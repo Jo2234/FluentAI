@@ -226,7 +226,7 @@ def generate_lesson(state: dict[str, Any]) -> dict[str, Any]:
     language = state["learner"]["target_language"]
     level = current_level(state)
     topic = choose_topic(state)
-    bank = LESSON_BANK.get(topic, _generic_lesson_bank(language, topic))
+    bank = LESSON_BANK.get(topic, _generic_lesson_bank(language, topic)) if language == "Spanish" else _generic_lesson_bank(language, topic)
     focus_skill = bank["focus_skill"]
     difficulty = performance_band(state)
 
@@ -256,6 +256,9 @@ def generate_quiz(state: dict[str, Any], lesson: dict[str, Any]) -> list[dict[st
     question_count = min(8, max(5, question_count))
 
     topic = lesson["topic"]
+    if lesson.get("source") == "openai" or lesson.get("language") != "Spanish":
+        return _lesson_driven_quiz(lesson, question_count)
+
     bank = LESSON_BANK.get(topic, _generic_lesson_bank(lesson["language"], topic))
     answers = bank["answers"]
     vocab = bank["vocabulary"]
@@ -333,7 +336,150 @@ def generate_quiz(state: dict[str, Any], lesson: dict[str, Any]) -> list[dict[st
     return questions[:question_count]
 
 
+def _lesson_driven_quiz(lesson: dict[str, Any], question_count: int) -> list[dict[str, Any]]:
+    language = str(lesson.get("language") or "Spanish")
+    topic = str(lesson.get("topic") or "practice")
+    focus_skill = str(lesson.get("focus_skill") or "vocabulary")
+    vocab = _pair_items(lesson.get("vocabulary"), _generic_lesson_bank(language, topic)["vocabulary"])
+    examples = _pair_items(lesson.get("examples"), _generic_lesson_bank(language, topic)["examples"])
+    first_word, first_meaning = vocab[0]
+    second_word, second_meaning = vocab[1] if len(vocab) > 1 else vocab[0]
+    model_sentence, model_meaning = examples[0]
+    second_sentence, _ = examples[1] if len(examples) > 1 else examples[0]
+
+    questions = [
+        {
+            "type": "multiple_choice",
+            "skill": "vocabulary",
+            "topic": topic,
+            "prompt": f"What does '{first_word}' mean?",
+            "answer": first_meaning,
+            "choices": _choices(first_meaning, ["friend", "the bill", "yesterday", "I speak"]),
+        },
+        {
+            "type": "fill_blank",
+            "skill": focus_skill,
+            "topic": topic,
+            "prompt": f"Fill in the {language} phrase for '{first_meaning}': ___.",
+            "answer": first_word,
+            "acceptable_answers": [first_word],
+        },
+        {
+            "type": "open_ended",
+            "skill": focus_skill,
+            "topic": topic,
+            "prompt": f"Write one short {language} sentence about {topic}.",
+            "answer": model_sentence,
+            "acceptable_answers": [model_sentence],
+            "keywords": _keywords(model_sentence) or [first_word],
+        },
+        {
+            "type": "multiple_choice",
+            "skill": "reading",
+            "topic": topic,
+            "prompt": f"Which option is a natural {language} sentence from today's lesson?",
+            "answer": second_sentence,
+            "choices": _choices(second_sentence, [first_meaning, second_meaning, "I am not sure."]),
+        },
+        {
+            "type": "fill_blank",
+            "skill": "vocabulary",
+            "topic": topic,
+            "prompt": f"Fill in the meaning: '{second_word}' means ___.",
+            "answer": second_meaning,
+            "acceptable_answers": [second_meaning],
+        },
+        {
+            "type": "open_ended",
+            "skill": "translation",
+            "topic": topic,
+            "prompt": f"Translate or reuse this idea in {language}: '{model_meaning}'",
+            "answer": model_sentence,
+            "acceptable_answers": [model_sentence],
+            "keywords": _keywords(model_sentence) or [first_word],
+        },
+        {
+            "type": "multiple_choice",
+            "skill": "grammar",
+            "topic": topic,
+            "prompt": f"In the example '{model_sentence}', what is the main meaning?",
+            "answer": model_meaning,
+            "choices": _choices(model_meaning, ["I need a ticket.", "It is too expensive.", "She reads a book."]),
+        },
+        {
+            "type": "open_ended",
+            "skill": focus_skill,
+            "topic": topic,
+            "prompt": "Write a tiny personal answer using one lesson word.",
+            "answer": model_sentence,
+            "acceptable_answers": [model_sentence],
+            "keywords": [item[0].split(" ")[0] for item in vocab[:3]],
+        },
+    ]
+    return questions[:question_count]
+
+
+def _pair_items(value: Any, fallback: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                first = str(item[0]).strip()
+                second = str(item[1]).strip()
+                if first and second:
+                    pairs.append((first, second))
+    return pairs or fallback
+
+
 def _generic_lesson_bank(language: str, topic: str) -> dict[str, Any]:
+    if language == "Hindi":
+        return {
+            "focus_skill": "vocabulary",
+            "vocabulary": [
+                ("नमस्ते", "hello"),
+                ("मेरा नाम", "my name"),
+                ("मुझे पसंद है", "I like"),
+                ("पानी", "water"),
+                ("आज", "today"),
+            ],
+            "grammar": f"Practice short Hindi phrases about {topic}. Use simple subject plus phrase patterns.",
+            "examples": [
+                ("नमस्ते, मेरा नाम जोहान है।", "Hello, my name is Johan."),
+                ("मुझे पानी पसंद है।", "I like water."),
+                ("आज मैं अभ्यास करता हूँ।", "Today I practice."),
+            ],
+            "answers": {
+                "mc": "hello",
+                "fill_prompt": "___, मेरा नाम जोहान है।",
+                "fill": "नमस्ते",
+                "open": "मुझे पानी पसंद है।",
+                "translation": "आज मैं अभ्यास करता हूँ।",
+            },
+        }
+    if language == "French":
+        return {
+            "focus_skill": "vocabulary",
+            "vocabulary": [
+                ("bonjour", "hello"),
+                ("je m'appelle", "my name is"),
+                ("j'aime", "I like"),
+                ("l'eau", "water"),
+                ("aujourd'hui", "today"),
+            ],
+            "grammar": f"Practice short French phrases about {topic}. Use simple present-tense sentence frames.",
+            "examples": [
+                ("Bonjour, je m'appelle Johan.", "Hello, my name is Johan."),
+                ("J'aime l'eau.", "I like water."),
+                ("Aujourd'hui, je pratique.", "Today I practice."),
+            ],
+            "answers": {
+                "mc": "hello",
+                "fill_prompt": "___, je m'appelle Johan.",
+                "fill": "Bonjour",
+                "open": "J'aime l'eau.",
+                "translation": "Aujourd'hui, je pratique.",
+            },
+        }
     return {
         "focus_skill": "vocabulary",
         "vocabulary": [

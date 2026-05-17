@@ -105,6 +105,17 @@
       flex-shrink: 0;
     }
 
+    .language-select {
+      width: auto;
+      min-width: 112px;
+      min-height: 38px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      box-shadow: 0 3px 0 #d5e1e6;
+    }
+
     .header-tab {
       min-height: 38px;
       padding: 8px 12px;
@@ -1223,6 +1234,11 @@
     <p class="header-meta" id="headerMeta">Loading local learner memory...</p>
     <div class="pill-row" id="headerPills"></div>
     <div class="header-actions">
+      <select class="language-select" id="languageSelect" aria-label="Target language">
+        <option value="Hindi">Hindi</option>
+        <option value="Spanish" selected>Spanish</option>
+        <option value="French">French</option>
+      </select>
       <button class="header-tab active" id="headerLessonBtn" type="button">Lesson</button>
       <button class="header-tab" id="headerConversationBtn" type="button">Conversation</button>
     </div>
@@ -1299,7 +1315,7 @@
           <div class="call-stage" id="callStage">
             <div class="call-head">
               <div>
-                <h3>Spanish tutor call</h3>
+                <h3 id="callTitle">Spanish tutor call</h3>
                 <p id="callStatus">Ready for an OpenAI voice session.</p>
               </div>
               <div class="call-badge" id="callBadge">OpenAI voice model</div>
@@ -1331,7 +1347,7 @@
               <button class="fallback-start" id="startTextFallbackBtn" type="button">Start text chat</button>
               <button class="fallback-start" id="startVoiceFromTextBtn" type="button">Use voice call</button>
               <form class="chat-form" id="chatForm">
-                <input id="chatInput" placeholder="Type your reply in Spanish" disabled>
+                <input id="chatInput" placeholder="Type your reply" disabled>
                 <button id="sendBtn" type="submit" disabled>Send</button>
               </form>
             </div>
@@ -1355,7 +1371,7 @@
       }
 
       window.fluentAI = {
-        status: () => bridge("status"),
+        status: (payload) => bridge("status", payload),
         startLesson: (payload) => bridge("lesson_start", payload),
         submitLesson: (payload) => bridge("lesson_submit", payload),
         realtimeClientSecret: (payload) => bridge("realtime_client_secret", payload),
@@ -1393,6 +1409,7 @@
     const els = {
       headerMeta: document.getElementById("headerMeta"),
       headerPills: document.getElementById("headerPills"),
+      languageSelect: document.getElementById("languageSelect"),
       profileBox: document.getElementById("profileBox"),
       workspace: document.getElementById("workspace"),
       workspaceStatus: document.getElementById("workspaceStatus"),
@@ -1405,6 +1422,7 @@
       chatInput: document.getElementById("chatInput"),
       sendBtn: document.getElementById("sendBtn"),
       callStatus: document.getElementById("callStatus"),
+      callTitle: document.getElementById("callTitle"),
       callBadge: document.getElementById("callBadge"),
       callCenter: document.getElementById("callCenter"),
       videoContextCard: document.getElementById("videoContextCard"),
@@ -1473,16 +1491,21 @@
     function renderProfile(profile) {
       state.profile = profile;
       const weak = (profile.weak_topics || []).join(", ") || "none";
-      els.headerMeta.textContent = `Level ${profile.level}; weak topics: ${weak}.`;
+      if (profile.language && els.languageSelect.value !== profile.language) {
+        els.languageSelect.value = profile.language;
+      }
+      updateLanguageCopy();
+      els.headerMeta.textContent = `${profile.language || currentLanguage()} Level ${profile.level}; weak topics: ${weak}.`;
       els.headerPills.replaceChildren(
         pill(`XP ${profile.xp}`),
         pill(`Streak ${profile.streak_days}`),
         pill(`Fluency ${Math.round(Number(profile.fluency_score || 0) * 100)}%`)
       );
       els.profileBox.replaceChildren(
+        profileLine("Language", profile.language || currentLanguage()),
         profileLine("Level", profile.level),
         profileLine("Weak topics", weak),
-        profileLine("Speaking goal", profile.next_speaking_goal || "Answer in complete Spanish sentences.")
+        profileLine("Speaking goal", profile.next_speaking_goal || `Answer in complete ${profile.language || currentLanguage()} sentences.`)
       );
     }
 
@@ -1519,6 +1542,25 @@
 
     function shouldUseVoice() {
       return els.voiceMode.value === "openai";
+    }
+
+    const SUPPORTED_LANGUAGES = new Set(["Hindi", "Spanish", "French"]);
+
+    function currentLanguage() {
+      return SUPPORTED_LANGUAGES.has(els.languageSelect.value) ? els.languageSelect.value : "Spanish";
+    }
+
+    function bridgePayload(extra) {
+      return { language: currentLanguage(), ...(extra || {}) };
+    }
+
+    function updateLanguageCopy() {
+      const language = currentLanguage();
+      els.callTitle.textContent = `${language} tutor call`;
+      els.chatInput.placeholder = `Type your reply in ${language}`;
+      if (!state.profile || state.profile.language !== language) {
+        els.headerMeta.textContent = `Learning ${language}`;
+      }
     }
 
     function audioConstraints() {
@@ -1606,10 +1648,10 @@
           setCallStatus("Camera is live. Connecting voice...");
         }
 
-        const secret = await window.fluentAI.realtimeClientSecret({
+        const secret = await window.fluentAI.realtimeClientSecret(bridgePayload({
           video: els.video.value,
           vision_summary: ""
-        });
+        }));
         if (!secret.ok || !secret.client_secret) {
           setCallStatus(secret.error || "Could not create OpenAI Realtime session.");
           appendLogs(secret.logs);
@@ -1635,7 +1677,7 @@
           sendRealtimeEvent({
             type: "response.create",
             response: {
-              instructions: "Start the Spanish tutoring call now. Greet the learner and ask the first simple question."
+              instructions: `Start the ${currentLanguage()} tutoring call now. Greet the learner and ask the first simple question. Detect the learner's spoken language and reply in that same language when it is Hindi, Spanish, or French.`
                 + (state.visualContext ? ` Use this camera context naturally: ${visualContextText()}.` : "")
             }
           });
@@ -1699,7 +1741,7 @@
     async function analyzeCurrentCameraFrame() {
       const image = await captureCameraFrame();
       if (!image) return { ok: false, error: "Camera frame was not ready yet." };
-      return window.fluentAI.analyzeCameraFrame({ image });
+      return window.fluentAI.analyzeCameraFrame(bridgePayload({ image }));
     }
 
     async function analyzeVisionInBackground(reason) {
@@ -1740,7 +1782,7 @@
             sendRealtimeEvent({
               type: "response.create",
               response: {
-                instructions: `You are watching the learner's live camera through OpenAI vision updates. Use this latest camera context naturally in Spanish: ${visualContextText()}. Respond to what you see with one short, level-appropriate tutor question.`
+                instructions: `You are watching the learner's live camera through OpenAI vision updates. Use this latest camera context naturally in ${currentLanguage()}: ${visualContextText()}. Detect the learner's language and answer in that same language when it is Hindi, Spanish, or French. Respond with one short, level-appropriate tutor question.`
               }
             });
             setCallStatus("Video is live and OpenAI recognized the scene.");
@@ -1997,8 +2039,8 @@
       els.videoPreview.replaceChildren(wrapper);
     }
 
-    async function refreshStatus() {
-      const result = await window.fluentAI.status();
+    async function refreshStatus(persistLanguage = false) {
+      const result = await window.fluentAI.status(persistLanguage ? bridgePayload() : {});
       if (!result.ok) {
         showError(result.error || "Could not load status.");
         return;
@@ -2023,7 +2065,7 @@
           ? "OpenAI is generating the lesson. This can take a moment."
           : "Fast local agents are generating the lesson now."
       ], true));
-      const result = await window.fluentAI.startLesson({ use_openai: useOpenAI() });
+      const result = await window.fluentAI.startLesson(bridgePayload({ use_openai: useOpenAI() }));
       if (!result.ok) {
         showError(result.error || "Lesson failed.");
         setBusy(false, "Ready");
@@ -2071,7 +2113,7 @@
       node.className = "lesson-hero";
       node.append(
         text("p", "Today's lesson", "eyebrow"),
-        text("h3", titleCase(String(lesson.topic || "Spanish practice"))),
+        text("h3", titleCase(String(lesson.topic || `${lesson.language || currentLanguage()} practice`))),
         text("p", `A ${lesson.minutes}-minute ${lesson.level} session focused on ${lesson.focus_skill}.`)
       );
       const metrics = document.createElement("div");
@@ -2178,11 +2220,11 @@
         return input ? input.value : "";
       });
 
-      const result = await window.fluentAI.submitLesson({
+      const result = await window.fluentAI.submitLesson(bridgePayload({
         lesson: state.lessonSession.lesson,
         quiz: state.lessonSession.quiz,
         answers
-      });
+      }));
       if (!result.ok) {
         showError(result.error || "Quiz grading failed.");
         setBusy(false, "Ready");
@@ -2240,12 +2282,12 @@
           : "Tutor is preparing the first question..."
       }];
       renderChat();
-        const result = await window.fluentAI.startConversation({
+        const result = await window.fluentAI.startConversation(bridgePayload({
           turns: Number(els.turns.value || 4),
           video: els.video.value,
           object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : "",
           use_openai: useOpenAI()
-        });
+        }));
       if (!result.ok) {
         showError(result.error || "Conversation failed.");
         setBusy(false, "Ready");
@@ -2312,12 +2354,12 @@
       renderChat();
       setBusy(true, "Tutor is listening...");
 
-      const result = await window.fluentAI.replyConversation({
+      const result = await window.fluentAI.replyConversation(bridgePayload({
         session: state.conversationSession,
         message,
         tutor_message: state.latestTutorMessage,
         use_openai: useOpenAI()
-      });
+      }));
       if (!result.ok) {
         showError(result.error || "Reply failed.");
         setBusy(false, "Your turn.");
@@ -2382,6 +2424,25 @@
     els.endCallBtn.addEventListener("click", endRealtimeCall);
     els.chatForm.addEventListener("submit", sendConversationReply);
     els.video.addEventListener("change", syncCallCameraToSelect);
+    els.languageSelect.addEventListener("change", async () => {
+      endRealtimeCall();
+      state.lessonSession = null;
+      state.conversationSession = null;
+      state.latestTutorMessage = "";
+      state.chatMessages = [];
+      state.visualContext = null;
+      state.lastVisionSignature = "";
+      state.visionSequence += 1;
+      state.lessonAutoStarted = false;
+      els.lessonEmpty.classList.remove("hidden");
+      els.lessonPane.classList.remove("lesson-active");
+      els.lessonContent.replaceChildren();
+      updateLanguageCopy();
+      renderChat();
+      setBusy(false, `Switched to ${currentLanguage()}.`);
+      await refreshStatus(true);
+      if (state.mode === "lesson") await ensureLessonStarted();
+    });
     els.voiceMode.addEventListener("change", () => {
       endRealtimeCall();
       state.conversationSession = null;

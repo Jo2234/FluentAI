@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fluent_ai.agent import evaluate_answers, generate_lesson, generate_quiz, update_progress
 from fluent_ai.conversation import asks_for_english_help, build_follow_up, choose_conversation_topic, run_conversation
-from fluent_ai.desktop_bridge import conversation_reply, conversation_start, lesson_start, lesson_submit
+from fluent_ai.desktop_bridge import conversation_reply, conversation_start, lesson_start, lesson_submit, status
 from fluent_ai.state import default_state
 
 
@@ -90,6 +90,29 @@ class AgentTests(unittest.TestCase):
         follow_up = build_follow_up(topic, "What does that mean in English?", 0.2, 1, state)
         self.assertIn("In English", follow_up)
         self.assertIn("Hace sol", follow_up)
+
+    def test_desktop_bridge_switches_supported_languages(self):
+        with TemporaryDirectory() as tmpdir:
+            state_path = str(Path(tmpdir) / "progress.json")
+
+            hindi = status({"state_path": state_path, "language": "Hindi"})
+            french = status({"state_path": state_path, "language": "French"})
+
+            self.assertTrue(hindi["ok"])
+            self.assertEqual(hindi["profile"]["language"], "Hindi")
+            self.assertTrue(french["ok"])
+            self.assertEqual(french["profile"]["language"], "French")
+            self.assertIn("French", french["profile"]["next_speaking_goal"])
+
+    def test_non_spanish_lesson_quiz_uses_target_language_content(self):
+        state = default_state("Hindi")
+        lesson = generate_lesson(state)
+        quiz = generate_quiz(state, lesson)
+
+        self.assertEqual(lesson["language"], "Hindi")
+        self.assertIn("नमस्ते", [item[0] for item in lesson["vocabulary"]])
+        self.assertEqual(quiz[0]["answer"], "hello")
+        self.assertTrue(any("Hindi" in question["prompt"] for question in quiz))
 
     def test_desktop_bridge_lesson_waits_for_real_answers(self):
         with TemporaryDirectory() as tmpdir:

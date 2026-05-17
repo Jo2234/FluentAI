@@ -30,6 +30,13 @@ from fluent_ai.state import load_state, recalculate_weak_topics, save_state, utc
 
 
 DEFAULT_PROGRESS_PATH = Path("data/progress.json")
+SUPPORTED_LANGUAGES = {
+    "hindi": "Hindi",
+    "spanish": "Spanish",
+    "french": "French",
+    "francais": "French",
+    "français": "French",
+}
 
 
 def status(payload: dict[str, Any]) -> dict[str, Any]:
@@ -341,7 +348,21 @@ def _turn_from_dict(value: dict[str, Any]) -> ConversationTurn:
 
 
 def _load(payload: dict[str, Any]) -> dict[str, Any]:
-    return load_state(_path(payload), str(payload.get("language") or "Spanish"))
+    language = _language(payload) if "language" in payload else None
+    path = _path(payload)
+    state = load_state(path, language or "Spanish")
+    learner = state.setdefault("learner", {})
+    if language and learner.get("target_language") != language:
+        learner["target_language"] = language
+        memory = state.setdefault("conversation_memory", {})
+        memory["next_speaking_goal"] = f"Answer simple questions in full {language} sentences."
+        save_state(path, state)
+    return state
+
+
+def _language(payload: dict[str, Any]) -> str:
+    raw = str(payload.get("language") or "Spanish").strip().lower()
+    return SUPPORTED_LANGUAGES.get(raw, "Spanish")
 
 
 def _path(payload: dict[str, Any]) -> Path:

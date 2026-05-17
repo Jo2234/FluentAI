@@ -67,7 +67,7 @@ def default_state(language: str) -> dict[str, Any]:
             "recent_topics": [],
             "missed_phrases": [],
             "last_video_object": None,
-            "next_speaking_goal": "Answer simple questions in full Spanish sentences.",
+            "next_speaking_goal": f"Answer simple questions in full {language} sentences.",
         },
         "updated_at": utc_now(),
     }
@@ -130,7 +130,10 @@ def migrate_state(state: dict[str, Any], language: str) -> dict[str, Any]:
     conversation_memory.setdefault("recent_topics", [])
     conversation_memory.setdefault("missed_phrases", [])
     conversation_memory.setdefault("last_video_object", None)
-    conversation_memory.setdefault("next_speaking_goal", "Answer simple questions in full Spanish sentences.")
+    conversation_memory.setdefault(
+        "next_speaking_goal",
+        f"Answer simple questions in full {learner.get('target_language', language)} sentences.",
+    )
     state.setdefault("updated_at", utc_now())
     return state
 

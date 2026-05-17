@@ -116,8 +116,8 @@ app.on("window-all-closed", () => {
   }
 });
 
-ipcMain.handle("status", async () => {
-  return runBridge("status");
+ipcMain.handle("status", async (_event, payload) => {
+  return runBridge("status", payload || {});
 });
 
 ipcMain.handle("lesson:start", async (_event, payload) => {

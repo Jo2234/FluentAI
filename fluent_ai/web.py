@@ -280,7 +280,7 @@ class FluentAIHandler(BaseHTTPRequestHandler):
         payload = {
             **body,
             "state_path": str(self.state_path),
-            "language": self.language,
+            "language": body.get("language") or self.language,
         }
         try:
             return handler(payload)

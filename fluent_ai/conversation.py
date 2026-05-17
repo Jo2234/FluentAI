@@ -319,9 +319,10 @@ def build_follow_up(topic: dict[str, Any], learner_text: str, score: float, turn
     level = current_level(state)
     if asks_for_english_help(learner_text):
         correction = correction_for(topic)
+        target_language = state.get("learner", {}).get("target_language", "Spanish")
         return (
             f"In English: it means you can answer with a simple phrase like '{correction}'. "
-            f"In Spanish, try: {correction}"
+            f"In {target_language}, try: {correction}"
         )
 
     if score < 0.35:
