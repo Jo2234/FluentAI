@@ -1,0 +1,15 @@
+{
+  "name": "fluentai-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone desktop shell for FluentAI.",
+  "main": "desktop/electron/main.js",
+  "scripts": {
+    "desktop": "electron .",
+    "build:app": "./scripts/build_mac_app.sh",
+    "app": "./scripts/build_mac_app.sh && open dist/FluentAI.app"
+  },
+  "devDependencies": {
+    "electron": "^39.2.4"
+  }
+}

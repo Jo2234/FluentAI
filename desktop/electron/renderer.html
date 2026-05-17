@@ -1,0 +1,2405 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FluentAI</title>
+  <style>
+    :root {
+      --ink: #172026;
+      --muted: #657382;
+      --line: #d7dee2;
+      --panel: #fff5f5;
+      --surface: #ffffff;
+      --soft: #fee2e2;
+      --accent: #ef4444;
+      --accent-dark: #b91c1c;
+      --warm: #f59e0b;
+      --blue: #2563eb;
+      --success: #16a34a;
+      --danger: #b42318;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, #fff1f2 0%, #ffffff 360px),
+        var(--surface);
+      font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    header {
+      height: 84px;
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 22px;
+      padding: 0 28px;
+      -webkit-app-region: drag;
+    }
+
+    header button {
+      -webkit-app-region: no-drag;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 30px;
+      font-weight: 850;
+      letter-spacing: 0;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      background: var(--accent);
+      box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.18);
+      color: #ffffff;
+      display: inline-grid;
+      place-items: center;
+      font-size: 24px;
+      font-weight: 950;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    h3 {
+      font-size: 15px;
+      margin-bottom: 8px;
+    }
+
+    .header-meta {
+      flex: 1;
+      min-width: 0;
+      color: var(--muted);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .pill-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .header-tab {
+      min-height: 38px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--ink);
+      box-shadow: 0 3px 0 #d5e1e6;
+      font-size: 13px;
+    }
+
+    .header-tab.active {
+      border-color: #fecaca;
+      background: var(--accent);
+      color: #ffffff;
+      box-shadow: 0 3px 0 var(--accent-dark);
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .pill strong {
+      color: var(--ink);
+    }
+
+    main {
+      height: calc(100vh - 84px);
+      min-height: 0;
+      padding: 20px 28px 24px;
+    }
+
+    .mission-card {
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      background: var(--soft);
+      color: var(--accent-dark);
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .mission-card h2 {
+      font-size: 17px;
+      margin-bottom: 5px;
+    }
+
+    .mission-card p {
+      color: #9f3333;
+      font-size: 13px;
+    }
+
+    .nav-list {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .nav-item {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-radius: 8px;
+      color: var(--muted);
+      font-weight: 850;
+      padding: 0 11px;
+    }
+
+    .nav-item.active {
+      color: var(--accent-dark);
+      border: 1px solid #fecaca;
+      background: var(--soft);
+    }
+
+    .video-preview {
+      display: none;
+      height: 210px;
+      border-radius: 8px;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(252, 165, 165, 0.4), transparent 110px),
+        linear-gradient(135deg, #991b1b, #172026);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 20px;
+      margin-bottom: 18px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .video-preview strong {
+      display: block;
+      font-size: 27px;
+      margin-bottom: 8px;
+    }
+
+    .video-preview span {
+      display: block;
+      opacity: 0.92;
+    }
+
+    .video-preview video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      position: absolute;
+      inset: 0;
+    }
+
+    .video-preview .video-overlay {
+      position: absolute;
+      inset: auto 12px 12px 12px;
+      border-radius: 6px;
+      background: rgba(17, 32, 38, 0.72);
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    .video-preview .video-overlay strong {
+      font-size: 14px;
+      margin: 0 0 2px;
+    }
+
+    .video-preview .video-overlay span {
+      font-size: 12px;
+    }
+
+    .workspace > .video-preview {
+      display: none;
+    }
+
+    .control-group {
+      display: grid;
+      grid-template-columns: 92px 120px minmax(150px, 1fr) 190px;
+      align-items: end;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 800;
+      margin: 0 0 6px;
+      color: #26323a;
+    }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      padding: 10px 11px;
+      min-height: 42px;
+    }
+
+    input:focus, select:focus, button:focus {
+      outline: 2px solid rgba(239, 68, 68, 0.28);
+      outline-offset: 2px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      padding: 11px 13px;
+      min-height: 42px;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: var(--warm);
+      color: #211700;
+    }
+
+    button.ghost {
+      border: 1px solid var(--line);
+      background: #ffffff;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 88px;
+      text-align: left;
+      box-shadow: 0 3px 0 #d5e1e6;
+    }
+
+    button.ghost.active {
+      border-color: #fecaca;
+      background: var(--panel);
+      color: var(--ink);
+      box-shadow: 0 3px 0 #fca5a5;
+    }
+
+    button.ghost strong {
+      display: block;
+      font-size: 20px;
+      line-height: 1.1;
+      margin-bottom: 5px;
+    }
+
+    button.ghost span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    .action-stack {
+      display: flex;
+      gap: 10px;
+      align-items: end;
+      justify-content: flex-end;
+    }
+
+    .profile-box {
+      display: none;
+    }
+
+    .profile-box strong {
+      color: var(--ink);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 16px;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 0 rgba(215, 222, 226, 0.72);
+    }
+
+    .workspace-head {
+      grid-column: 1 / -1;
+      display: none;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+    }
+
+    .workspace-status {
+      align-self: stretch;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 150px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
+      box-shadow: 0 3px 0 #d5e1e6;
+    }
+
+    .control-dock {
+      grid-column: 1 / -1;
+      display: none;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 12px;
+      box-shadow: 0 3px 0 #d5e1e6;
+    }
+
+    .pane {
+      min-height: 0;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 22px 24px;
+      box-shadow: 0 3px 0 #d5e1e6;
+    }
+
+    #conversationPane {
+      grid-column: 1 / -1;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .workspace.conversation-active {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+    }
+
+    .workspace.conversation-active .workspace-head {
+      display: none;
+    }
+
+    .workspace.conversation-active .log-box {
+      display: none;
+    }
+
+    .workspace.conversation-active .control-dock {
+      display: none;
+    }
+
+    .workspace.conversation-active #lessonPane {
+      grid-column: 1 / -1;
+    }
+
+    .workspace.conversation-active #conversationPane {
+      grid-column: 1 / -1;
+      grid-row: 1 / -1;
+    }
+
+    .pane.lesson-active {
+      padding: 0;
+      background: linear-gradient(180deg, #ffffff, #fffafa);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .empty-state {
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 40px;
+    }
+
+    .empty-state strong {
+      display: block;
+      color: var(--ink);
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .path-home {
+      min-height: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 22px;
+      text-align: left;
+      width: 100%;
+    }
+
+    .path-main {
+      position: relative;
+      min-height: 440px;
+      padding: 26px;
+      overflow: hidden;
+    }
+
+    .unit-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #ffffff;
+      padding: 22px 24px;
+      box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.18);
+      margin-bottom: 44px;
+    }
+
+    .unit-card h3 {
+      font-size: 30px;
+      margin: 0 0 6px;
+    }
+
+    .unit-card p {
+      color: rgba(255, 255, 255, 0.88);
+      max-width: 58ch;
+      font-weight: 650;
+    }
+
+    .unit-card button {
+      background: #ffffff;
+      color: var(--accent-dark);
+      box-shadow: 0 4px 0 rgba(127, 29, 29, 0.38);
+      min-width: 146px;
+    }
+
+    .path-rail {
+      position: relative;
+      display: grid;
+      justify-items: center;
+      gap: 30px;
+      padding: 8px 0 30px;
+    }
+
+    .path-rail::before {
+      content: "";
+      position: absolute;
+      top: 40px;
+      bottom: 40px;
+      width: 8px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #fecaca, #dbeafe, #fed7aa);
+    }
+
+    .path-node {
+      position: relative;
+      z-index: 1;
+      width: 94px;
+      height: 94px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: #ffffff;
+      font-weight: 950;
+      text-align: center;
+      box-shadow: inset 0 -7px 0 rgba(0, 0, 0, 0.18), 0 10px 24px rgba(15, 23, 42, 0.18);
+      border: 7px solid #ffffff;
+    }
+
+    .path-node span {
+      display: block;
+      font-size: 13px;
+      margin-top: 2px;
+    }
+
+    .path-node.red { background: var(--accent); }
+    .path-node.blue { background: var(--blue); transform: translateX(-120px); }
+    .path-node.orange { background: var(--warm); transform: translateX(135px); }
+    .path-node.gray { background: #cbd5e1; color: #334155; }
+
+    .path-note {
+      position: absolute;
+      right: 24px;
+      top: 220px;
+      width: 285px;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 16px;
+      box-shadow: 0 3px 0 #fca5a5;
+      color: var(--muted);
+    }
+
+    .path-note strong {
+      font-size: 20px;
+      margin-bottom: 6px;
+    }
+
+    .path-side {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+
+    .insight-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 18px;
+      box-shadow: 0 2px 0 #e6eef2;
+    }
+
+    .insight-card h3 {
+      font-size: 20px;
+      margin-bottom: 12px;
+    }
+
+    .progress-track {
+      height: 12px;
+      border-radius: 999px;
+      background: #e6eef2;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .progress-track span {
+      display: block;
+      width: 68%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+    }
+
+    .topic-list {
+      display: grid;
+      gap: 10px;
+      color: var(--muted);
+      font-weight: 750;
+    }
+
+    .topic-list p {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .lesson-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.82fr) minmax(390px, 1.18fr);
+      gap: 18px;
+      align-items: start;
+      padding: 18px;
+    }
+
+    .lesson-column,
+    .quiz-column {
+      min-width: 0;
+      display: grid;
+      gap: 14px;
+    }
+
+    .lesson-hero {
+      border-radius: 8px;
+      background:
+        radial-gradient(circle at 88% 10%, rgba(255, 255, 255, 0.34), transparent 150px),
+        linear-gradient(135deg, var(--accent), #991b1b);
+      color: #ffffff;
+      padding: 18px;
+      box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.17);
+    }
+
+    .lesson-hero .eyebrow {
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 12px;
+      font-weight: 850;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+
+    .lesson-hero h3 {
+      font-size: 26px;
+      line-height: 1.05;
+      margin-bottom: 8px;
+    }
+
+    .lesson-hero p {
+      color: rgba(255, 255, 255, 0.88);
+      max-width: 46ch;
+    }
+
+    .lesson-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .metric {
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.16);
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .metric strong,
+    .metric span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .metric strong {
+      font-size: 16px;
+    }
+
+    .metric span {
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .section-block {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 16px;
+      margin-bottom: 0;
+      box-shadow: 0 2px 0 #e6eef2;
+    }
+
+    .section-block h3 {
+      font-size: 17px;
+      margin-bottom: 10px;
+    }
+
+    .section-block p + p {
+      margin-top: 7px;
+    }
+
+    .section-block.tint {
+      background: var(--soft);
+      border-color: #fecaca;
+    }
+
+    .vocab-list, .result-list, .example-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .vocab-list li, .result-list li, .example-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      border: 1px solid #edf1f4;
+      border-radius: 8px;
+      padding: 10px 11px;
+      background: #ffffff;
+    }
+
+    .vocab-list span,
+    .example-list span {
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .question {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 14px;
+      background: #fff;
+      box-shadow: 0 2px 0 #e6eef2;
+    }
+
+    .question .question-kicker {
+      color: var(--accent-dark);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .question .question-prompt {
+      font-weight: 750;
+      margin-bottom: 12px;
+      font-size: 17px;
+      line-height: 1.35;
+    }
+
+    .answer-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .choice {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      color: #26323a;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 10px 11px;
+      font-weight: 750;
+      cursor: pointer;
+      box-shadow: 0 2px 0 #e6eef2;
+    }
+
+    .choice:has(input:checked) {
+      border-color: #fecaca;
+      background: var(--soft);
+      color: var(--accent-dark);
+      box-shadow: 0 2px 0 #fca5a5;
+    }
+
+    .choice input {
+      width: auto;
+      min-height: auto;
+    }
+
+    .free-answer {
+      border-radius: 8px;
+      font-weight: 750;
+    }
+
+    .submit-quiz {
+      width: 100%;
+      margin-top: 4px;
+      min-height: 48px;
+      box-shadow: 0 4px 0 var(--accent-dark);
+    }
+
+    .feedback {
+      border-left: 4px solid var(--accent);
+      background: var(--soft);
+      padding: 10px 12px;
+      margin-top: 8px;
+      border-radius: 0 6px 6px 0;
+      color: #26323a;
+    }
+
+    .feedback strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .quiz-summary {
+      margin: 18px 18px 0;
+      box-shadow: 0 3px 0 #fca5a5;
+    }
+
+    .feedback.review {
+      border-left-color: var(--warm);
+      background: #fff7e8;
+    }
+
+    .chat-shell {
+      height: 100%;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: 14px;
+    }
+
+    .call-shell {
+      height: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 0;
+      background: #ffffff;
+    }
+
+    .call-stage {
+      position: relative;
+      overflow: hidden;
+      border-radius: 8px 0 0 8px;
+      background:
+        radial-gradient(circle at 15% 20%, rgba(239, 68, 68, 0.24), transparent 260px),
+        linear-gradient(145deg, #171923, #26364f 42%, #4c1d2d);
+      color: #ffffff;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(220px, 1fr) auto;
+      gap: 18px;
+      padding: 28px 30px;
+      box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.24);
+    }
+
+    .call-head,
+    .call-controls {
+      position: relative;
+      z-index: 2;
+    }
+
+    .call-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .call-head h3 {
+      font-size: 30px;
+      margin-bottom: 4px;
+    }
+
+    .call-head p,
+    .call-status {
+      color: rgba(255, 255, 255, 0.76);
+    }
+
+    .call-badge {
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      background: rgba(255, 255, 255, 0.12);
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .call-center {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      min-height: 0;
+      border: 1px solid rgba(147, 197, 253, 0.35);
+      border-radius: 8px;
+      background: linear-gradient(145deg, rgba(127, 29, 29, 0.40), rgba(30, 64, 175, 0.34));
+    }
+
+    .ai-face {
+      width: 210px;
+      height: 210px;
+      border-radius: 50%;
+      background: #ffffff;
+      color: var(--accent-dark);
+      display: grid;
+      place-items: center;
+      font-size: 72px;
+      font-weight: 950;
+      box-shadow: inset 0 -14px 0 #fee2e2, 0 18px 46px rgba(0, 0, 0, 0.25);
+    }
+
+    .call-video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.82;
+    }
+
+    .call-center .video-overlay {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      z-index: 2;
+      border-radius: 8px;
+      background: rgba(16, 24, 32, 0.68);
+      color: #ffffff;
+      padding: 10px 12px;
+      backdrop-filter: blur(10px);
+    }
+
+    .call-center .video-overlay span {
+      color: rgba(255, 255, 255, 0.72);
+      display: block;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .video-context-card {
+      position: absolute;
+      left: 28px;
+      bottom: 86px;
+      z-index: 2;
+      width: min(270px, calc(100% - 56px));
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.94);
+      color: var(--ink);
+      padding: 16px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+    }
+
+    .video-context-card strong,
+    .video-context-card span {
+      display: block;
+    }
+
+    .video-context-card span {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 3px;
+    }
+
+    .call-controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-bottom: 4px;
+    }
+
+    .round-btn {
+      min-width: 66px;
+      height: 66px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      padding: 0 14px;
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: none;
+    }
+
+    .round-btn.primary {
+      background: var(--accent);
+      box-shadow: 0 4px 0 var(--accent-dark);
+    }
+
+    .round-btn.danger {
+      background: #ef4444;
+      box-shadow: 0 4px 0 #991b1b;
+    }
+
+    .round-btn.active {
+      background: #ffffff;
+      color: var(--accent-dark);
+    }
+
+    .call-transcript {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: 12px;
+      border-left: 1px solid var(--line);
+      padding: 22px;
+      min-height: 0;
+    }
+
+    .chat-log {
+      min-height: 0;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-right: 4px;
+    }
+
+    .bubble {
+      max-width: 88%;
+      border-radius: 8px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .bubble.tutor {
+      align-self: flex-start;
+      background: var(--soft);
+      border-color: #fecaca;
+    }
+
+    .bubble.learner {
+      align-self: flex-end;
+      background: #eaf1ff;
+      border-color: #c8d8ff;
+    }
+
+    .bubble.system {
+      align-self: center;
+      max-width: 760px;
+      background: #fff7e8;
+      border-color: #f3d39a;
+      color: #5d4400;
+      font-size: 13px;
+    }
+
+    .bubble small {
+      display: block;
+      color: var(--muted);
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .chat-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 104px;
+      gap: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+    }
+
+    .voice-card {
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--accent-dark);
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+
+    .voice-card strong,
+    .voice-card span {
+      display: block;
+    }
+
+    .voice-card strong {
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .voice-card span {
+      color: #9f3333;
+      font-size: 13px;
+    }
+
+    .voice-btn {
+      background: #ffffff;
+      border: 1px solid #fecaca;
+      color: var(--accent-dark);
+      box-shadow: 0 3px 0 #fca5a5;
+    }
+
+    .voice-btn.listening {
+      background: var(--accent);
+      color: #ffffff;
+      box-shadow: 0 3px 0 var(--accent-dark);
+    }
+
+    .text-fallback {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 14px;
+      min-width: 0;
+    }
+
+    .text-fallback .fallback-start {
+      width: 100%;
+      margin-bottom: 12px;
+      background: #ffffff;
+      color: var(--accent-dark);
+      border: 1px solid #fecaca;
+      box-shadow: 0 3px 0 #fca5a5;
+    }
+
+    #startVoiceFromTextBtn {
+      display: none;
+    }
+
+    .text-fallback h3 {
+      margin-bottom: 4px;
+    }
+
+    .text-fallback p {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    #conversationPane.text-chat-active .call-shell {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    #conversationPane.text-chat-active .call-stage {
+      display: none;
+    }
+
+    #conversationPane.text-chat-active .call-transcript {
+      border-left: 0;
+      padding: 24px;
+    }
+
+    #conversationPane.text-chat-active .text-fallback {
+      max-width: none;
+    }
+
+    #conversationPane.text-chat-active #startTextFallbackBtn {
+      display: none;
+    }
+
+    #conversationPane.text-chat-active #startVoiceFromTextBtn {
+      display: block;
+    }
+
+    .log-box {
+      min-height: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      color: #26323a;
+      padding: 58px 18px 18px;
+      font-family: Menlo, Consolas, monospace;
+      font-size: 12px;
+      overflow: auto;
+      white-space: pre-wrap;
+      box-shadow: 0 3px 0 #d5e1e6;
+      position: relative;
+    }
+
+    .log-box::before {
+      content: "Visible agent decisions";
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      right: 18px;
+      color: var(--ink);
+      font: 800 20px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      white-space: normal;
+    }
+
+    .error {
+      color: var(--danger);
+      font-weight: 750;
+    }
+
+    @media (max-width: 980px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .lesson-grid,
+      .workspace-head,
+      .control-dock,
+      .control-group,
+      .call-shell,
+      .chat-form,
+      .call-transcript {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span class="brand-mark">F</span>FluentAI</h1>
+    <p class="header-meta" id="headerMeta">Loading local learner memory...</p>
+    <div class="pill-row" id="headerPills"></div>
+    <div class="header-actions">
+      <button class="header-tab active" id="headerLessonBtn" type="button">Lesson</button>
+      <button class="header-tab" id="headerConversationBtn" type="button">Conversation</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="workspace" id="workspace">
+      <div class="workspace-head">
+        <button class="ghost active" id="lessonModeBtn" type="button">
+          <strong>Lesson Mode</strong>
+          <span>Adaptive lesson, quiz, evaluation, and progress update.</span>
+        </button>
+        <button class="ghost" id="conversationModeBtn" type="button">
+          <strong>Conversation Mode</strong>
+          <span>Tutor-led call with optional camera object context.</span>
+        </button>
+        <p class="workspace-status" id="workspaceStatus">Ready</p>
+      </div>
+
+      <div class="control-dock">
+        <div class="control-group">
+          <div>
+            <label for="turns">Turns</label>
+            <input id="turns" type="number" min="2" max="8" value="4">
+          </div>
+          <div>
+            <label for="video">Video</label>
+            <select id="video">
+              <option value="off">Off</option>
+              <option value="on">On</option>
+            </select>
+          </div>
+          <div>
+            <label for="modelMode">Model</label>
+            <select id="modelMode">
+              <option value="local">Fast local tutor</option>
+              <option value="openai" selected>OpenAI model</option>
+            </select>
+          </div>
+          <div>
+            <label for="voiceMode">Interface</label>
+            <select id="voiceMode">
+              <option value="openai" selected>OpenAI voice call</option>
+              <option value="text">Text fallback</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="action-stack">
+          <button id="startLessonBtn" type="button">Start Lesson</button>
+          <button id="startConversationBtn" class="secondary" type="button">Start Conversation</button>
+        </div>
+      </div>
+
+      <div class="video-preview" id="videoPreview">
+        <div><strong>Video Off</strong><span>Text conversation</span></div>
+      </div>
+
+      <div class="profile-box" id="profileBox">
+        <p><strong>Level:</strong> loading</p>
+        <p><strong>Weak topics:</strong> loading</p>
+        <p><strong>Speaking goal:</strong> loading</p>
+      </div>
+
+      <div class="pane" id="lessonPane">
+        <div class="empty-state" id="lessonEmpty">
+          <div><strong>Ready for today</strong><p>Start a lesson when you want the agents to build the next quiz.</p></div>
+        </div>
+        <div id="lessonContent"></div>
+      </div>
+
+      <div class="pane hidden" id="conversationPane">
+        <div class="call-shell">
+          <div class="call-stage" id="callStage">
+            <div class="call-head">
+              <div>
+                <h3>Spanish tutor call</h3>
+                <p id="callStatus">Ready for an OpenAI voice session.</p>
+              </div>
+              <div class="call-badge" id="callBadge">OpenAI voice model</div>
+            </div>
+            <div class="call-center" id="callCenter">
+              <div class="ai-face">AI</div>
+            </div>
+            <div class="video-context-card" id="videoContextCard">
+              <strong>Voice call</strong>
+              <span id="videoContextText">Turn video on to add visual context.</span>
+            </div>
+            <div class="call-controls">
+              <button class="round-btn primary" id="voiceCallBtn" type="button">Call</button>
+              <button class="round-btn" id="muteBtn" type="button" disabled>Mute</button>
+              <button class="round-btn" id="cameraBtn" type="button" disabled>Video</button>
+              <button class="round-btn danger" id="endCallBtn" type="button" disabled>End</button>
+            </div>
+          </div>
+          <div class="call-transcript">
+            <div class="chat-log" id="chatLog">
+              <div class="voice-card">
+                <strong>OpenAI Voice</strong>
+                <span>Start the call to speak naturally with the tutor.</span>
+              </div>
+            </div>
+            <div class="text-fallback">
+              <h3>Text fallback</h3>
+              <p>Use this if the voice call cannot connect.</p>
+              <button class="fallback-start" id="startTextFallbackBtn" type="button">Start text chat</button>
+              <button class="fallback-start" id="startVoiceFromTextBtn" type="button">Use voice call</button>
+              <form class="chat-form" id="chatForm">
+                <input id="chatInput" placeholder="Type your reply in Spanish" disabled>
+                <button id="sendBtn" type="submit" disabled>Send</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="log-box" id="agentLogs">Agent logs will appear here.</div>
+    </section>
+  </main>
+
+  <script>
+    if (!window.fluentAI) {
+      async function bridge(command, payload) {
+        const response = await fetch(`/api/bridge/${command}`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload || {})
+        });
+        return response.json();
+      }
+
+      window.fluentAI = {
+        status: () => bridge("status"),
+        startLesson: (payload) => bridge("lesson_start", payload),
+        submitLesson: (payload) => bridge("lesson_submit", payload),
+        realtimeClientSecret: (payload) => bridge("realtime_client_secret", payload),
+        analyzeCameraFrame: (payload) => bridge("vision_analyze_frame", payload),
+        requestMediaAccess: async () => ({ ok: true }),
+        mediaDiagnostics: async () => ({ ok: true, fakeMedia: false }),
+        startConversation: (payload) => bridge("conversation_start", payload),
+        replyConversation: (payload) => bridge("conversation_reply", payload)
+      };
+    }
+
+    const state = {
+      mode: "lesson",
+      busy: false,
+      profile: null,
+      lessonSession: null,
+      conversationSession: null,
+      latestTutorMessage: "",
+      chatMessages: [],
+      localMediaStream: null,
+      realtimePeer: null,
+      realtimeChannel: null,
+      remoteAudio: null,
+      callActive: false,
+      muted: false,
+      visualContext: null,
+      visionSequence: 0,
+      visionInFlight: false,
+      visionLoopTimer: null,
+      lastVisionSignature: "",
+      mediaDiagnostics: { fakeMedia: false },
+      lessonAutoStarted: false
+    };
+
+    const els = {
+      headerMeta: document.getElementById("headerMeta"),
+      headerPills: document.getElementById("headerPills"),
+      profileBox: document.getElementById("profileBox"),
+      workspace: document.getElementById("workspace"),
+      workspaceStatus: document.getElementById("workspaceStatus"),
+      lessonPane: document.getElementById("lessonPane"),
+      conversationPane: document.getElementById("conversationPane"),
+      lessonEmpty: document.getElementById("lessonEmpty"),
+      lessonContent: document.getElementById("lessonContent"),
+      chatLog: document.getElementById("chatLog"),
+      chatForm: document.getElementById("chatForm"),
+      chatInput: document.getElementById("chatInput"),
+      sendBtn: document.getElementById("sendBtn"),
+      callStatus: document.getElementById("callStatus"),
+      callBadge: document.getElementById("callBadge"),
+      callCenter: document.getElementById("callCenter"),
+      videoContextCard: document.getElementById("videoContextCard"),
+      videoContextText: document.getElementById("videoContextText"),
+      voiceCallBtn: document.getElementById("voiceCallBtn"),
+      muteBtn: document.getElementById("muteBtn"),
+      cameraBtn: document.getElementById("cameraBtn"),
+      endCallBtn: document.getElementById("endCallBtn"),
+      turns: document.getElementById("turns"),
+      video: document.getElementById("video"),
+      modelMode: document.getElementById("modelMode"),
+      voiceMode: document.getElementById("voiceMode"),
+      videoPreview: document.getElementById("videoPreview"),
+      headerLessonBtn: document.getElementById("headerLessonBtn"),
+      headerConversationBtn: document.getElementById("headerConversationBtn"),
+      lessonModeBtn: document.getElementById("lessonModeBtn"),
+      conversationModeBtn: document.getElementById("conversationModeBtn"),
+      startLessonBtn: document.getElementById("startLessonBtn"),
+      startConversationBtn: document.getElementById("startConversationBtn"),
+      startTextFallbackBtn: document.getElementById("startTextFallbackBtn"),
+      startVoiceFromTextBtn: document.getElementById("startVoiceFromTextBtn"),
+      agentLogs: document.getElementById("agentLogs")
+    };
+
+    function text(tag, value, className) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      node.textContent = value;
+      return node;
+    }
+
+    els.voiceMode.value = "openai";
+    els.video.value = "off";
+    els.conversationPane.classList.remove("text-chat-active");
+
+    function setMode(mode) {
+      state.mode = mode;
+      if (mode === "lesson") {
+        endRealtimeCall();
+      }
+      els.lessonPane.classList.toggle("hidden", mode !== "lesson");
+      els.conversationPane.classList.toggle("hidden", mode !== "conversation");
+      els.workspace.classList.toggle("conversation-active", mode === "conversation");
+      els.lessonModeBtn.classList.toggle("active", mode === "lesson");
+      els.conversationModeBtn.classList.toggle("active", mode === "conversation");
+      els.headerLessonBtn.classList.toggle("active", mode === "lesson");
+      els.headerConversationBtn.classList.toggle("active", mode === "conversation");
+      els.conversationPane.classList.toggle("text-chat-active", mode === "conversation" && !shouldUseVoice());
+      if (mode === "conversation" && !state.callActive) {
+        els.cameraBtn.disabled = false;
+      }
+    }
+
+    function setBusy(busy, message) {
+      state.busy = busy;
+      els.startLessonBtn.disabled = busy;
+      els.startConversationBtn.disabled = busy;
+      els.startTextFallbackBtn.disabled = busy;
+      els.startVoiceFromTextBtn.disabled = busy;
+      const textFallbackReady = !shouldUseVoice() && state.conversationSession;
+      els.sendBtn.disabled = busy || !textFallbackReady;
+      els.chatInput.disabled = busy || !textFallbackReady;
+      if (message) els.workspaceStatus.textContent = message;
+    }
+
+    function renderProfile(profile) {
+      state.profile = profile;
+      const weak = (profile.weak_topics || []).join(", ") || "none";
+      els.headerMeta.textContent = `Level ${profile.level}; weak topics: ${weak}.`;
+      els.headerPills.replaceChildren(
+        pill(`XP ${profile.xp}`),
+        pill(`Streak ${profile.streak_days}`),
+        pill(`Fluency ${Math.round(Number(profile.fluency_score || 0) * 100)}%`)
+      );
+      els.profileBox.replaceChildren(
+        profileLine("Level", profile.level),
+        profileLine("Weak topics", weak),
+        profileLine("Speaking goal", profile.next_speaking_goal || "Answer in complete Spanish sentences.")
+      );
+    }
+
+    function pill(value) {
+      const node = document.createElement("span");
+      node.className = "pill";
+      node.textContent = value;
+      return node;
+    }
+
+    function profileLine(label, value) {
+      const p = document.createElement("p");
+      const strong = document.createElement("strong");
+      strong.textContent = `${label}: `;
+      p.append(strong, document.createTextNode(value));
+      return p;
+    }
+
+    function appendLogs(logs) {
+      if (!logs || !logs.length) return;
+      const previous = els.agentLogs.textContent === "Agent logs will appear here." ? "" : els.agentLogs.textContent + "\n";
+      els.agentLogs.textContent = previous + logs.join("\n");
+      els.agentLogs.scrollTop = els.agentLogs.scrollHeight;
+    }
+
+    function showError(message) {
+      els.workspaceStatus.innerHTML = "";
+      els.workspaceStatus.append(text("span", message, "error"));
+    }
+
+    function useOpenAI() {
+      return els.modelMode.value === "openai";
+    }
+
+    function shouldUseVoice() {
+      return els.voiceMode.value === "openai";
+    }
+
+    function audioConstraints() {
+      return {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      };
+    }
+
+    function cameraConstraints() {
+      return {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: "user",
+      };
+    }
+
+    function callMediaConstraints(wantsVideo) {
+      return {
+        audio: audioConstraints(),
+        video: wantsVideo ? cameraConstraints() : false,
+      };
+    }
+
+    async function loadMediaDiagnostics() {
+      if (!window.fluentAI.mediaDiagnostics) return;
+      try {
+        const diagnostics = await window.fluentAI.mediaDiagnostics();
+        if (diagnostics && diagnostics.ok) {
+          state.mediaDiagnostics = diagnostics;
+        }
+      } catch {
+        state.mediaDiagnostics = { fakeMedia: false };
+      }
+    }
+
+    function activeVideoTrack() {
+      if (!state.localMediaStream) return null;
+      return state.localMediaStream.getVideoTracks()[0] || null;
+    }
+
+    function usingSyntheticCamera() {
+      const track = activeVideoTrack();
+      const label = track && track.label ? track.label : "";
+      return Boolean(state.mediaDiagnostics.fakeMedia || /fake|test pattern/i.test(label));
+    }
+
+    function voiceStatusText() {
+      if (!shouldUseVoice()) return "Text fallback is active.";
+      if (state.callActive) return "Connected to the OpenAI voice model. Speak naturally.";
+      return "OpenAI voice call is ready. Press Call to connect microphone and audio.";
+    }
+
+    function setCallStatus(message) {
+      els.callStatus.textContent = message;
+      renderChat();
+    }
+
+    async function startRealtimeCall() {
+      if (!shouldUseVoice() || state.callActive) return;
+      setCallStatus("Creating OpenAI Realtime voice session...");
+      els.workspaceStatus.textContent = "Starting voice call...";
+      els.voiceCallBtn.disabled = true;
+      try {
+        const wantsVideo = els.video.value === "on";
+        const permission = await window.fluentAI.requestMediaAccess({
+          video: els.video.value
+        });
+        if (permission && !permission.ok) {
+          throw new Error(permission.error || "Microphone permission is required to start the voice call.");
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("Microphone access is unavailable in this environment.");
+        }
+
+        setCallStatus(wantsVideo ? "Requesting microphone and camera..." : "Requesting microphone...");
+        const media = await navigator.mediaDevices.getUserMedia(callMediaConstraints(wantsVideo));
+        state.localMediaStream = media;
+        state.visualContext = null;
+        state.visionSequence += 1;
+        renderCallMedia();
+
+        if (wantsVideo) {
+          setCallStatus("Camera is live. Connecting voice...");
+        }
+
+        const secret = await window.fluentAI.realtimeClientSecret({
+          video: els.video.value,
+          vision_summary: ""
+        });
+        if (!secret.ok || !secret.client_secret) {
+          setCallStatus(secret.error || "Could not create OpenAI Realtime session.");
+          appendLogs(secret.logs);
+          els.voiceCallBtn.disabled = false;
+          stopLocalMedia();
+          return;
+        }
+        renderProfile(secret.profile);
+        appendLogs(secret.logs);
+
+        const peer = new RTCPeerConnection();
+        state.realtimePeer = peer;
+        state.remoteAudio = new Audio();
+        state.remoteAudio.autoplay = true;
+        peer.ontrack = (event) => {
+          state.remoteAudio.srcObject = event.streams[0];
+          state.remoteAudio.play().catch(() => undefined);
+        };
+        media.getTracks().forEach((track) => peer.addTrack(track, media));
+        const channel = peer.createDataChannel("oai-events");
+        state.realtimeChannel = channel;
+        channel.onopen = () => {
+          sendRealtimeEvent({
+            type: "response.create",
+            response: {
+              instructions: "Start the Spanish tutoring call now. Greet the learner and ask the first simple question."
+                + (state.visualContext ? ` Use this camera context naturally: ${visualContextText()}.` : "")
+            }
+          });
+        };
+        channel.onmessage = (event) => handleRealtimeEvent(event.data);
+
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        const response = await fetch("https://api.openai.com/v1/realtime/calls", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${secret.client_secret}`,
+            "Content-Type": "application/sdp"
+          },
+          body: offer.sdp
+        });
+        if (!response.ok) {
+          const detail = await response.text();
+          endRealtimeCall();
+          setCallStatus(`OpenAI voice call failed: ${response.status} ${detail.slice(0, 180)}`);
+          return;
+        }
+        await peer.setRemoteDescription({ type: "answer", sdp: await response.text() });
+        state.callActive = true;
+        els.callBadge.textContent = `${secret.model || "gpt-realtime"} voice`;
+        els.voiceCallBtn.textContent = "Live";
+        els.voiceCallBtn.disabled = true;
+        els.muteBtn.disabled = false;
+        els.cameraBtn.disabled = false;
+        els.endCallBtn.disabled = false;
+        els.workspaceStatus.textContent = "Voice tutor is live.";
+        setCallStatus(wantsVideo ? "Connected. Video is live while OpenAI analyzes the view." : "Connected. Speak to the tutor naturally.");
+        if (wantsVideo) {
+          startVisionLoop("connected");
+        }
+      } catch (error) {
+        endRealtimeCall();
+        els.workspaceStatus.textContent = "Voice call needs attention.";
+        setCallStatus(mediaErrorMessage(error));
+      }
+    }
+
+    function mediaErrorMessage(error) {
+      const message = error && error.message ? error.message : "OpenAI voice call could not start.";
+      const name = error && error.name ? error.name : "";
+      if (/permission denied|notallowed|denied|blocked/i.test(`${name} ${message}`)) {
+        return "Mic permission is blocked. Allow microphone access, then press Call again.";
+      }
+      if (/notfound|device/i.test(`${name} ${message}`)) {
+        return "No microphone was found. Connect a microphone, then press Call again.";
+      }
+      return message;
+    }
+
+    function sendRealtimeEvent(payload) {
+      if (state.realtimeChannel && state.realtimeChannel.readyState === "open") {
+        state.realtimeChannel.send(JSON.stringify(payload));
+      }
+    }
+
+    async function analyzeCurrentCameraFrame() {
+      const image = await captureCameraFrame();
+      if (!image) return { ok: false, error: "Camera frame was not ready yet." };
+      return window.fluentAI.analyzeCameraFrame({ image });
+    }
+
+    async function analyzeVisionInBackground(reason) {
+      if (state.visionInFlight) return;
+      if (!state.localMediaStream || !state.localMediaStream.getVideoTracks().length) return;
+      const sequence = state.visionSequence;
+      state.visionInFlight = true;
+      try {
+        const vision = await analyzeCurrentCameraFrame();
+        if (sequence !== state.visionSequence) return;
+        if (vision && vision.ok) {
+          if (shouldIgnoreSyntheticVision(vision)) {
+            state.visualContext = {
+              ok: true,
+              summary: "Test camera feed detected. Restart without fake media to use the real camera.",
+              primary_object: "",
+              spanish_prompt: "",
+              confidence: "high",
+              synthetic: true,
+            };
+            appendLogs([
+              "[Vision Context Agent] Ignored synthetic test-camera pattern.",
+              "[Vision Context Agent] Restart without FLUENTAI_FAKE_MEDIA to use the real camera feed.",
+            ]);
+            renderCallMedia();
+            if (state.callActive) {
+              setCallStatus("Test camera feed detected. Use the normal app launch for your real camera.");
+            }
+            return;
+          }
+          state.visualContext = vision;
+          appendLogs(vision.logs);
+          renderCallMedia();
+          const signature = visionSignature(vision);
+          const changed = signature && signature !== state.lastVisionSignature;
+          state.lastVisionSignature = signature || state.lastVisionSignature;
+          if (state.callActive && (reason !== "loop" || changed)) {
+            sendRealtimeEvent({
+              type: "response.create",
+              response: {
+                instructions: `You are watching the learner's live camera through OpenAI vision updates. Use this latest camera context naturally in Spanish: ${visualContextText()}. Respond to what you see with one short, level-appropriate tutor question.`
+              }
+            });
+            setCallStatus("Video is live and OpenAI recognized the scene.");
+          }
+          return;
+        }
+        if (vision) appendLogs(vision.logs);
+        if (state.callActive || reason === "initial") {
+          setCallStatus(vision && vision.error ? vision.error : "Video is live, but OpenAI could not analyze this frame.");
+        }
+      } finally {
+        state.visionInFlight = false;
+      }
+    }
+
+    function startVisionLoop(reason) {
+      stopVisionLoop();
+      analyzeVisionInBackground(reason);
+      state.visionLoopTimer = window.setInterval(() => {
+        analyzeVisionInBackground("loop");
+      }, 9000);
+    }
+
+    function stopVisionLoop() {
+      if (state.visionLoopTimer) {
+        window.clearInterval(state.visionLoopTimer);
+        state.visionLoopTimer = null;
+      }
+    }
+
+    function visionSignature(vision) {
+      return [
+        vision.summary || "",
+        vision.primary_object || "",
+      ].join("|").toLowerCase().replace(/\s+/g, " ").trim();
+    }
+
+    function shouldIgnoreSyntheticVision(vision) {
+      if (!usingSyntheticCamera()) return false;
+      const description = [
+        vision.summary || "",
+        vision.primary_object || "",
+        vision.spanish_prompt || "",
+      ].join(" ").toLowerCase();
+      return /green|shape|test|synthetic|fake/.test(description);
+    }
+
+    async function captureCameraFrame() {
+      if (!state.localMediaStream || !state.localMediaStream.getVideoTracks().length) return "";
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = state.localMediaStream;
+      await new Promise((resolve) => {
+        video.onloadedmetadata = resolve;
+        setTimeout(resolve, 900);
+        video.play().catch(() => resolve());
+      });
+      const width = video.videoWidth || 640;
+      const height = video.videoHeight || 480;
+      if (!width || !height) return "";
+      const scale = Math.min(1, 640 / Math.max(width, height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) return "";
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.72);
+    }
+
+    function visualContextText() {
+      if (!state.visualContext) return "";
+      return [
+        state.visualContext.summary,
+        state.visualContext.primary_object ? `Primary object: ${state.visualContext.primary_object}` : "",
+        state.visualContext.spanish_prompt ? `Tutor prompt: ${state.visualContext.spanish_prompt}` : "",
+      ].filter(Boolean).join(" ");
+    }
+
+    function handleRealtimeEvent(raw) {
+      let event;
+      try {
+        event = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      if (event.type === "response.output_audio_transcript.done" && event.transcript) {
+        state.chatMessages.push({ role: "tutor", text: event.transcript });
+        renderChat();
+      }
+      if (event.type === "conversation.item.input_audio_transcription.completed" && event.transcript) {
+        state.chatMessages.push({ role: "learner", text: event.transcript });
+        renderChat();
+      }
+    }
+
+    function endRealtimeCall() {
+      stopVisionLoop();
+      if (state.realtimeChannel) state.realtimeChannel.close();
+      if (state.realtimePeer) state.realtimePeer.close();
+      if (state.remoteAudio) {
+        state.remoteAudio.pause();
+        state.remoteAudio.srcObject = null;
+      }
+      stopLocalMedia();
+      state.realtimeChannel = null;
+      state.realtimePeer = null;
+      state.remoteAudio = null;
+      state.callActive = false;
+      state.muted = false;
+      state.visionSequence += 1;
+      state.visionInFlight = false;
+      state.lastVisionSignature = "";
+      els.voiceCallBtn.textContent = "Call";
+      els.voiceCallBtn.disabled = false;
+      els.muteBtn.disabled = true;
+      els.cameraBtn.disabled = state.mode !== "conversation";
+      els.endCallBtn.disabled = true;
+      renderCallMedia();
+      if (state.mode === "conversation") {
+        els.workspaceStatus.textContent = "Call ended.";
+        setCallStatus("Call ended. Press Call to reconnect.");
+      }
+    }
+
+    function stopLocalMedia() {
+      if (!state.localMediaStream) return;
+      state.localMediaStream.getTracks().forEach((track) => track.stop());
+      state.localMediaStream = null;
+    }
+
+    function renderCallMedia() {
+      const wantsVideo = els.video.value === "on";
+      const context = visualContextText();
+      const contextLabel = context || "OpenAI will keep checking the live camera while video is on.";
+      const hasVideo = state.localMediaStream && state.localMediaStream.getVideoTracks().length > 0;
+      const audioTrack = state.localMediaStream ? state.localMediaStream.getAudioTracks()[0] : null;
+      const contextTitle = els.videoContextCard.querySelector("strong");
+      if (contextTitle) contextTitle.textContent = wantsVideo ? "OpenAI vision" : "Voice call";
+      els.videoContextCard.classList.toggle("active", wantsVideo);
+      els.videoContextText.textContent = wantsVideo
+        ? contextLabel
+        : "Turn video on to add visual context.";
+      els.callBadge.textContent = shouldUseVoice() ? "OpenAI voice model" : "Text fallback";
+      els.cameraBtn.textContent = wantsVideo ? "Video On" : "Video";
+      els.cameraBtn.classList.toggle("active", wantsVideo);
+      els.muteBtn.textContent = state.muted || (audioTrack && !audioTrack.enabled) ? "Unmute" : "Mute";
+
+      if (hasVideo) {
+        const videoEl = document.createElement("video");
+        videoEl.className = "call-video";
+        videoEl.autoplay = true;
+        videoEl.muted = true;
+        videoEl.playsInline = true;
+        videoEl.srcObject = state.localMediaStream;
+        const overlay = document.createElement("div");
+        overlay.className = "video-overlay";
+        overlay.replaceChildren(
+          text("strong", usingSyntheticCamera() ? "Test camera feed" : "Live camera"),
+          text("span", state.visualContext ? state.visualContext.summary : "OpenAI vision is watching for context")
+        );
+        els.callCenter.replaceChildren(videoEl, overlay);
+        return;
+      }
+
+      const face = document.createElement("div");
+      face.className = "ai-face";
+      face.textContent = state.callActive ? "LIVE" : "AI";
+      els.callCenter.replaceChildren(face);
+    }
+
+    function toggleMute() {
+      if (!state.localMediaStream) return;
+      state.muted = !state.muted;
+      state.localMediaStream.getAudioTracks().forEach((track) => {
+        track.enabled = !state.muted;
+      });
+      setCallStatus(state.muted ? "Microphone muted." : "Microphone live. Speak naturally.");
+      renderCallMedia();
+    }
+
+    async function syncCallCameraToSelect() {
+      const wantsVideo = els.video.value === "on";
+      const videoTracks = state.localMediaStream ? state.localMediaStream.getVideoTracks() : [];
+      if (!state.callActive || !state.localMediaStream) {
+        updateVideoPreview();
+        return;
+      }
+
+      if (wantsVideo && !videoTracks.length) {
+        try {
+          setCallStatus("Requesting camera for this call...");
+          const videoStream = await navigator.mediaDevices.getUserMedia({ video: cameraConstraints(), audio: false });
+          videoStream.getVideoTracks().forEach((track) => {
+            state.localMediaStream.addTrack(track);
+            if (state.realtimePeer) state.realtimePeer.addTrack(track, state.localMediaStream);
+          });
+          state.visualContext = null;
+          state.visionSequence += 1;
+          renderCallMedia();
+          setCallStatus("Camera is live. OpenAI is analyzing the view...");
+          startVisionLoop("toggle");
+        } catch (error) {
+          els.video.value = "off";
+          setCallStatus(error.message || "Camera could not be started.");
+        }
+      }
+
+      if (!wantsVideo && videoTracks.length) {
+        const senders = state.realtimePeer ? state.realtimePeer.getSenders() : [];
+        videoTracks.forEach((track) => {
+          const sender = senders.find((candidate) => candidate.track === track);
+          if (sender && state.realtimePeer) state.realtimePeer.removeTrack(sender);
+          track.stop();
+          state.localMediaStream.removeTrack(track);
+        });
+        state.visualContext = null;
+        state.visionSequence += 1;
+        state.lastVisionSignature = "";
+        stopVisionLoop();
+        setCallStatus("Video paused. Voice is still live.");
+      }
+
+      renderCallMedia();
+      updateVideoPreview();
+    }
+
+    async function toggleCallCamera() {
+      els.video.value = els.video.value === "on" ? "off" : "on";
+      if (state.callActive) {
+        await syncCallCameraToSelect();
+        return;
+      }
+      setCallStatus(els.video.value === "on" ? "Video will be included when the call starts." : "Voice-only call selected.");
+      updateVideoPreview();
+    }
+
+    function updateVideoPreview() {
+      const on = els.video.value === "on";
+      renderCallMedia();
+
+      if (!on) {
+        els.videoPreview.style.background = "linear-gradient(135deg, #991b1b, #172026)";
+        const wrapper = text("div", "");
+        wrapper.replaceChildren(text("strong", "Voice Call"), text("span", "Video off"));
+        els.videoPreview.replaceChildren(wrapper);
+        return;
+      }
+
+      els.videoPreview.style.background = "linear-gradient(135deg, #f59e0b, #b45309)";
+      const wrapper = text("div", "");
+      wrapper.replaceChildren(text("strong", "OpenAI Vision"), text("span", "Camera frame recognition"));
+      els.videoPreview.replaceChildren(wrapper);
+    }
+
+    async function refreshStatus() {
+      const result = await window.fluentAI.status();
+      if (!result.ok) {
+        showError(result.error || "Could not load status.");
+        return;
+      }
+      renderProfile(result.profile);
+      appendLogs(result.logs);
+    }
+
+    async function ensureLessonStarted() {
+      if (state.lessonAutoStarted || state.lessonSession || state.busy) return;
+      state.lessonAutoStarted = true;
+      await startLesson();
+    }
+
+    async function startLesson() {
+      setMode("lesson");
+      setBusy(true, "Building lesson...");
+      els.lessonEmpty.classList.add("hidden");
+      els.lessonPane.classList.add("lesson-active");
+      els.lessonContent.replaceChildren(block("Working", [
+        useOpenAI()
+          ? "OpenAI is generating the lesson. This can take a moment."
+          : "Fast local agents are generating the lesson now."
+      ], true));
+      const result = await window.fluentAI.startLesson({ use_openai: useOpenAI() });
+      if (!result.ok) {
+        showError(result.error || "Lesson failed.");
+        setBusy(false, "Ready");
+        return;
+      }
+      state.lessonSession = { lesson: result.lesson, quiz: result.quiz };
+      renderProfile(result.profile);
+      appendLogs(result.logs);
+      renderLesson(result.lesson, result.quiz);
+      setBusy(false, "Answer the quiz, then submit.");
+    }
+
+    function renderLesson(lesson, quiz) {
+      const grid = document.createElement("div");
+      grid.className = "lesson-grid";
+
+      const left = document.createElement("div");
+      left.className = "lesson-column";
+      left.append(
+        lessonHero(lesson, quiz.length),
+        vocabBlock(lesson.vocabulary || []),
+        block("Grammar Focus", [lesson.grammar_explanation || ""], false),
+        examplesBlock(lesson.examples || []),
+        block("Coach Challenge", [lesson.micro_task || ""], true)
+      );
+
+      const right = document.createElement("form");
+      right.id = "quizForm";
+      right.className = "quiz-column";
+      right.append(text("h3", "Adaptive Quiz"));
+      quiz.forEach((question, index) => right.append(questionNode(question, index)));
+      const submit = document.createElement("button");
+      submit.type = "submit";
+      submit.className = "submit-quiz";
+      submit.textContent = "Submit Quiz";
+      right.append(submit);
+      right.addEventListener("submit", submitQuiz);
+
+      grid.append(left, right);
+      els.lessonContent.replaceChildren(grid);
+    }
+
+    function lessonHero(lesson, questionCount) {
+      const node = document.createElement("div");
+      node.className = "lesson-hero";
+      node.append(
+        text("p", "Today's lesson", "eyebrow"),
+        text("h3", titleCase(String(lesson.topic || "Spanish practice"))),
+        text("p", `A ${lesson.minutes}-minute ${lesson.level} session focused on ${lesson.focus_skill}.`)
+      );
+      const metrics = document.createElement("div");
+      metrics.className = "lesson-metrics";
+      [
+        ["Level", lesson.level],
+        ["Quiz", `${questionCount} questions`],
+        ["Focus", lesson.focus_skill],
+      ].forEach(([label, value]) => {
+        const metric = document.createElement("div");
+        metric.className = "metric";
+        metric.append(text("span", label), text("strong", value));
+        metrics.append(metric);
+      });
+      node.append(metrics);
+      return node;
+    }
+
+    function titleCase(value) {
+      return value
+        .split(" ")
+        .filter(Boolean)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+    }
+
+    function block(title, rows, tint) {
+      const node = document.createElement("div");
+      node.className = `section-block${tint ? " tint" : ""}`;
+      node.append(text("h3", title));
+      rows.filter(Boolean).forEach((row) => node.append(text("p", row)));
+      return node;
+    }
+
+    function vocabBlock(items) {
+      const node = document.createElement("div");
+      node.className = "section-block";
+      node.append(text("h3", "Vocabulary"));
+      const list = document.createElement("ul");
+      list.className = "vocab-list";
+      items.forEach(([word, meaning]) => {
+        const li = document.createElement("li");
+        li.append(text("strong", word), text("span", meaning));
+        list.append(li);
+      });
+      node.append(list);
+      return node;
+    }
+
+    function examplesBlock(items) {
+      const node = document.createElement("div");
+      node.className = "section-block";
+      node.append(text("h3", "Examples"));
+      const list = document.createElement("ul");
+      list.className = "example-list";
+      items.forEach(([source, meaning]) => {
+        const li = document.createElement("li");
+        li.append(text("strong", source), text("span", meaning));
+        list.append(li);
+      });
+      node.append(list);
+      return node;
+    }
+
+    function questionNode(question, index) {
+      const node = document.createElement("div");
+      node.className = "question";
+      node.dataset.index = String(index);
+      node.append(text("p", `Question ${index + 1}`, "question-kicker"));
+      node.append(text("p", question.prompt, "question-prompt"));
+
+      if (question.choices && question.choices.length) {
+        const answers = document.createElement("div");
+        answers.className = "answer-grid";
+        question.choices.forEach((choice) => {
+          const label = document.createElement("label");
+          label.className = "choice";
+          const radio = document.createElement("input");
+          radio.type = "radio";
+          radio.name = `q${index}`;
+          radio.value = choice;
+          label.append(radio, document.createTextNode(choice));
+          answers.append(label);
+        });
+        node.append(answers);
+      } else {
+        const input = document.createElement("input");
+        input.className = "free-answer";
+        input.name = `q${index}`;
+        input.placeholder = "Your answer";
+        node.append(input);
+      }
+      return node;
+    }
+
+    async function submitQuiz(event) {
+      event.preventDefault();
+      if (!state.lessonSession) return;
+      setBusy(true, "Grading quiz...");
+      const answers = state.lessonSession.quiz.map((question, index) => {
+        const checked = document.querySelector(`input[name="q${index}"]:checked`);
+        if (checked) return checked.value;
+        const input = document.querySelector(`input[name="q${index}"]`);
+        return input ? input.value : "";
+      });
+
+      const result = await window.fluentAI.submitLesson({
+        lesson: state.lessonSession.lesson,
+        quiz: state.lessonSession.quiz,
+        answers
+      });
+      if (!result.ok) {
+        showError(result.error || "Quiz grading failed.");
+        setBusy(false, "Ready");
+        return;
+      }
+      renderProfile(result.profile);
+      appendLogs(result.logs);
+      renderQuizResults(result.results, result.summary);
+      setBusy(false, `Score ${result.summary.score}`);
+    }
+
+    function renderQuizResults(results, summary) {
+      const panel = document.createElement("div");
+      panel.className = "section-block tint quiz-summary";
+      panel.append(text("h3", `Score ${summary.score}`), text("p", summary.report), text("p", summary.recommendation));
+
+      results.forEach((result, index) => {
+        const question = document.querySelector(`.question[data-index="${index}"]`);
+        if (!question) return;
+        const feedback = document.createElement("div");
+        feedback.className = `feedback${result.correct ? "" : " review"}`;
+        feedback.append(
+          text("strong", result.correct ? "Correct" : "Review"),
+          text("p", result.feedback),
+          text("p", `Expected: ${result.expected}`)
+        );
+        question.append(feedback);
+      });
+
+      const existing = document.getElementById("quizSummary");
+      if (existing) existing.remove();
+      panel.id = "quizSummary";
+      els.lessonContent.prepend(panel);
+    }
+
+    async function startConversation() {
+      setMode("conversation");
+      state.conversationSession = null;
+      state.latestTutorMessage = "";
+      state.chatMessages = [];
+      renderChat();
+
+      if (shouldUseVoice()) {
+        setBusy(true, "Starting OpenAI voice call...");
+        await startRealtimeCall();
+        setBusy(false, state.callActive ? "Voice tutor is live." : "Voice call is ready.");
+        return;
+      }
+
+      setBusy(true, "Starting text fallback tutor session...");
+      state.chatMessages = [{
+        role: "system",
+        text: useOpenAI()
+          ? "Tutor is preparing the first question with OpenAI..."
+          : "Tutor is preparing the first question..."
+      }];
+      renderChat();
+        const result = await window.fluentAI.startConversation({
+          turns: Number(els.turns.value || 4),
+          video: els.video.value,
+          object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : "",
+          use_openai: useOpenAI()
+        });
+      if (!result.ok) {
+        showError(result.error || "Conversation failed.");
+        setBusy(false, "Ready");
+        return;
+      }
+      state.conversationSession = result.session;
+      state.latestTutorMessage = result.tutor_message;
+      state.chatMessages = [{ role: "tutor", text: result.tutor_message }];
+      renderProfile(result.profile);
+      appendLogs(result.logs);
+      renderChat();
+      setBusy(false, "Your turn.");
+      els.chatInput.focus();
+    }
+
+    async function startTextFallback() {
+      els.voiceMode.value = "text";
+      endRealtimeCall();
+      els.video.value = "off";
+      state.visualContext = null;
+      state.visionSequence += 1;
+      state.lastVisionSignature = "";
+      state.conversationSession = null;
+      state.latestTutorMessage = "";
+      state.chatMessages = [];
+      els.conversationPane.classList.add("text-chat-active");
+      setCallStatus("Text fallback selected. Starting typed tutor...");
+      renderCallMedia();
+      renderChat();
+      await startConversation();
+    }
+
+    async function startVoiceCallFromButton() {
+      if (!shouldUseVoice()) {
+        showVoiceCallInterface();
+      }
+      await startRealtimeCall();
+    }
+
+    function showVoiceCallInterface() {
+      els.voiceMode.value = "openai";
+      endRealtimeCall();
+      state.conversationSession = null;
+      state.latestTutorMessage = "";
+      state.chatMessages = [];
+      state.visualContext = null;
+      state.visionSequence += 1;
+      state.lastVisionSignature = "";
+      els.conversationPane.classList.remove("text-chat-active");
+      setBusy(false, "OpenAI voice call selected.");
+      setCallStatus("Ready for an OpenAI voice session.");
+      renderCallMedia();
+      renderChat();
+    }
+
+    async function sendConversationReply(event) {
+      event.preventDefault();
+      if (!state.conversationSession) return;
+      const message = els.chatInput.value.trim();
+      if (!message) return;
+
+      els.chatInput.value = "";
+      state.chatMessages.push({ role: "learner", text: message });
+      renderChat();
+      setBusy(true, "Tutor is listening...");
+
+      const result = await window.fluentAI.replyConversation({
+        session: state.conversationSession,
+        message,
+        tutor_message: state.latestTutorMessage,
+        use_openai: useOpenAI()
+      });
+      if (!result.ok) {
+        showError(result.error || "Reply failed.");
+        setBusy(false, "Your turn.");
+        return;
+      }
+
+      state.conversationSession = result.session;
+      state.latestTutorMessage = result.tutor_message;
+      state.chatMessages.push({
+        role: "system",
+        text: result.turn.correction
+          ? `${result.turn.feedback} Model phrase: ${result.turn.correction}`
+          : result.turn.feedback
+      });
+      state.chatMessages.push({ role: "tutor", text: result.tutor_message });
+      renderProfile(result.profile);
+      appendLogs(result.logs);
+      renderChat();
+      setBusy(false, result.done ? "Turn target reached. You can keep chatting." : "Your turn.");
+      els.chatInput.focus();
+    }
+
+    function renderChat() {
+      const voiceCard = document.createElement("div");
+      voiceCard.className = "voice-card";
+      voiceCard.append(text("strong", shouldUseVoice() ? "Voice Mode" : "Text Mode"), text("span", voiceStatusText()));
+
+      if (!state.chatMessages.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.append(text("div", ""));
+        empty.firstChild.replaceChildren(
+          text("strong", "Call not started"),
+          text("p", shouldUseVoice() ? "Press Call to connect the OpenAI voice tutor." : "Use the message box below to chat with the tutor.")
+        );
+        els.chatLog.replaceChildren(voiceCard, empty);
+        return;
+      }
+
+      els.chatLog.replaceChildren(voiceCard);
+      state.chatMessages.forEach((message) => {
+        const bubble = document.createElement("div");
+        bubble.className = `bubble ${message.role}`;
+        const label = message.role === "tutor" ? "Tutor" : message.role === "learner" ? "You" : "Feedback";
+        bubble.append(text("small", label), text("p", message.text));
+        els.chatLog.append(bubble);
+      });
+      els.chatLog.scrollTop = els.chatLog.scrollHeight;
+    }
+
+    els.lessonModeBtn.addEventListener("click", () => setMode("lesson"));
+    els.conversationModeBtn.addEventListener("click", () => setMode("conversation"));
+    els.headerLessonBtn.addEventListener("click", () => setMode("lesson"));
+    els.headerConversationBtn.addEventListener("click", () => setMode("conversation"));
+    els.startLessonBtn.addEventListener("click", startLesson);
+    els.startConversationBtn.addEventListener("click", startConversation);
+    els.startTextFallbackBtn.addEventListener("click", startTextFallback);
+    els.startVoiceFromTextBtn.addEventListener("click", showVoiceCallInterface);
+    els.voiceCallBtn.addEventListener("click", startVoiceCallFromButton);
+    els.muteBtn.addEventListener("click", toggleMute);
+    els.cameraBtn.addEventListener("click", toggleCallCamera);
+    els.endCallBtn.addEventListener("click", endRealtimeCall);
+    els.chatForm.addEventListener("submit", sendConversationReply);
+    els.video.addEventListener("change", syncCallCameraToSelect);
+    els.voiceMode.addEventListener("change", () => {
+      endRealtimeCall();
+      state.conversationSession = null;
+      state.chatMessages = [];
+      els.conversationPane.classList.toggle("text-chat-active", !shouldUseVoice());
+      setBusy(false, shouldUseVoice() ? "OpenAI voice call selected." : "Text fallback selected.");
+      setCallStatus(shouldUseVoice() ? "Ready for an OpenAI voice session." : "Text fallback selected. Start Conversation to type with the tutor.");
+      renderCallMedia();
+      renderChat();
+    });
+    window.addEventListener("beforeunload", () => {
+      endRealtimeCall();
+    });
+
+    updateVideoPreview();
+    loadMediaDiagnostics().then(() => renderCallMedia());
+    setMode("lesson");
+    refreshStatus().then(ensureLessonStarted);
+  </script>
+</body>
+</html>

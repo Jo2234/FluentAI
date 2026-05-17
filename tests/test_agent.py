@@ -1,0 +1,145 @@
+import unittest
+from tempfile import TemporaryDirectory
+from pathlib import Path
+
+from fluent_ai.agent import evaluate_answers, generate_lesson, generate_quiz, update_progress
+from fluent_ai.conversation import asks_for_english_help, build_follow_up, choose_conversation_topic, run_conversation
+from fluent_ai.desktop_bridge import conversation_reply, conversation_start, lesson_start, lesson_submit
+from fluent_ai.state import default_state
+
+
+class AgentTests(unittest.TestCase):
+    def test_progress_updates_after_quiz(self):
+        state = default_state("Spanish")
+        lesson = generate_lesson(state)
+        quiz = generate_quiz(state, lesson)
+        answers = [question["answer"] for question in quiz]
+
+        results = evaluate_answers(quiz, answers)
+        update_progress(state, lesson, results)
+
+        self.assertGreater(state["learner"]["xp"], 0)
+        self.assertTrue(state["history"])
+        self.assertIn(lesson["topic"], state["recent_topics"])
+        self.assertIn("current_level", state["learner"])
+
+    def test_quiz_has_required_mixed_question_types(self):
+        state = default_state("Spanish")
+        lesson = generate_lesson(state)
+        quiz = generate_quiz(state, lesson)
+        question_types = {question["type"] for question in quiz}
+
+        self.assertGreaterEqual(len(quiz), 5)
+        self.assertLessEqual(len(quiz), 8)
+        self.assertIn("multiple_choice", question_types)
+        self.assertIn("fill_blank", question_types)
+        self.assertIn("open_ended", question_types)
+
+    def test_conversation_mode_initiates_and_updates_memory(self):
+        state = default_state("Spanish")
+
+        transcript, updated_state, topic = run_conversation(
+            state=state,
+            turns=3,
+            mode="auto",
+            video_on=False,
+            video_object=None,
+        )
+
+        self.assertEqual(len(transcript), 3)
+        self.assertTrue(transcript[0].tutor_text)
+        self.assertEqual(updated_state["conversation_memory"]["sessions_completed"], 1)
+        self.assertEqual(updated_state["conversation_memory"]["total_turns"], 3)
+        self.assertIn(topic["topic"], updated_state["conversation_memory"]["recent_topics"])
+
+    def test_video_object_steers_beginner_conversation(self):
+        state = default_state("Spanish")
+
+        topic = choose_conversation_topic(state, video_on=True, video_object="apple")
+        transcript, updated_state, _topic = run_conversation(
+            state=state,
+            turns=2,
+            mode="auto",
+            video_on=True,
+            video_object="apple",
+        )
+
+        self.assertIn("manzana", topic["opening"])
+        self.assertIn("manzana", transcript[0].tutor_text)
+        self.assertEqual(updated_state["conversation_memory"]["last_video_object"], "apple")
+
+    def test_advanced_conversation_uses_complex_topics(self):
+        state = default_state("Spanish")
+        state["learner"]["current_level"] = "C1"
+        state["learner"]["level"] = "C1"
+
+        topic = choose_conversation_topic(state, video_on=False, video_object=None)
+
+        self.assertIn(topic["complexity"], {"advanced", "near-native"})
+
+    def test_conversation_can_switch_to_english_help(self):
+        state = default_state("Spanish")
+        topic = {
+            "topic": "weather",
+            "complexity": "beginner",
+            "support": "Model answer: Hace sol.",
+            "keywords": ["hace", "sol"],
+        }
+
+        self.assertTrue(asks_for_english_help("What does that mean in English?"))
+        follow_up = build_follow_up(topic, "What does that mean in English?", 0.2, 1, state)
+        self.assertIn("In English", follow_up)
+        self.assertIn("Hace sol", follow_up)
+
+    def test_desktop_bridge_lesson_waits_for_real_answers(self):
+        with TemporaryDirectory() as tmpdir:
+            state_path = str(Path(tmpdir) / "progress.json")
+            start = lesson_start({"state_path": state_path, "language": "Spanish", "use_openai": False})
+            answers = [question["answer"] for question in start["quiz"]]
+
+            result = lesson_submit(
+                {
+                    "state_path": state_path,
+                    "language": "Spanish",
+                    "lesson": start["lesson"],
+                    "quiz": start["quiz"],
+                    "answers": answers,
+                }
+            )
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["summary"]["score"], f"{len(answers)}/{len(answers)}")
+            self.assertGreater(result["profile"]["xp"], 0)
+
+    def test_desktop_bridge_conversation_accepts_user_reply(self):
+        with TemporaryDirectory() as tmpdir:
+            state_path = str(Path(tmpdir) / "progress.json")
+            start = conversation_start(
+                {
+                    "state_path": state_path,
+                    "language": "Spanish",
+                    "use_openai": False,
+                    "video": "on",
+                    "object": "apple",
+                    "turns": 2,
+                }
+            )
+            reply = conversation_reply(
+                {
+                    "state_path": state_path,
+                    "language": "Spanish",
+                    "use_openai": False,
+                    "session": start["session"],
+                    "message": "Esto es una manzana.",
+                    "tutor_message": start["tutor_message"],
+                }
+            )
+
+            self.assertTrue(reply["ok"])
+            self.assertEqual(len(reply["session"]["turns"]), 1)
+            self.assertIn("manzana", reply["tutor_message"])
+            self.assertGreater(reply["profile"]["fluency_score"], start["profile"]["fluency_score"])
+
+
+if __name__ == "__main__":
+    unittest.main()

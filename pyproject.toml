@@ -1,0 +1,14 @@
+[project]
+name = "fluent-ai"
+version = "0.1.0"
+description = "Agentic language learning demo with local learner state."
+requires-python = ">=3.10"
+dependencies = ["openai>=1.0.0"]
+
+[project.optional-dependencies]
+ui = ["gradio"]
+
+[project.scripts]
+fluent-ai = "fluent_ai.app:main"
+fluent-ai-ui = "fluent_ai.ui:main"
+fluent-ai-web = "fluent_ai.web:main"

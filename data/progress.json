@@ -1,0 +1,380 @@
+{
+  "learner": {
+    "name": "Demo Learner",
+    "target_language": "Spanish",
+    "current_level": "A1",
+    "level": "A1",
+    "xp": 325,
+    "streak_days": 1,
+    "learning_goals": [
+      "Hold a simple 5-minute conversation",
+      "Build useful daily vocabulary",
+      "Improve conjugation accuracy"
+    ]
+  },
+  "weak_topics": [
+    "daily routines",
+    "present tense",
+    "family vocabulary",
+    "translation"
+  ],
+  "skills": {
+    "vocabulary": 0.8,
+    "grammar": 0.452,
+    "conjugations": 0.29,
+    "reading": 0.32,
+    "translation": 0.275
+  },
+  "topic_mastery": {
+    "cafe orders": 0.34,
+    "introductions": 0.43,
+    "daily routines": 0.05,
+    "past tense": 0.4,
+    "conjugations": 0.66,
+    "vocabulary": 0.34,
+    "visible object: manzana": 0.46,
+    "weather": 0.3,
+    "likes and food": 0.375,
+    "present tense": 0.21,
+    "family vocabulary": 0.21
+  },
+  "preferences": {
+    "lesson_minutes": 10,
+    "daily_quiz_questions": 6,
+    "tone": "encouraging and specific"
+  },
+  "recent_topics": [
+    "conjugations",
+    "conjugations",
+    "daily routines",
+    "introductions",
+    "present tense",
+    "family vocabulary",
+    "daily routines",
+    "introductions"
+  ],
+  "history": [
+    {
+      "mode": "conversation_turn",
+      "topic": "visible object: manzana",
+      "complexity": "visual beginner",
+      "score": 0.58,
+      "video_on": true,
+      "video_object": "apple",
+      "next_speaking_goal": "Add one extra detail after each basic answer."
+    },
+    {
+      "topic": "introductions",
+      "focus_skill": "vocabulary",
+      "difficulty": "easier",
+      "correct_count": 0,
+      "total_questions": 5,
+      "score": "0/5",
+      "level_after": "A1",
+      "weak_topics_after": [
+        "introductions",
+        "daily routines",
+        "past tense",
+        "conjugations"
+      ],
+      "adaptation": "Next cycle should stay at A1 and focus on introductions, daily routines."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "visible object: manzana",
+      "complexity": "visual beginner",
+      "score": 0.4,
+      "video_on": true,
+      "video_object": "apple",
+      "next_speaking_goal": "Review useful phrases for visible object: manzana before the next conversation."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "visible object: manzana",
+      "complexity": "visual beginner",
+      "score": 0.51,
+      "video_on": true,
+      "video_object": "apple",
+      "next_speaking_goal": "Add one extra detail after each basic answer."
+    },
+    {
+      "topic": "past tense",
+      "focus_skill": "conjugations",
+      "difficulty": "easier",
+      "correct_count": 5,
+      "total_questions": 5,
+      "score": "5/5",
+      "level_after": "A1",
+      "weak_topics_after": [
+        "daily routines",
+        "introductions",
+        "conjugations",
+        "weather"
+      ],
+      "adaptation": "Next cycle should stay at A1 and focus on daily routines, introductions."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "visible object: manzana",
+      "complexity": "visual beginner",
+      "score": 0.95,
+      "video_on": true,
+      "video_object": "apple",
+      "next_speaking_goal": "Add one extra detail after each basic answer."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "likes and food",
+      "complexity": "beginner",
+      "score": 0.95,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Add one extra detail after each basic answer."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "weather",
+      "complexity": "beginner",
+      "score": 0.73,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Add one extra detail after each basic answer."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "introductions",
+      "complexity": "beginner",
+      "score": 0.55,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Add one extra detail after each basic answer."
+    },
+    {
+      "topic": "conjugations",
+      "focus_skill": "conjugations",
+      "difficulty": "easier",
+      "correct_count": 4,
+      "total_questions": 5,
+      "score": "4/5",
+      "level_after": "A1",
+      "weak_topics_after": [
+        "conjugations",
+        "daily routines",
+        "introductions",
+        "translation"
+      ],
+      "adaptation": "Next cycle should stay at A1 and focus on conjugations, daily routines."
+    },
+    {
+      "topic": "conjugations",
+      "focus_skill": "conjugations",
+      "difficulty": "easier",
+      "correct_count": 4,
+      "total_questions": 5,
+      "score": "4/5",
+      "level_after": "A1",
+      "weak_topics_after": [
+        "conjugations",
+        "daily routines",
+        "introductions",
+        "translation"
+      ],
+      "adaptation": "Next cycle should stay at A1 and focus on conjugations, daily routines."
+    },
+    {
+      "topic": "daily routines",
+      "focus_skill": "grammar",
+      "difficulty": "steady",
+      "correct_count": 1,
+      "total_questions": 6,
+      "score": "1/6",
+      "level_after": "A1",
+      "weak_topics_after": [
+        "daily routines",
+        "introductions",
+        "translation",
+        "conjugations"
+      ],
+      "adaptation": "Next cycle should stay at A1 and focus on daily routines, introductions."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "likes and food",
+      "complexity": "beginner",
+      "score": 0.55,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Add one extra detail after each basic answer."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "weather",
+      "complexity": "beginner",
+      "score": 0.38,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Review useful phrases for weather before the next conversation."
+    },
+    {
+      "topic": "introductions",
+      "focus_skill": "vocabulary",
+      "difficulty": "easier",
+      "correct_count": 1,
+      "total_questions": 5,
+      "score": "1/5",
+      "level_after": "A1",
+      "weak_topics_after": [
+        "introductions",
+        "daily routines",
+        "translation",
+        "conjugations"
+      ],
+      "adaptation": "Next cycle should stay at A1 and focus on introductions, daily routines."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "weather",
+      "complexity": "beginner",
+      "score": 0.4,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Review useful phrases for weather before the next conversation."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "weather",
+      "complexity": "beginner",
+      "score": 0.4,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Review useful phrases for weather before the next conversation."
+    },
+    {
+      "topic": "present tense",
+      "focus_skill": "vocabulary",
+      "difficulty": "easier",
+      "correct_count": 1,
+      "total_questions": 5,
+      "score": "1/5",
+      "level_after": "A1",
+      "weak_topics_after": [
+        "present tense",
+        "daily routines",
+        "introductions",
+        "translation"
+      ],
+      "adaptation": "Next cycle should stay at A1 and focus on present tense, daily routines."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "weather",
+      "complexity": "beginner",
+      "score": 0.38,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Review useful phrases for weather before the next conversation."
+    },
+    {
+      "topic": "family vocabulary",
+      "focus_skill": "vocabulary",
+      "difficulty": "easier",
+      "correct_count": 1,
+      "total_questions": 5,
+      "score": "1/5",
+      "level_after": "A1",
+      "weak_topics_after": [
+        "family vocabulary",
+        "daily routines",
+        "introductions",
+        "present tense"
+      ],
+      "adaptation": "Next cycle should stay at A1 and focus on family vocabulary, daily routines."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "introductions",
+      "complexity": "beginner",
+      "score": 0.73,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Add one extra detail after each basic answer."
+    },
+    {
+      "topic": "daily routines",
+      "focus_skill": "grammar",
+      "difficulty": "easier",
+      "correct_count": 0,
+      "total_questions": 5,
+      "score": "0/5",
+      "level_after": "A1",
+      "weak_topics_after": [
+        "daily routines",
+        "introductions",
+        "present tense",
+        "family vocabulary"
+      ],
+      "adaptation": "Next cycle should stay at A1 and focus on daily routines, introductions."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "likes and food",
+      "complexity": "beginner",
+      "score": 0.55,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Add one extra detail after each basic answer."
+    },
+    {
+      "topic": "introductions",
+      "focus_skill": "vocabulary",
+      "difficulty": "easier",
+      "correct_count": 5,
+      "total_questions": 5,
+      "score": "5/5",
+      "level_after": "A1",
+      "weak_topics_after": [
+        "daily routines",
+        "present tense",
+        "family vocabulary",
+        "weather"
+      ],
+      "adaptation": "Next cycle should stay at A1 and focus on daily routines, present tense."
+    },
+    {
+      "mode": "conversation_turn",
+      "topic": "weather",
+      "complexity": "beginner",
+      "score": 0.71,
+      "video_on": false,
+      "video_object": null,
+      "next_speaking_goal": "Add one extra detail after each basic answer."
+    }
+  ],
+  "daily_summary": {
+    "last_sent_at": "2026-05-17T07:42:07+00:00",
+    "lessons_completed": 13
+  },
+  "conversation_memory": {
+    "sessions_completed": 17,
+    "total_turns": 28,
+    "fluency_score": 0.554,
+    "speaking_confidence": 0.575,
+    "recent_topics": [
+      "weather",
+      "introductions",
+      "likes and food",
+      "weather",
+      "weather",
+      "introductions",
+      "likes and food",
+      "weather"
+    ],
+    "missed_phrases": [
+      "Me llamo Ana."
+    ],
+    "last_video_object": null,
+    "next_speaking_goal": "Add one extra detail after each basic answer.",
+    "last_session_at": "2026-05-17T07:42:48+00:00"
+  },
+  "updated_at": "2026-05-17T07:42:48+00:00"
+}
