@@ -98,14 +98,6 @@ python -m fluent_ai.ui
 
 If Gradio is not installed, the UI command prints the console fallback. The UI includes Lesson Mode and Conversation Mode tabs.
 
-## Demo Story
-
-1. Start the loop in auto mode for 5-10 minutes.
-2. Show that each cycle reads the current level, streak, weak topics, and goals.
-3. Watch the named agents generate a lesson, notification, quiz, evaluation, progress report, and next recommendation.
-4. Open `data/progress.json` to show progress changed locally.
-5. Run Conversation Mode with `--video on --video-object apple` to show the tutor initiating object-grounded Spanish conversation.
-
 ## Roadmap
 
 - Add OpenAI-backed lesson generation with deterministic fallback.
