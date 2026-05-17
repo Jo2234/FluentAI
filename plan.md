@@ -35,6 +35,7 @@ Create a demoable agentic language learning app with Lesson Mode and Conversatio
 - Make video mode use the live camera feed with recurring OpenAI vision updates and filter synthetic green test feeds. Done.
 - Remove model-name UI copy and improve English-help responsiveness in tutor conversation. Done.
 - Add Hindi, Spanish, and French language selection across lessons, text fallback, realtime voice, and camera-context prompts. Done.
+- Make the visible agent decision log collapsible. Done.
 
 ## Next
 - Continue polishing the red Demo Studio UI after user feedback.
