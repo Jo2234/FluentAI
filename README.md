@@ -17,7 +17,7 @@ Create a private `.env` file:
 
 ```bash
 OPENAI_API_KEY=sk-your-real-key-here
-OPENAI_MODEL=gpt-5.5
+OPENAI_MODEL=<your-preferred-openai-model>
 ```
 
 The app reads `.env` automatically. If the API is unavailable, it falls back to local deterministic agents.
