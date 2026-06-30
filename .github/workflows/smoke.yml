@@ -25,12 +25,8 @@ jobs:
         run: ruff check .
       - name: Unit tests
         run: python -m unittest discover -s tests -q
-      - name: Offline smoke demo
+      - name: Mocked agent smoke demo
         run: python scripts/smoke_demo.py
-      - name: CLI lesson smoke
-        run: python -m fluent_ai.app --once --mode auto --state-path /tmp/fluentai-lesson.json
-      - name: CLI conversation smoke
-        run: python -m fluent_ai.app --product-mode conversation --turns 2 --video on --video-object apple --mode auto --state-path /tmp/fluentai-conversation.json
 
   node-desktop:
     runs-on: ubuntu-latest

@@ -1,11 +1,33 @@
 import unittest
 from tempfile import TemporaryDirectory
 from pathlib import Path
+from unittest.mock import patch
 
 from fluent_ai.agent import evaluate_answers, generate_lesson, generate_quiz, update_progress
 from fluent_ai.conversation import asks_for_english_help, build_follow_up, choose_conversation_topic, run_conversation
 from fluent_ai.desktop_bridge import conversation_reply, conversation_start, lesson_start, lesson_submit, status
 from fluent_ai.state import default_state
+
+
+def fake_tutor_reply(topic, state, transcript, phase, fallback):
+    return fallback
+
+
+class FakeOpenAIProvider:
+    model = "test-model"
+    last_error = None
+    available = True
+
+    def status(self):
+        return "OpenAI enabled: model test-model."
+
+    def enhance_lesson(self, state, lesson):
+        enhanced = lesson.copy()
+        enhanced["source"] = "openai"
+        return enhanced
+
+    def conversation_tutor_reply(self, topic, state, transcript, phase, fallback):
+        return fallback
 
 
 class AgentTests(unittest.TestCase):
@@ -44,6 +66,7 @@ class AgentTests(unittest.TestCase):
             mode="auto",
             video_on=False,
             video_object=None,
+            tutor_reply_fn=fake_tutor_reply,
         )
 
         self.assertEqual(len(transcript), 3)
@@ -62,6 +85,7 @@ class AgentTests(unittest.TestCase):
             mode="auto",
             video_on=True,
             video_object="apple",
+            tutor_reply_fn=fake_tutor_reply,
         )
 
         self.assertIn("manzana", topic["opening"])
@@ -115,9 +139,9 @@ class AgentTests(unittest.TestCase):
         self.assertTrue(any("Hindi" in question["prompt"] for question in quiz))
 
     def test_desktop_bridge_lesson_waits_for_real_answers(self):
-        with TemporaryDirectory() as tmpdir:
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", FakeOpenAIProvider):
             state_path = str(Path(tmpdir) / "progress.json")
-            start = lesson_start({"state_path": state_path, "language": "Spanish", "use_openai": False})
+            start = lesson_start({"state_path": state_path, "language": "Spanish"})
             answers = [question["answer"] for question in start["quiz"]]
 
             result = lesson_submit(
@@ -135,13 +159,12 @@ class AgentTests(unittest.TestCase):
             self.assertGreater(result["profile"]["xp"], 0)
 
     def test_desktop_bridge_conversation_accepts_user_reply(self):
-        with TemporaryDirectory() as tmpdir:
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", FakeOpenAIProvider):
             state_path = str(Path(tmpdir) / "progress.json")
             start = conversation_start(
                 {
                     "state_path": state_path,
                     "language": "Spanish",
-                    "use_openai": False,
                     "video": "on",
                     "object": "apple",
                     "turns": 2,
@@ -151,7 +174,6 @@ class AgentTests(unittest.TestCase):
                 {
                     "state_path": state_path,
                     "language": "Spanish",
-                    "use_openai": False,
                     "session": start["session"],
                     "message": "Esto es una manzana.",
                     "tutor_message": start["tutor_message"],

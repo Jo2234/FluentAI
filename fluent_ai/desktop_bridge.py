@@ -101,16 +101,15 @@ def lesson_start(payload: dict[str, Any]) -> dict[str, Any]:
         f"[Memory Agent] Loaded level {current_level(state)} with weak topics: {', '.join(state.get('weak_topics', []))}.",
     ]
 
+    if not provider.available:
+        return _openai_required(state, provider, "Lesson Mode requires OPENAI_API_KEY.")
+
     lesson = generate_lesson(state)
-    if _use_openai(payload) and provider.available:
-        enhanced = provider.enhance_lesson(state, lesson)
-        if enhanced.get("source") == "openai":
-            lesson = enhanced
-            logs.append("[OpenAI Model Agent] Enhanced lesson with the OpenAI Responses API.")
-        elif provider.last_error:
-            logs.append(f"[OpenAI Model Agent] Local fallback after API issue: {provider.last_error}")
-    else:
-        logs.append("[OpenAI Model Agent] Using deterministic local lesson generator.")
+    enhanced = provider.enhance_lesson(state, lesson)
+    if enhanced.get("source") != "openai":
+        return _openai_required(state, provider, f"OpenAI lesson generation failed: {provider.last_error or 'empty model response'}")
+    lesson = enhanced
+    logs.append("[OpenAI Model Agent] Generated lesson with the OpenAI Responses API.")
 
     quiz = generate_quiz(state, lesson)
     logs.append(
@@ -165,9 +164,14 @@ def conversation_start(payload: dict[str, Any]) -> dict[str, Any]:
     provider = OpenAIProvider()
     video_on = payload.get("video") == "on"
     video_object = str(payload.get("object") or payload.get("vision_summary") or "").strip() or None
+    if not provider.available:
+        return _openai_required(state, provider, "Conversation Mode requires OPENAI_API_KEY.")
+
     topic = choose_conversation_topic(state, video_on=video_on, video_object=video_object)
     fallback = build_opening(topic, state)
     tutor_text = _tutor_reply(provider, payload, topic, state, [], "opening", fallback)
+    if not tutor_text:
+        return _openai_required(state, provider, f"OpenAI tutor generation failed: {provider.last_error or 'empty model response'}")
 
     logs = [
         "[Conversation Orchestrator] Starting a live tutor session.",
@@ -175,10 +179,7 @@ def conversation_start(payload: dict[str, Any]) -> dict[str, Any]:
         f"[Vision Context Agent] Video {'on' if video_on else 'off'}"
         + (f"; OpenAI vision context: {video_object}." if video_on and video_object else "."),
     ]
-    if _use_openai(payload) and provider.available:
-        logs.append("[OpenAI Model Agent] Generated the tutor opening.")
-    else:
-        logs.append("[OpenAI Model Agent] Using local tutor opening.")
+    logs.append("[OpenAI Model Agent] Generated the tutor opening.")
 
     session = {
         "topic": topic,
@@ -205,6 +206,9 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
     turns = list(session.get("turns", []))
     learner_text = str(payload.get("message") or "").strip()
     turn_number = len(turns) + 1
+
+    if not provider.available:
+        return _openai_required(state, provider, "Conversation Mode requires OPENAI_API_KEY.")
 
     if not learner_text:
         return {
@@ -324,12 +328,12 @@ def _tutor_reply(
     transcript: list[ConversationTurn],
     phase: str,
     fallback: str,
-) -> str:
-    if _use_openai(payload) and provider.available:
+) -> str | None:
+    if provider.available:
         generated = provider.conversation_tutor_reply(topic, state, transcript, phase, fallback)
         if generated:
             return generated
-    return fallback
+    return None
 
 
 def _turn_from_dict(value: dict[str, Any]) -> ConversationTurn:
@@ -369,8 +373,13 @@ def _path(payload: dict[str, Any]) -> Path:
     return Path(str(payload.get("state_path") or DEFAULT_PROGRESS_PATH))
 
 
-def _use_openai(payload: dict[str, Any]) -> bool:
-    return bool(payload.get("use_openai", True))
+def _openai_required(state: dict[str, Any], provider: OpenAIProvider, message: str) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "error": message,
+        "profile": profile_for(state, provider),
+        "logs": [f"[OpenAI Model Agent] {provider.status()}", f"[Orchestrator] {message}"],
+    }
 
 
 def _bounded_int(value: Any, low: int, high: int, default: int) -> int:

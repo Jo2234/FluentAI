@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Offline FluentAI smoke demo used by humans and CI.
+"""Mocked FluentAI smoke demo used by humans and CI.
 
 Runs one lesson, one text conversation, and one video-object conversation against a
-temporary learner profile. No OpenAI key, browser, webcam, or desktop runtime is
-required.
+temporary learner profile while using a fake OpenAI reply function. This proves
+state updates and object grounding without hitting the network; real CLI/web use
+requires OPENAI_API_KEY.
 """
 from __future__ import annotations
 
@@ -14,6 +15,10 @@ from pathlib import Path
 from fluent_ai.agent import answer_quiz, evaluate_answers, generate_lesson, generate_quiz, update_progress
 from fluent_ai.conversation import run_conversation
 from fluent_ai.state import default_state, load_state, save_state
+
+
+def fake_tutor_reply(topic, state, transcript, phase, fallback):
+    return fallback
 
 
 def main() -> None:
@@ -41,6 +46,7 @@ def main() -> None:
             mode="auto",
             video_on=False,
             video_object=None,
+            tutor_reply_fn=fake_tutor_reply,
         )
         if len(transcript) != 2 or not transcript[0].tutor_text:
             raise SystemExit("text conversation smoke failed")
@@ -52,6 +58,7 @@ def main() -> None:
             mode="auto",
             video_on=True,
             video_object="apple",
+            tutor_reply_fn=fake_tutor_reply,
         )
         if "manzana" not in transcript[0].tutor_text.lower():
             raise SystemExit("video-object smoke did not mention manzana")

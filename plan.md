@@ -12,7 +12,7 @@ Create a demoable agentic language learning app with Lesson Mode and Conversatio
 - Conversation mode: a FaceTime-like tutor that initiates and steers spoken/chat conversation based on learner ability, with video optional.
 - Video-on conversation can use an object/image context such as "apple" to keep the target-language conversation grounded.
 - Optional Gradio UI when the dependency is installed, with console fallback.
-- OpenAI-backed generation with deterministic local fallback.
+- OpenAI-backed generation for real lessons and conversations; mocked providers are used only in tests/CI.
 
 ## Build Steps
 - Scaffold project docs and concise Goal-mode instructions. Done.

@@ -132,6 +132,10 @@ VISIBLE_OBJECTS = {
 }
 
 
+class TutorGenerationError(RuntimeError):
+    """Raised when the required OpenAI tutor response is unavailable."""
+
+
 @dataclass
 class ConversationTurn:
     turn_number: int
@@ -199,7 +203,7 @@ def run_conversation(
     topic = choose_conversation_topic(state, video_on, video_object)
     transcript: list[ConversationTurn] = []
     fallback_opening = build_opening(topic, state)
-    tutor_text = _model_or_fallback(tutor_reply_fn, topic, state, transcript, "opening", fallback_opening)
+    tutor_text = _model_or_raise(tutor_reply_fn, topic, state, transcript, "opening", fallback_opening)
 
     for index in range(1, turns + 1):
         learner_text = get_learner_reply(topic, state, index, mode, tutor_text)
@@ -219,13 +223,13 @@ def run_conversation(
             )
         )
         fallback_follow_up = build_follow_up(topic, learner_text, score, index, state)
-        tutor_text = _model_or_fallback(tutor_reply_fn, topic, state, transcript, "follow_up", fallback_follow_up)
+        tutor_text = _model_or_raise(tutor_reply_fn, topic, state, transcript, "follow_up", fallback_follow_up)
 
     update_conversation_progress(state, topic, transcript, video_on, video_object)
     return transcript, state, topic
 
 
-def _model_or_fallback(
+def _model_or_raise(
     tutor_reply_fn: TutorReplyFn | None,
     topic: dict[str, Any],
     state: dict[str, Any],
@@ -234,9 +238,11 @@ def _model_or_fallback(
     fallback: str,
 ) -> str:
     if tutor_reply_fn is None:
-        return fallback
+        raise TutorGenerationError("OpenAI tutor generation is required for Conversation Mode.")
     generated = tutor_reply_fn(topic, state, transcript, phase, fallback)
-    return generated or fallback
+    if not generated:
+        raise TutorGenerationError("OpenAI tutor generation returned an empty response.")
+    return generated
 
 
 def build_opening(topic: dict[str, Any], state: dict[str, Any]) -> str:

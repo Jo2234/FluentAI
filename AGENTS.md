@@ -29,6 +29,6 @@ Conversation Mode:
 - Prefer small, runnable slices over speculative architecture.
 - Store learner state locally under `data/`.
 - Keep generated lesson, quiz, evaluation, and adaptation logic easy to inspect for demos.
-- Keep Conversation Mode runnable without external credentials using deterministic fallbacks; add OpenAI Realtime or vision APIs as an upgrade path, not as a hard dependency for the MVP.
+- Keep Conversation Mode and Lesson Mode API-key-first for real app usage; use mocked OpenAI providers in tests rather than deterministic user-facing fallbacks.
 - Make agent decisions visible in console logs so judges can see memory loading, topic choice, video-context handling, feedback, and adaptation.
 - Add tests or smoke checks for behavior that changes learner state.

@@ -1,17 +1,34 @@
 import json
 import threading
-import time
 import unittest
 import urllib.request
 from tempfile import TemporaryDirectory
 from pathlib import Path
+from unittest.mock import patch
 
 from fluent_ai.web import FluentAIHandler, ThreadingHTTPServer
 
 
+class FakeOpenAIProvider:
+    model = "test-model"
+    last_error = None
+    available = True
+
+    def status(self):
+        return "OpenAI enabled: model test-model."
+
+    def enhance_lesson(self, state, lesson):
+        enhanced = lesson.copy()
+        enhanced["source"] = "openai"
+        return enhanced
+
+    def conversation_tutor_reply(self, topic, state, transcript, phase, fallback):
+        return fallback
+
+
 class WebSmokeTests(unittest.TestCase):
     def test_web_status_lesson_and_conversation_endpoints(self):
-        with TemporaryDirectory() as tmpdir:
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.web.OpenAIProvider", FakeOpenAIProvider):
             state_path = Path(tmpdir) / "progress.json"
             FluentAIHandler.state_path = state_path
             FluentAIHandler.language = "Spanish"

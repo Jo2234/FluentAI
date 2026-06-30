@@ -45,6 +45,8 @@ def run_loop(
     agent_log("Orchestrator", f"Memory file: {state_path}")
     agent_log("Orchestrator", f"Mode: {mode}")
     agent_log("OpenAI Model Agent", provider.status())
+    if not provider.available:
+        raise SystemExit("FluentAI requires OPENAI_API_KEY. Add it to .env before running Lesson Mode.")
     if once:
         agent_log("Orchestrator", "Running one on-demand lesson cycle.")
     elif max_cycles:
@@ -64,13 +66,11 @@ def run_loop(
         agent_log("Memory Agent", f"Learning goals: {goals}")
 
         lesson = generate_lesson(state)
-        if provider.available:
-            enhanced_lesson = provider.enhance_lesson(state, lesson)
-            if enhanced_lesson.get("source") == "openai":
-                lesson = enhanced_lesson
-                agent_log("OpenAI Model Agent", "Enhanced the lesson content with the OpenAI Responses API.")
-            elif provider.last_error:
-                agent_log("OpenAI Model Agent", f"Using local lesson fallback after API issue: {provider.last_error}")
+        enhanced_lesson = provider.enhance_lesson(state, lesson)
+        if enhanced_lesson.get("source") != "openai":
+            raise RuntimeError(f"OpenAI lesson generation failed: {provider.last_error or 'empty model response'}")
+        lesson = enhanced_lesson
+        agent_log("OpenAI Model Agent", "Generated the lesson with the OpenAI Responses API.")
         agent_log(
             "Lesson Generator Agent",
             f"Created a {lesson['minutes']}-minute {lesson['level']} lesson on {lesson['topic']} ({lesson['difficulty']}).",
@@ -126,6 +126,8 @@ def run_conversation_loop(
     agent_log("Conversation Orchestrator", f"Memory file: {state_path}")
     agent_log("Conversation Orchestrator", f"Mode: {mode}; video: {video}")
     agent_log("OpenAI Model Agent", provider.status())
+    if not provider.available:
+        raise SystemExit("FluentAI requires OPENAI_API_KEY. Add it to .env before running Conversation Mode.")
 
     weak_topics = ", ".join(state.get("weak_topics", []))
     agent_log(
@@ -144,7 +146,7 @@ def run_conversation_loop(
         mode=mode,
         video_on=video_on,
         video_object=video_object,
-        tutor_reply_fn=provider.conversation_tutor_reply if provider.available else None,
+        tutor_reply_fn=provider.conversation_tutor_reply,
     )
 
     agent_log(

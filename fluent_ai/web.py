@@ -328,16 +328,16 @@ def _bounded_int(value: Any, low: int, high: int, default: int) -> int:
 def run_lesson_cycle(state_path: Path, language: str) -> str:
     state = load_state(state_path, language)
     provider = OpenAIProvider()
+    if not provider.available:
+        return f"[OpenAI Model Agent] {provider.status()}\n[Orchestrator] Add OPENAI_API_KEY to .env before running Lesson Mode."
+
     before = snapshot_progress(state)
     lesson = generate_lesson(state)
-    source = "local deterministic fallback"
-    if provider.available:
-        enhanced = provider.enhance_lesson(state, lesson)
-        if enhanced.get("source") == "openai":
-            lesson = enhanced
-            source = f"OpenAI Responses API ({provider.model})"
-        elif provider.last_error:
-            source = f"local fallback after OpenAI issue: {provider.last_error}"
+    enhanced = provider.enhance_lesson(state, lesson)
+    if enhanced.get("source") != "openai":
+        return f"[OpenAI Model Agent] OpenAI lesson generation failed: {provider.last_error or 'empty model response'}"
+    lesson = enhanced
+    source = f"OpenAI Responses API ({provider.model})"
 
     quiz = generate_quiz(state, lesson)
     answers = answer_quiz(quiz, state, "auto")
@@ -365,19 +365,23 @@ def run_lesson_cycle(state_path: Path, language: str) -> str:
 def run_conversation_cycle(state_path: Path, language: str, turns: int, video_on: bool, video_object: str | None) -> str:
     state = load_state(state_path, language)
     provider = OpenAIProvider()
-    transcript, state, topic = run_conversation(
-        state=state,
-        turns=max(2, min(8, turns)),
-        mode="auto",
-        video_on=video_on,
-        video_object=video_object,
-        tutor_reply_fn=provider.conversation_tutor_reply if provider.available else None,
-    )
+    if not provider.available:
+        return f"[OpenAI Model Agent] {provider.status()}\n[Orchestrator] Add OPENAI_API_KEY to .env before running Conversation Mode."
+
+    try:
+        transcript, state, topic = run_conversation(
+            state=state,
+            turns=max(2, min(8, turns)),
+            mode="auto",
+            video_on=video_on,
+            video_object=video_object,
+            tutor_reply_fn=provider.conversation_tutor_reply,
+        )
+    except Exception as exc:
+        return f"[OpenAI Model Agent] OpenAI conversation generation failed: {exc.__class__.__name__}: {exc}"
     save_state(state_path, state)
 
-    source = f"OpenAI Responses API ({provider.model})" if provider.available and not provider.last_error else "local deterministic fallback"
-    if provider.last_error:
-        source = f"local fallback after OpenAI issue: {provider.last_error}"
+    source = f"OpenAI Responses API ({provider.model})"
     lines = [
         f"[OpenAI Model Agent] Source: {source}",
         f"[Speaking Tutor Agent] AI initiated topic: {topic['topic']} ({topic['complexity']})",

@@ -26,7 +26,7 @@ class OpenAIProvider:
 
     def status(self) -> str:
         if not self.api_key:
-            return "OpenAI disabled: OPENAI_API_KEY is not set."
+            return "OpenAI required: OPENAI_API_KEY is not set."
         if self._load_client() is None:
             return f"OpenAI disabled: {self.last_error}"
         return f"OpenAI enabled: model {self.model}."

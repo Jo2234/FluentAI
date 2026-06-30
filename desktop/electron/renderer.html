@@ -1310,13 +1310,6 @@
             </select>
           </div>
           <div>
-            <label for="modelMode">Model</label>
-            <select id="modelMode">
-              <option value="local">Fast local tutor</option>
-              <option value="openai" selected>OpenAI model</option>
-            </select>
-          </div>
-          <div>
             <label for="voiceMode">Interface</label>
             <select id="voiceMode">
               <option value="openai" selected>OpenAI voice call</option>
@@ -1477,7 +1470,6 @@
       endCallBtn: document.getElementById("endCallBtn"),
       turns: document.getElementById("turns"),
       video: document.getElementById("video"),
-      modelMode: document.getElementById("modelMode"),
       voiceMode: document.getElementById("voiceMode"),
       videoPreview: document.getElementById("videoPreview"),
       headerLessonBtn: document.getElementById("headerLessonBtn"),
@@ -1586,10 +1578,6 @@
     function showError(message) {
       els.workspaceStatus.innerHTML = "";
       els.workspaceStatus.append(text("span", message, "error"));
-    }
-
-    function useOpenAI() {
-      return els.modelMode.value === "openai";
     }
 
     function shouldUseVoice() {
@@ -2113,11 +2101,9 @@
       els.lessonEmpty.classList.add("hidden");
       els.lessonPane.classList.add("lesson-active");
       els.lessonContent.replaceChildren(block("Working", [
-        useOpenAI()
-          ? "OpenAI is generating the lesson. This can take a moment."
-          : "Fast local agents are generating the lesson now."
+        "OpenAI is generating the lesson. This can take a moment."
       ], true));
-      const result = await window.fluentAI.startLesson(bridgePayload({ use_openai: useOpenAI() }));
+      const result = await window.fluentAI.startLesson(bridgePayload({}));
       if (!result.ok) {
         showError(result.error || "Lesson failed.");
         setBusy(false, "Ready");
@@ -2329,16 +2315,13 @@
       setBusy(true, "Starting text fallback tutor session...");
       state.chatMessages = [{
         role: "system",
-        text: useOpenAI()
-          ? "Tutor is preparing the first question with OpenAI..."
-          : "Tutor is preparing the first question..."
+        text: "Tutor is preparing the first question with OpenAI..."
       }];
       renderChat();
         const result = await window.fluentAI.startConversation(bridgePayload({
           turns: Number(els.turns.value || 4),
           video: els.video.value,
-          object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : "",
-          use_openai: useOpenAI()
+          object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : ""
         }));
       if (!result.ok) {
         showError(result.error || "Conversation failed.");
@@ -2409,8 +2392,7 @@
       const result = await window.fluentAI.replyConversation(bridgePayload({
         session: state.conversationSession,
         message,
-        tutor_message: state.latestTutorMessage,
-        use_openai: useOpenAI()
+        tutor_message: state.latestTutorMessage
       }));
       if (!result.ok) {
         showError(result.error || "Reply failed.");

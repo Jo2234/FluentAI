@@ -1,8 +1,8 @@
 # FluentAI
 
-FluentAI is a local-first agentic language-learning demo. It feels like a compact AI tutor studio: Lesson Mode generates adaptive lessons/quizzes, Conversation Mode starts a FaceTime-style tutor session, and both modes update the same persistent learner memory.
+FluentAI is an OpenAI-powered agentic language-learning demo. It feels like a compact AI tutor studio: Lesson Mode generates adaptive lessons/quizzes, Conversation Mode starts a FaceTime-style tutor session, and both modes update the same persistent learner memory.
 
-The project is intentionally demo-safe: it runs without API keys, never prints secrets, and uses deterministic fallback agents when OpenAI is unavailable.
+FluentAI now requires `OPENAI_API_KEY` for real lesson and conversation runs. Tests use mocked OpenAI responses so CI never needs secrets.
 
 ## What works now
 
@@ -12,7 +12,7 @@ The project is intentionally demo-safe: it runs without API keys, never prints s
 - **Persistent memory**: `data/progress.json` tracks level, skills, topic mastery, streak, history, and speaking memory.
 - **Browser UI**: standard-library local web server; no heavy framework required.
 - **Desktop UI**: Electron shell with the same Python agent engine.
-- **Offline tests/smoke**: no OpenAI, webcam, browser, or IBKR-style external service needed.
+- **Mocked tests/smoke**: CI validates state updates and UI endpoints without using secrets.
 
 ## Quickstart
 
@@ -30,9 +30,16 @@ If you only want to run it without dev tools:
 python -m pip install -e .
 ```
 
-## Optional OpenAI setup
+## OpenAI setup
 
-Create a private `.env` file:
+Create a private `.env` file before running the app:
+
+```bash
+cp .env.example .env
+# then edit .env and set OPENAI_API_KEY
+```
+
+Required values:
 
 ```bash
 OPENAI_API_KEY=sk-...
@@ -41,7 +48,7 @@ OPENAI_REASONING_EFFORT=low
 OPENAI_VERBOSITY=low
 ```
 
-If the key or SDK call is unavailable, FluentAI logs a safe fallback reason and continues locally. It never prints the API key.
+If the key or SDK call is unavailable, FluentAI stops with a clear setup/error message instead of falling back to deterministic local tutor behavior. It never prints the API key.
 
 ## CLI demos
 
@@ -110,9 +117,14 @@ The desktop app calls the same Python bridge/API as the CLI and web UI, so demo 
 ```bash
 python -m unittest discover -s tests -q
 python scripts/smoke_demo.py
+npm run check
+```
+
+With `OPENAI_API_KEY` set in `.env`, also run:
+
+```bash
 python -m fluent_ai.app --once --mode auto --state-path /tmp/fluentai-lesson.json
 python -m fluent_ai.app --product-mode conversation --turns 2 --video on --video-object apple --mode auto --state-path /tmp/fluentai-conversation.json
-npm run check
 ```
 
 CI runs these Python checks on 3.10, 3.11, and 3.12, plus a desktop file/dependency smoke.
@@ -132,7 +144,7 @@ CI runs these Python checks on 3.10, 3.11, and 3.12, plus a desktop file/depende
 ```text
 fluent_ai/              core agents, CLI, web server, OpenAI provider, desktop bridge
 desktop/electron/       standalone desktop shell
-scripts/smoke_demo.py   offline acceptance smoke
+scripts/smoke_demo.py   mocked acceptance smoke
 tests/                  unittest suite for core, bridge, and web endpoints
 data/progress.json      demo learner memory
 ```

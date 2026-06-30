@@ -37,7 +37,7 @@ class FluentAIDesktop(tk.Tk):
         self.refresh_status()
 
     def payload(self) -> dict:
-        return {"state_path": str(STATE_PATH), "language": self.language.get(), "use_openai": False}
+        return {"state_path": str(STATE_PATH), "language": self.language.get()}
 
     def _build_ui(self) -> None:
         header = tk.Frame(self, bg="#ef4444", padx=18, pady=14)
@@ -68,7 +68,7 @@ class FluentAIDesktop(tk.Tk):
         result = status(self.payload())
         profile = result.get("profile", {})
         self.status_label.config(
-            text=f"{profile.get('language', 'Spanish')} · {profile.get('level', 'A1')} · XP {profile.get('xp', 0)} · local fallback ready"
+            text=f"{profile.get('language', 'Spanish')} · {profile.get('level', 'A1')} · XP {profile.get('xp', 0)} · OpenAI required"
         )
 
     def run_lesson(self) -> None:
