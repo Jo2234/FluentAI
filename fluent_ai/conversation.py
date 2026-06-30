@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import random
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Callable
-
 from fluent_ai.agent import current_level
 from fluent_ai.state import recalculate_weak_topics, utc_now
 
@@ -424,7 +424,10 @@ def next_speaking_goal(state: dict[str, Any], average_score: float, topic: dict[
 
 
 def normalize(value: str) -> str:
-    return " ".join(value.lower().strip().strip(".,!?;:'\"").split())
+    normalized = unicodedata.normalize("NFKD", value.lower())
+    ascii_text = "".join(char for char in normalized if not unicodedata.combining(char))
+    cleaned = "".join(char if char.isalnum() or char.isspace() else " " for char in ascii_text)
+    return " ".join(cleaned.split())
 
 
 def asks_for_english_help(value: str) -> bool:
@@ -443,6 +446,15 @@ def asks_for_english_help(value: str) -> bool:
         "what mean",
         "que significa",
         "no entiendo",
+        "sorry what was that",
+        "what was that",
+        "say that again",
+        "can you repeat",
+        "could you repeat",
+        "repeat that",
+        "repite",
+        "puedes repetir",
+        "otra vez",
     ]
     return any(phrase in normalized for phrase in help_phrases)
 

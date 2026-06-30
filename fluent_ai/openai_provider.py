@@ -10,6 +10,17 @@ from fluent_ai.agent import current_level
 from fluent_ai.config import load_env_file, openai_model
 
 
+NATURAL_TURN_POLICY = """
+Natural conversation policy:
+- Do not interrupt the learner. Treat short pauses, filler words, self-corrections, and thinking sounds as part of their turn.
+- Wait for a real pause of about 2.5 seconds before responding. If the learner sounds mid-sentence, keep listening.
+- If the learner is silent for several seconds after your question, give one short check-in such as "Take your time" or "¿Quieres una pista?". Do not monologue.
+- If the learner says they did not understand, asks you to repeat, asks what something means, or falls back to English, respond in the language they used for that help request.
+- For English help, explain the meaning in English first, then offer one simple target-language phrase and gently invite them back into the target language.
+- After two failed attempts or repeated confusion, use more English scaffolding briefly, then continue in the target language when they are ready.
+""".strip()
+
+
 class OpenAIProvider:
     def __init__(self) -> None:
         load_env_file()
@@ -45,20 +56,11 @@ class OpenAIProvider:
         voice = os.getenv("OPENAI_REALTIME_VOICE", "alloy")
         target_language = str(state.get("learner", {}).get("target_language", "Spanish"))
         visual = f" If video context is enabled, use this camera analysis: {video_context}." if video_on and video_context else ""
-        instructions = (
-            f"You are FluentAI, a warm live {target_language} tutor in a FaceTime-style call. "
-            f"The learner level is {current_level(state)}. "
-            f"Weak topics: {', '.join(state.get('weak_topics', [])) or 'none'}. "
-            f"Initiate the conversation in {target_language}. "
-            "Detect whether the learner replies in Hindi, Spanish, French, or English. "
-            "When the learner replies in Hindi, Spanish, or French, respond in that same language. "
-            "If the learner asks what something means, asks for English, says they do not understand, "
-            "or uses phrases like 'what does that mean', briefly explain in English first, then give "
-            f"one simple {target_language} model phrase and ask if they want to try it. "
-            "For beginners, use one short sentence and one simple question at a time. "
-            "Correct gently and provide a short model phrase when needed. "
-            "Keep turns natural, brief, and encouraging."
-            + visual
+        instructions = _realtime_instructions(
+            target_language=target_language,
+            level=current_level(state),
+            weak_topics=state.get("weak_topics", []),
+            visual=visual,
         )
         payload = {
             "expires_after": {"anchor": "created_at", "seconds": 600},
@@ -69,7 +71,7 @@ class OpenAIProvider:
                 "output_modalities": ["audio"],
                 "audio": {
                     "input": {
-                        "turn_detection": {"type": "server_vad"},
+                        "turn_detection": _realtime_turn_detection(),
                     },
                     "output": {
                         "voice": voice,
@@ -267,6 +269,7 @@ Product behavior:
 - If advanced, ask for opinions, reasons, tradeoffs, or examples.
 - If video context exists, use it naturally.
 - Be warm, conversational, and specific.
+- Natural turn policy: {NATURAL_TURN_POLICY}
 
 Video context:
 {json.dumps(visual, ensure_ascii=True)}
@@ -324,6 +327,51 @@ Phase: {phase}
         if output_text:
             return output_text
         return str(response)
+
+
+def _realtime_instructions(*, target_language: str, level: str, weak_topics: list[Any], visual: str = "") -> str:
+    weak = ", ".join(str(topic) for topic in weak_topics) or "none"
+    return (
+        f"You are FluentAI, a warm live {target_language} tutor in a FaceTime-style call. "
+        f"The learner level is {level}. Weak topics: {weak}. "
+        f"Initiate the conversation in {target_language}, then adapt turn-by-turn. "
+        "Detect whether the learner replies in Hindi, Spanish, French, or English. "
+        "When the learner clearly speaks Hindi, Spanish, or French, respond in that same language. "
+        f"When the learner speaks English because they need help, answer in English first, then give one simple {target_language} model phrase and invite them back. "
+        "For beginners, use one short sentence and one simple question at a time. "
+        "Correct gently and provide a short model phrase when needed. "
+        "Keep turns natural, brief, and encouraging. "
+        + NATURAL_TURN_POLICY
+        + visual
+    )
+
+
+def _realtime_turn_detection() -> dict[str, Any]:
+    return {
+        "type": "server_vad",
+        "threshold": _env_float("OPENAI_REALTIME_VAD_THRESHOLD", 0.65, 0.3, 0.95),
+        "prefix_padding_ms": _env_int("OPENAI_REALTIME_PREFIX_PADDING_MS", 450, 150, 1000),
+        "silence_duration_ms": _env_int("OPENAI_REALTIME_SILENCE_MS", 2500, 2200, 5000),
+        "idle_timeout_ms": _env_int("OPENAI_REALTIME_IDLE_PROMPT_MS", 7000, 4000, 12000),
+        "create_response": True,
+        "interrupt_response": False,
+    }
+
+
+def _env_int(name: str, default: int, low: int, high: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        value = default
+    return max(low, min(high, value))
+
+
+def _env_float(name: str, default: float, low: float, high: float) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        value = default
+    return max(low, min(high, value))
 
 
 def _safe_error(exc: Exception) -> str:

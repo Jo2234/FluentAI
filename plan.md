@@ -40,3 +40,4 @@ Create a demoable agentic language learning app with Lesson Mode and Conversatio
 ## Next
 - Add spaced repetition scheduling.
 - Add richer browser/desktop regression tests for voice and camera behavior.
+- Tune Realtime voice turn-taking and English-help behavior for natural language-learning conversations. Done.

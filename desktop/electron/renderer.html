@@ -1594,6 +1594,19 @@
       return { language: currentLanguage(), ...(extra || {}) };
     }
 
+    function realtimeTutorInstruction(context) {
+      const base = [
+        `You are FluentAI, a warm live ${currentLanguage()} tutor.`,
+        "Do not interrupt the learner. Wait for a real pause of about 2.5 seconds before responding.",
+        "If the learner pauses briefly, says um/uh, or sounds mid-sentence, keep listening.",
+        "If the learner is silent for several seconds after your question, give one short check-in, not a monologue.",
+        "Detect the learner's spoken language. Reply in that language when they ask for help or switch languages.",
+        `If they ask what something means or fall back to English, explain briefly in English, then offer one simple ${currentLanguage()} phrase and invite them back.`,
+      ];
+      if (context) base.push(context);
+      return base.join(" ");
+    }
+
     function updateLanguageCopy() {
       const language = currentLanguage();
       els.callTitle.textContent = `${language} tutor call`;
@@ -1717,8 +1730,10 @@
           sendRealtimeEvent({
             type: "response.create",
             response: {
-              instructions: `Start the ${currentLanguage()} tutoring call now. Greet the learner and ask the first simple question. Detect the learner's spoken language and reply in that same language when it is Hindi, Spanish, or French.`
-                + (state.visualContext ? ` Use this camera context naturally: ${visualContextText()}.` : "")
+              instructions: realtimeTutorInstruction(
+                `Start the tutoring call now. Greet the learner and ask the first simple ${currentLanguage()} question.`
+                  + (state.visualContext ? ` Use this camera context naturally: ${visualContextText()}.` : "")
+              )
             }
           });
         };
@@ -1820,9 +1835,11 @@
           state.lastVisionSignature = signature || state.lastVisionSignature;
           if (state.callActive && (reason !== "loop" || changed)) {
             sendRealtimeEvent({
-              type: "response.create",
-              response: {
-                instructions: `You are watching the learner's live camera through OpenAI vision updates. Use this latest camera context naturally in ${currentLanguage()}: ${visualContextText()}. Detect the learner's language and answer in that same language when it is Hindi, Spanish, or French. Respond with one short, level-appropriate tutor question.`
+              type: "session.update",
+              session: {
+                instructions: realtimeTutorInstruction(
+                  `Use this latest camera context naturally on the learner's next turn: ${visualContextText()}. Do not speak immediately just because the camera context changed.`
+                )
               }
             });
             setCallStatus("Video is live and OpenAI recognized the scene.");

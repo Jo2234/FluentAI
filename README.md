@@ -88,6 +88,23 @@ Use a disposable memory file while testing:
 python -m fluent_ai.app --once --state-path /tmp/fluentai-progress.json
 ```
 
+## Conversation behavior
+
+Voice calls are tuned for natural turn-taking:
+
+- the tutor waits for a real pause of about 2.5 seconds before replying
+- brief thinking pauses, filler words, and self-corrections should not trigger interruptions
+- if you are silent for several seconds, it gives a short check-in instead of a monologue
+- if you say “what was that?”, “no entiendo”, “what does that mean?”, or fall back to English, it explains briefly in English, gives one simple target-language phrase, then nudges you back into practice
+
+Optional `.env` tuning knobs:
+
+```bash
+OPENAI_REALTIME_SILENCE_MS=2500
+OPENAI_REALTIME_IDLE_PROMPT_MS=7000
+OPENAI_REALTIME_VAD_THRESHOLD=0.65
+```
+
 ## Browser app
 
 ```bash
