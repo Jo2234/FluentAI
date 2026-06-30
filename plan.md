@@ -38,5 +38,5 @@ Create a demoable agentic language learning app with Lesson Mode and Conversatio
 - Make the visible agent decision log collapsible. Done.
 
 ## Next
-- Continue polishing the red Demo Studio UI after user feedback.
 - Add spaced repetition scheduling.
+- Add richer browser/desktop regression tests for voice and camera behavior.

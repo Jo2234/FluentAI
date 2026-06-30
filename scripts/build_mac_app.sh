@@ -6,6 +6,16 @@ SOURCE_APP="$ROOT_DIR/node_modules/electron/dist/Electron.app"
 APP_DIR="$ROOT_DIR/dist/FluentAI.app"
 APP_LOADER_DIR="$APP_DIR/Contents/Resources/app"
 
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "build_mac_app.sh only supports macOS because it packages Electron.app with /usr/bin/ditto." >&2
+  exit 1
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required to build FluentAI.app" >&2
+  exit 1
+fi
+
 if [[ ! -d "$SOURCE_APP" ]]; then
   echo "Electron is not installed. Run: npm install" >&2
   exit 1

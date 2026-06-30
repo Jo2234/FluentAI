@@ -15,6 +15,8 @@ from fluent_ai.openai_provider import OpenAIProvider
 from fluent_ai.state import load_state, save_state
 
 
+MAX_JSON_BYTES = 64_000
+
 HTML = """<!doctype html>
 <html lang="en">
 <head>
@@ -257,7 +259,7 @@ class FluentAIHandler(BaseHTTPRequestHandler):
             self._send_json({"text": run_lesson_cycle(self.state_path, self.language)})
             return
         if self.path == "/api/conversation":
-            turns = int(body.get("turns", 4))
+            turns = _bounded_int(body.get("turns", 4), 2, 8, 4)
             video_on = body.get("video", "off") == "on"
             video_object = str(body.get("object") or "").strip() or None
             self._send_json({"text": run_conversation_cycle(self.state_path, self.language, turns, video_on, video_object)})
@@ -288,14 +290,15 @@ class FluentAIHandler(BaseHTTPRequestHandler):
             return {"ok": False, "error": f"{exc.__class__.__name__}: {exc}"}
 
     def _read_json(self) -> dict[str, Any]:
-        length = int(self.headers.get("content-length", "0") or "0")
+        length = _bounded_int(self.headers.get("content-length", "0"), 0, MAX_JSON_BYTES, 0)
         if length <= 0:
             return {}
-        raw = self.rfile.read(length).decode("utf-8")
+        raw = self.rfile.read(length).decode("utf-8", errors="replace")
         try:
-            return json.loads(raw)
+            value = json.loads(raw)
         except json.JSONDecodeError:
             return {}
+        return value if isinstance(value, dict) else {}
 
     def _send_json(self, payload: dict[str, Any]) -> None:
         data = json.dumps(payload).encode("utf-8")
@@ -312,6 +315,14 @@ class FluentAIHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+
+def _bounded_int(value: Any, low: int, high: int, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(low, min(high, parsed))
 
 
 def run_lesson_cycle(state_path: Path, language: str) -> str:

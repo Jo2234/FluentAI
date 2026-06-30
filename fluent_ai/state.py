@@ -157,5 +157,5 @@ def save_state(path: Path, state: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     state["updated_at"] = utc_now()
     with path.open("w", encoding="utf-8") as file:
-        json.dump(state, file, indent=2, ensure_ascii=True)
+        json.dump(state, file, indent=2, ensure_ascii=False)
         file.write("\n")

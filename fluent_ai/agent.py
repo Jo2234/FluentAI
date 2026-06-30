@@ -9,7 +9,7 @@ from fluent_ai.state import LEVELS, recalculate_weak_topics, utc_now
 
 
 TOPICS_BY_LEVEL = {
-    "A1": ["introductions", "cafe orders", "daily routines", "family vocabulary", "present tense"],
+    "A1": ["introductions", "cafe orders", "daily routines", "past tense", "conjugations", "vocabulary"],
     "A2": ["past tense", "shopping", "travel plans", "health symptoms", "object pronouns"],
     "B1": ["opinions", "workplace situations", "news summaries", "storytelling", "future plans"],
     "B2": ["debate", "professional goals", "culture", "problem solving", "hypotheticals"],

@@ -29,7 +29,7 @@ class OpenAIProvider:
             return "OpenAI disabled: OPENAI_API_KEY is not set."
         if self._load_client() is None:
             return f"OpenAI disabled: {self.last_error}"
-        return "OpenAI connected."
+        return f"OpenAI enabled: model {self.model}."
 
     def realtime_client_secret(
         self,
@@ -317,13 +317,20 @@ Phase: {phase}
         except TypeError:
             response = client.responses.create(model=self.model, input=prompt)
         except Exception as exc:
-            self.last_error = f"{exc.__class__.__name__}: {exc}"
+            self.last_error = _safe_error(exc)
             return ""
 
         output_text = getattr(response, "output_text", None)
         if output_text:
             return output_text
         return str(response)
+
+
+def _safe_error(exc: Exception) -> str:
+    message = str(exc).splitlines()[0].strip()
+    if len(message) > 120:
+        message = message[:117] + "..."
+    return f"{exc.__class__.__name__}: {message}" if message else exc.__class__.__name__
 
 
 def _extract_json(text: str) -> dict[str, Any] | None:

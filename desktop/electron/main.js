@@ -1,10 +1,26 @@
 const { app, BrowserWindow, ipcMain, systemPreferences } = require("electron");
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 
-const projectRoot = path.resolve(__dirname, "..", "..");
-const pythonExecutable = process.env.PYTHON_EXECUTABLE || "/Users/johanvaz/.pyenv/shims/python";
+const projectRoot = process.env.FLUENTAI_PROJECT_ROOT || path.resolve(__dirname, "..", "..");
+const pythonExecutable = resolvePythonExecutable();
 let mainWindow = null;
+
+function resolvePythonExecutable() {
+  if (process.env.PYTHON_EXECUTABLE) {
+    return process.env.PYTHON_EXECUTABLE;
+  }
+
+  const venvPython = process.platform === "win32"
+    ? path.join(projectRoot, ".venv", "Scripts", "python.exe")
+    : path.join(projectRoot, ".venv", "bin", "python");
+  if (fs.existsSync(venvPython)) {
+    return venvPython;
+  }
+
+  return process.platform === "win32" ? "python" : "python3";
+}
 
 app.setName("FluentAI");
 
@@ -59,7 +75,7 @@ function createWindow() {
     title: "FluentAI",
     width: 1440,
     height: 920,
-    fullscreen: false,
+    fullscreen: true,
     autoHideMenuBar: true,
     show: true,
     backgroundColor: "#ffffff",
@@ -80,23 +96,19 @@ function createWindow() {
     mainWindow = null;
   });
 
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.key === "Escape" && mainWindow && mainWindow.isFullScreen()) {
+      mainWindow.setFullScreen(false);
+      event.preventDefault();
+    }
+  });
+
   mainWindow.loadFile(path.join(__dirname, "renderer.html")).then(() => {
     if (app.dock) {
       app.dock.show();
     }
-    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    mainWindow.setAlwaysOnTop(true, "screen-saver");
-    mainWindow.maximize();
     mainWindow.show();
-    app.focus({ steal: true });
     mainWindow.focus();
-    mainWindow.moveTop();
-    setTimeout(() => {
-      if (mainWindow) {
-        mainWindow.setAlwaysOnTop(false);
-        mainWindow.setVisibleOnAllWorkspaces(false);
-      }
-    }, 3000);
   });
 }
 

@@ -140,7 +140,7 @@ def run_conversation_loop(
 
     transcript, state, topic = run_conversation(
         state=state,
-        turns=turns,
+        turns=max(1, min(12, turns)),
         mode=mode,
         video_on=video_on,
         video_object=video_object,
