@@ -63,8 +63,19 @@ class NaturalConversationTests(unittest.TestCase):
         with patch.dict("os.environ", {"OPENAI_REALTIME_SILENCE_MS": "100", "OPENAI_REALTIME_IDLE_PROMPT_MS": "99999"}):
             config = _realtime_turn_detection()
 
-        self.assertEqual(config["silence_duration_ms"], 2200)
-        self.assertEqual(config["idle_timeout_ms"], 12000)
+        self.assertEqual(config["silence_duration_ms"], 1400)
+        self.assertEqual(config["idle_timeout_ms"], 11000)
+
+    def test_turn_detection_is_dynamic_for_confident_advanced_learners(self):
+        beginner = default_state("Spanish")
+        advanced = default_state("Spanish")
+        advanced["learner"]["current_level"] = "C1"
+        advanced["conversation_memory"]["speaking_confidence"] = 0.82
+
+        self.assertGreater(
+            _realtime_turn_detection(beginner)["silence_duration_ms"],
+            _realtime_turn_detection(advanced)["silence_duration_ms"],
+        )
 
 
 if __name__ == "__main__":

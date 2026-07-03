@@ -62,6 +62,7 @@ class OpenAIProvider:
             weak_topics=state.get("weak_topics", []),
             visual=visual,
         )
+        turn_detection = _realtime_turn_detection(state)
         payload = {
             "expires_after": {"anchor": "created_at", "seconds": 600},
             "session": {
@@ -71,7 +72,7 @@ class OpenAIProvider:
                 "output_modalities": ["audio"],
                 "audio": {
                     "input": {
-                        "turn_detection": _realtime_turn_detection(),
+                        "turn_detection": turn_detection,
                     },
                     "output": {
                         "voice": voice,
@@ -109,6 +110,7 @@ class OpenAIProvider:
             "session": data.get("session", {}),
             "model": realtime_model,
             "voice": voice,
+            "turn_detection": turn_detection,
         }
 
     def analyze_camera_frame(self, state: dict[str, Any], image_data_url: str) -> dict[str, Any]:
@@ -117,15 +119,16 @@ class OpenAIProvider:
         if not image_data_url.startswith("data:image/"):
             return {"ok": False, "error": "Camera frame must be an image data URL."}
 
-        vision_model = os.getenv("OPENAI_VISION_MODEL", self.model)
+        vision_model = os.getenv("OPENAI_VISION_MODEL", "gpt-4.1-mini")
         target_language = str(state.get("learner", {}).get("target_language", "Spanish"))
         prompt = (
             f"You are the Vision Context Agent for a live {target_language} tutoring call. "
             "The image is a camera frame from the learner's current video feed. "
             "Look at the camera frame and return JSON only with keys: "
             "summary, primary_object, spanish_prompt, confidence. "
-            "summary should be one short English phrase about what is visible. "
+            "summary should be one short English phrase about what is visible right now. "
             "primary_object should be the main object or scene, or empty string if unclear. "
+            "Prefer being uncertain over being wrong: if you cannot clearly identify the object, set confidence to low and say unclear instead of guessing. "
             f"spanish_prompt should be one beginner-friendly {target_language} tutor prompt using what you see. "
             "If the frame looks like a synthetic webcam test pattern or fake media source, say "
             '"synthetic test camera feed" in summary, leave primary_object empty, and do not invent an object. '
@@ -153,7 +156,7 @@ class OpenAIProvider:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            with urllib.request.urlopen(request, timeout=12) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
@@ -346,13 +349,22 @@ def _realtime_instructions(*, target_language: str, level: str, weak_topics: lis
     )
 
 
-def _realtime_turn_detection() -> dict[str, Any]:
+def _realtime_turn_detection(state: dict[str, Any] | None = None) -> dict[str, Any]:
+    memory = (state or {}).get("conversation_memory", {}) if isinstance(state, dict) else {}
+    confidence = float(memory.get("speaking_confidence", 0.3) or 0.3)
+    level = current_level(state or {"learner": {"current_level": "A1"}})
+    if level in {"A1", "A2"} or confidence < 0.45:
+        default_silence = 2800
+    elif confidence > 0.72 or level in {"C1", "C2"}:
+        default_silence = 1800
+    else:
+        default_silence = 2300
     return {
         "type": "server_vad",
         "threshold": _env_float("OPENAI_REALTIME_VAD_THRESHOLD", 0.65, 0.3, 0.95),
         "prefix_padding_ms": _env_int("OPENAI_REALTIME_PREFIX_PADDING_MS", 450, 150, 1000),
-        "silence_duration_ms": _env_int("OPENAI_REALTIME_SILENCE_MS", 2500, 2200, 5000),
-        "idle_timeout_ms": _env_int("OPENAI_REALTIME_IDLE_PROMPT_MS", 7000, 4000, 12000),
+        "silence_duration_ms": _env_int("OPENAI_REALTIME_SILENCE_MS", default_silence, 1400, 4200),
+        "idle_timeout_ms": _env_int("OPENAI_REALTIME_IDLE_PROMPT_MS", 6500, 3500, 11000),
         "create_response": True,
         "interrupt_response": False,
     }

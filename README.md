@@ -90,20 +90,23 @@ python -m fluent_ai.app --once --state-path /tmp/fluentai-progress.json
 
 ## Conversation behavior
 
-Voice calls are tuned for natural turn-taking:
+Voice calls are tuned for natural, dynamic turn-taking:
 
-- the tutor waits for a real pause of about 2.5 seconds before replying
+- the tutor uses dynamic pause windows based on learner level and speaking confidence
+- beginners / low-confidence learners get a little more time; confident advanced learners get snappier pacing
 - brief thinking pauses, filler words, and self-corrections should not trigger interruptions
 - if you are silent for several seconds, it gives a short check-in instead of a monologue
 - if you say “what was that?”, “no entiendo”, “what does that mean?”, or fall back to English, it explains briefly in English, gives one simple target-language phrase, then nudges you back into practice
 
-Optional `.env` tuning knobs:
+Optional `.env` tuning knobs. Leave them unset for dynamic defaults:
 
 ```bash
 OPENAI_REALTIME_SILENCE_MS=2500
-OPENAI_REALTIME_IDLE_PROMPT_MS=7000
+OPENAI_REALTIME_IDLE_PROMPT_MS=6500
 OPENAI_REALTIME_VAD_THRESHOLD=0.65
 ```
+
+Video context uses `OPENAI_VISION_MODEL`, defaulting to `gpt-4.1-mini` for faster camera-frame descriptions. The app refreshes the camera context roughly every 3.5 seconds while video is on, shows the model/confidence in the UI, and tells the tutor not to guess when the object is unclear.
 
 ## Browser app
 
