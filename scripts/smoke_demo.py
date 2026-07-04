@@ -37,6 +37,8 @@ def main() -> None:
 
         if state["learner"]["xp"] <= before_xp:
             raise SystemExit("lesson smoke did not increase XP")
+        if not state.get("review_queue"):
+            raise SystemExit("lesson smoke did not schedule spaced review")
         if not (5 <= len(quiz) <= 8):
             raise SystemExit(f"quiz smoke expected 5-8 questions, got {len(quiz)}")
 

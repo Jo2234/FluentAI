@@ -3,7 +3,7 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest.mock import patch
 
-from fluent_ai.agent import evaluate_answers, generate_lesson, generate_quiz, update_progress
+from fluent_ai.agent import choose_topic, evaluate_answers, generate_lesson, generate_quiz, update_progress
 from fluent_ai.conversation import asks_for_english_help, build_follow_up, choose_conversation_topic, run_conversation
 from fluent_ai.desktop_bridge import conversation_reply, conversation_start, lesson_start, lesson_submit, status
 from fluent_ai.state import default_state
@@ -56,6 +56,36 @@ class AgentTests(unittest.TestCase):
         self.assertIn("multiple_choice", question_types)
         self.assertIn("fill_blank", question_types)
         self.assertIn("open_ended", question_types)
+
+    def test_missed_lesson_schedules_spaced_review(self):
+        state = default_state("Spanish")
+        lesson = generate_lesson(state)
+        quiz = generate_quiz(state, lesson)
+        answers = ["not yet" for _question in quiz]
+
+        results = evaluate_answers(quiz, answers)
+        update_progress(state, lesson, results)
+
+        scheduled = state["review_queue"][lesson["topic"]]
+        self.assertEqual(scheduled["topic"], lesson["topic"])
+        self.assertEqual(scheduled["focus_skill"], lesson["focus_skill"])
+        self.assertEqual(scheduled["interval_days"], 1)
+        self.assertIn("due_at", scheduled)
+
+    def test_due_spaced_review_overrides_recent_topic_rotation(self):
+        state = default_state("Spanish")
+        state["recent_topics"] = ["past tense", "conjugations", "vocabulary"]
+        state["review_queue"] = {
+            "past tense": {
+                "topic": "past tense",
+                "focus_skill": "conjugations",
+                "due_at": "2000-01-01T00:00:00+00:00",
+                "interval_days": 1,
+                "missed_count": 2,
+            }
+        }
+
+        self.assertEqual(choose_topic(state), "past tense")
 
     def test_conversation_mode_initiates_and_updates_memory(self):
         state = default_state("Spanish")

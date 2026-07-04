@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import random
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fluent_ai.state import LEVELS, recalculate_weak_topics, utc_now
@@ -208,7 +209,38 @@ def performance_band(state: dict[str, Any]) -> str:
     return "steady"
 
 
+def next_due_review_topic(state: dict[str, Any], now: datetime | None = None) -> str | None:
+    now = now or datetime.now(timezone.utc)
+    due_items: list[tuple[datetime, str]] = []
+    for topic, item in state.get("review_queue", {}).items():
+        if topic not in LESSON_BANK:
+            continue
+        due_at = _parse_due_at(item.get("due_at"))
+        if due_at and due_at <= now:
+            due_items.append((due_at, topic))
+    if not due_items:
+        return None
+    due_items.sort(key=lambda item: item[0])
+    return due_items[0][1]
+
+
+def _parse_due_at(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def choose_topic(state: dict[str, Any]) -> str:
+    due_review = next_due_review_topic(state)
+    if due_review:
+        return due_review
+
     level = current_level(state)
     level_topics = TOPICS_BY_LEVEL.get(level, TOPICS_BY_LEVEL["A1"])
     weak_topics = state.get("weak_topics", [])
@@ -629,6 +661,7 @@ def update_progress(state: dict[str, Any], lesson: dict[str, Any], results: list
     state["weak_topics"] = state["weak_topics"][:4]
 
     state["recent_topics"] = (state.get("recent_topics", []) + [lesson["topic"]])[-8:]
+    update_review_schedule(state, lesson, correct_count, total)
     state.setdefault("daily_summary", {})
     state["daily_summary"]["lessons_completed"] = int(state["daily_summary"].get("lessons_completed", 0) + 1)
     state["daily_summary"]["last_sent_at"] = utc_now()
@@ -647,6 +680,32 @@ def update_progress(state: dict[str, Any], lesson: dict[str, Any], results: list
     )
     state["history"] = state["history"][-25:]
     return state
+
+
+def update_review_schedule(state: dict[str, Any], lesson: dict[str, Any], correct_count: int, total: int) -> None:
+    queue = state.setdefault("review_queue", {})
+    topic = lesson["topic"]
+    score = correct_count / max(1, total)
+    existing = queue.get(topic, {}) if isinstance(queue.get(topic), dict) else {}
+
+    if score >= 0.85:
+        previous_interval = int(existing.get("interval_days", 1) or 1)
+        interval_days = min(30, max(2, previous_interval * 2))
+        missed_count = 0
+    else:
+        interval_days = 1
+        missed_count = int(existing.get("missed_count", 0) or 0) + 1
+
+    due_at = datetime.now(timezone.utc) + timedelta(days=interval_days)
+    queue[topic] = {
+        "topic": topic,
+        "focus_skill": lesson["focus_skill"],
+        "due_at": due_at.replace(microsecond=0).isoformat(),
+        "interval_days": interval_days,
+        "missed_count": missed_count,
+        "last_score": f"{correct_count}/{total}",
+        "updated_at": utc_now(),
+    }
 
 
 def _bounded_score(score: float) -> float:

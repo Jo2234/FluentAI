@@ -9,7 +9,7 @@ FluentAI now requires `OPENAI_API_KEY` for real lesson and conversation runs. Te
 - **Lesson Mode**: personalized mini lesson, vocabulary, grammar, examples, adaptive quiz, grading, XP, weak-topic updates.
 - **Conversation Mode**: tutor initiates, adapts to A1-C2 ability, supports text fallback, OpenAI Realtime voice path, and video context.
 - **Video-object demo**: `--video on --video-object apple` reliably grounds beginner Spanish conversation around `manzana`.
-- **Persistent memory**: `data/progress.json` tracks level, skills, topic mastery, streak, history, and speaking memory.
+- **Persistent memory**: `data/progress.json` tracks level, skills, topic mastery, spaced-review queue, streak, history, and speaking memory.
 - **Browser UI**: standard-library local web server; no heavy framework required.
 - **Desktop UI**: Electron shell with the same Python agent engine.
 - **Mocked tests/smoke**: CI validates state updates and UI endpoints without using secrets.
@@ -157,7 +157,7 @@ CI runs these Python checks on 3.10, 3.11, and 3.12, plus a desktop file/depende
 4. Switch to Conversation Mode.
 5. Turn video on and set visible object to `apple`.
 6. Start the conversation. The tutor initiates and uses `manzana` naturally.
-7. Open `data/progress.json` to show XP, history, speaking memory, turns, sessions, and last video object.
+7. Open `data/progress.json` to show XP, history, spaced-review scheduling, speaking memory, turns, sessions, and last video object.
 
 ## Project shape
 

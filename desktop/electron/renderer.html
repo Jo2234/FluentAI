@@ -1653,16 +1653,21 @@
         els.languageSelect.value = profile.language;
       }
       updateLanguageCopy();
+      const reviewLabel = profile.review_count
+        ? `${profile.review_count} scheduled${profile.next_review_topic ? `; next: ${profile.next_review_topic}` : ""}`
+        : "none scheduled";
       els.headerMeta.textContent = `${profile.language || currentLanguage()} Level ${profile.level}; weak topics: ${weak}.`;
       els.headerPills.replaceChildren(
         pill(`XP ${profile.xp}`),
         pill(`Streak ${profile.streak_days}`),
+        pill(`Reviews ${profile.review_count || 0}`),
         pill(`Fluency ${Math.round(Number(profile.fluency_score || 0) * 100)}%`)
       );
       els.profileBox.replaceChildren(
         profileLine("Language", profile.language || currentLanguage()),
         profileLine("Level", profile.level),
         profileLine("Weak topics", weak),
+        profileLine("Review queue", reviewLabel),
         profileLine("Speaking goal", profile.next_speaking_goal || `Answer in complete ${profile.language || currentLanguage()} sentences.`)
       );
     }

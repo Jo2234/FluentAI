@@ -11,6 +11,7 @@ from fluent_ai.agent import (
     evaluate_answers,
     generate_lesson,
     generate_quiz,
+    next_due_review_topic,
     progress_report,
     recommendation,
     snapshot_progress,
@@ -153,6 +154,7 @@ def lesson_submit(payload: dict[str, Any]) -> dict[str, Any]:
         },
         "logs": [
             f"[Evaluator Agent] Graded quiz: {correct_count}/{len(results)} correct.",
+            f"[Memory Agent] Scheduled spaced review for {lesson['topic']}.",
             f"[Memory Agent] Saved progress to {_path(payload)}.",
             f"[Progress Reporter Agent] {progress_report(before, state)}",
         ],
@@ -305,6 +307,7 @@ def apply_conversation_turn_progress(
 def profile_for(state: dict[str, Any], provider: OpenAIProvider | None = None) -> dict[str, Any]:
     memory = state.get("conversation_memory", {})
     provider = provider or OpenAIProvider()
+    review_queue = state.get("review_queue", {}) if isinstance(state.get("review_queue"), dict) else {}
     return {
         "name": state["learner"].get("name", "Demo Learner"),
         "language": state["learner"].get("target_language", "Spanish"),
@@ -316,6 +319,8 @@ def profile_for(state: dict[str, Any], provider: OpenAIProvider | None = None) -
         "fluency_score": memory.get("fluency_score", 0.30),
         "speaking_confidence": memory.get("speaking_confidence", 0.30),
         "next_speaking_goal": memory.get("next_speaking_goal", ""),
+        "review_count": len(review_queue),
+        "next_review_topic": next_due_review_topic(state) or next(iter(review_queue), ""),
         "openai_status": provider.status(),
     }
 

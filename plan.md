@@ -38,6 +38,6 @@ Create a demoable agentic language learning app with Lesson Mode and Conversatio
 - Make the visible agent decision log collapsible. Done.
 
 ## Next
-- Add spaced repetition scheduling.
+- Add spaced repetition scheduling. Done.
 - Add richer browser/desktop regression tests for voice and camera behavior.
 - Tune Realtime voice turn-taking and English-help behavior for natural language-learning conversations. Done.

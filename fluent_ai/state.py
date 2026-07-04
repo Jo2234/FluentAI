@@ -54,6 +54,7 @@ def default_state(language: str) -> dict[str, Any]:
             "tone": "encouraging and specific",
         },
         "recent_topics": [],
+        "review_queue": {},
         "history": [],
         "daily_summary": {
             "last_sent_at": None,
@@ -119,6 +120,7 @@ def migrate_state(state: dict[str, Any], language: str) -> dict[str, Any]:
     state["preferences"].setdefault("daily_quiz_questions", 6)
     state["preferences"].setdefault("tone", "encouraging and specific")
     state.setdefault("recent_topics", [])
+    state.setdefault("review_queue", {})
     state.setdefault("history", [])
     state.setdefault("daily_summary", {"last_sent_at": None, "lessons_completed": 0})
     state.setdefault("conversation_memory", {})
