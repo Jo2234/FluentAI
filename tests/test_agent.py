@@ -3,9 +3,9 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest.mock import patch
 
-from fluent_ai.agent import choose_topic, evaluate_answers, generate_lesson, generate_quiz, update_progress
+from fluent_ai.agent import choose_topic, due_review_items, evaluate_answers, generate_lesson, generate_quiz, update_progress
 from fluent_ai.conversation import asks_for_english_help, build_follow_up, choose_conversation_topic, run_conversation
-from fluent_ai.desktop_bridge import conversation_reply, conversation_start, lesson_start, lesson_submit, status
+from fluent_ai.desktop_bridge import conversation_reply, conversation_start, lesson_start, lesson_submit, profile_for, status
 from fluent_ai.state import default_state
 
 
@@ -86,6 +86,34 @@ class AgentTests(unittest.TestCase):
         }
 
         self.assertEqual(choose_topic(state), "past tense")
+
+    def test_profile_separates_due_reviews_from_future_schedule(self):
+        state = default_state("Spanish")
+        state["review_queue"] = {
+            "past tense": {
+                "topic": "past tense",
+                "focus_skill": "conjugations",
+                "due_at": "2000-01-01T00:00:00+00:00",
+                "interval_days": 1,
+                "missed_count": 2,
+            },
+            "vocabulary": {
+                "topic": "vocabulary",
+                "focus_skill": "vocabulary",
+                "due_at": "2999-01-01T00:00:00+00:00",
+                "interval_days": 30,
+                "missed_count": 0,
+            },
+        }
+
+        profile = profile_for(state)
+        due_topics = [topic for _due_at, topic in due_review_items(state)]
+
+        self.assertEqual(due_topics, ["past tense"])
+        self.assertEqual(profile["review_count"], 2)
+        self.assertEqual(profile["due_review_count"], 1)
+        self.assertEqual(profile["next_review_topic"], "past tense")
+        self.assertEqual(profile["next_review_due_at"], "2000-01-01T00:00:00+00:00")
 
     def test_conversation_mode_initiates_and_updates_memory(self):
         state = default_state("Spanish")

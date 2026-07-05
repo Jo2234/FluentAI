@@ -1653,14 +1653,18 @@
         els.languageSelect.value = profile.language;
       }
       updateLanguageCopy();
-      const reviewLabel = profile.review_count
-        ? `${profile.review_count} scheduled${profile.next_review_topic ? `; next: ${profile.next_review_topic}` : ""}`
-        : "none scheduled";
+      const dueReviews = Number(profile.due_review_count || 0);
+      const totalReviews = Number(profile.review_count || 0);
+      const reviewLabel = dueReviews
+        ? `${dueReviews} due now${profile.next_review_topic ? `; next: ${profile.next_review_topic}` : ""}`
+        : totalReviews
+          ? `${totalReviews} scheduled${profile.next_review_due_at ? `; next due: ${formatDueDate(profile.next_review_due_at)}` : ""}`
+          : "none scheduled";
       els.headerMeta.textContent = `${profile.language || currentLanguage()} Level ${profile.level}; weak topics: ${weak}.`;
       els.headerPills.replaceChildren(
         pill(`XP ${profile.xp}`),
         pill(`Streak ${profile.streak_days}`),
-        pill(`Reviews ${profile.review_count || 0}`),
+        pill(dueReviews ? `Reviews ${dueReviews} due` : `Reviews ${totalReviews} scheduled`),
         pill(`Fluency ${Math.round(Number(profile.fluency_score || 0) * 100)}%`)
       );
       els.profileBox.replaceChildren(
@@ -1677,6 +1681,12 @@
       node.className = "pill";
       node.textContent = value;
       return node;
+    }
+
+    function formatDueDate(value) {
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return "scheduled";
+      return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     }
 
     function profileLine(label, value) {

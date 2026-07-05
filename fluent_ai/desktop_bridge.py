@@ -8,10 +8,10 @@ from typing import Any
 
 from fluent_ai.agent import (
     current_level,
+    due_review_items,
     evaluate_answers,
     generate_lesson,
     generate_quiz,
-    next_due_review_topic,
     progress_report,
     recommendation,
     snapshot_progress,
@@ -308,6 +308,11 @@ def profile_for(state: dict[str, Any], provider: OpenAIProvider | None = None) -
     memory = state.get("conversation_memory", {})
     provider = provider or OpenAIProvider()
     review_queue = state.get("review_queue", {}) if isinstance(state.get("review_queue"), dict) else {}
+    due_reviews = due_review_items(state)
+    next_review_topic = due_reviews[0][1] if due_reviews else next(iter(review_queue), "")
+    next_review_due_at = ""
+    if next_review_topic and isinstance(review_queue.get(next_review_topic), dict):
+        next_review_due_at = str(review_queue[next_review_topic].get("due_at") or "")
     return {
         "name": state["learner"].get("name", "Demo Learner"),
         "language": state["learner"].get("target_language", "Spanish"),
@@ -320,7 +325,9 @@ def profile_for(state: dict[str, Any], provider: OpenAIProvider | None = None) -
         "speaking_confidence": memory.get("speaking_confidence", 0.30),
         "next_speaking_goal": memory.get("next_speaking_goal", ""),
         "review_count": len(review_queue),
-        "next_review_topic": next_due_review_topic(state) or next(iter(review_queue), ""),
+        "due_review_count": len(due_reviews),
+        "next_review_topic": next_review_topic,
+        "next_review_due_at": next_review_due_at,
         "openai_status": provider.status(),
     }
 

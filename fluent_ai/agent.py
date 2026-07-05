@@ -209,18 +209,28 @@ def performance_band(state: dict[str, Any]) -> str:
     return "steady"
 
 
-def next_due_review_topic(state: dict[str, Any], now: datetime | None = None) -> str | None:
+def due_review_items(state: dict[str, Any], now: datetime | None = None) -> list[tuple[datetime, str]]:
+    """Return valid due review topics ordered by oldest due date first."""
     now = now or datetime.now(timezone.utc)
     due_items: list[tuple[datetime, str]] = []
-    for topic, item in state.get("review_queue", {}).items():
-        if topic not in LESSON_BANK:
+    queue = state.get("review_queue", {})
+    if not isinstance(queue, dict):
+        return due_items
+
+    for topic, item in queue.items():
+        if topic not in LESSON_BANK or not isinstance(item, dict):
             continue
         due_at = _parse_due_at(item.get("due_at"))
         if due_at and due_at <= now:
             due_items.append((due_at, topic))
+    due_items.sort(key=lambda item: item[0])
+    return due_items
+
+
+def next_due_review_topic(state: dict[str, Any], now: datetime | None = None) -> str | None:
+    due_items = due_review_items(state, now)
     if not due_items:
         return None
-    due_items.sort(key=lambda item: item[0])
     return due_items[0][1]
 
 
