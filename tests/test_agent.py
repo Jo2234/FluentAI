@@ -1,10 +1,22 @@
 import json
 import unittest
+from datetime import datetime, timezone
 from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest.mock import patch
 
-from fluent_ai.agent import QuizResult, choose_topic, categorize_error, due_review_items, evaluate_answers, generate_lesson, generate_quiz, update_progress
+from fluent_ai.agent import (
+    QuizResult,
+    categorize_error,
+    choose_topic,
+    choose_topic_with_reason,
+    due_mistake_items,
+    due_review_items,
+    evaluate_answers,
+    generate_lesson,
+    generate_quiz,
+    update_progress,
+)
 from fluent_ai.conversation import (
     asks_for_english_help,
     apply_turn_progress,
@@ -438,7 +450,75 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(mistake["severity"], "medium")
         self.assertIn("next_review", mistake)
         self.assertTrue(mistake["next_review"])
+        self.assertGreater(datetime.fromisoformat(mistake["next_review"]), datetime.now(timezone.utc))
         self.assertIn(f"review_{mistake['id']}", review_queue(state))
+
+    def test_successful_mistake_memory_lesson_reschedules_mistake_review(self):
+        state = default_state("Spanish")
+        mistake = record_mistake(
+            state,
+            {
+                "incorrect_form": "yo estudiar",
+                "corrected_form": "yo estudio",
+                "skill": "conjugations",
+                "topic": "daily routines",
+                "error_category": "wrong_conjugation",
+                "source": "conversation",
+                "next_review": "2000-01-01T00:00:00+00:00",
+            },
+        )
+        lesson = {
+            "language": "Spanish",
+            "level": "A1",
+            "topic": "daily routines",
+            "selection_source": "mistake_memory",
+            "focus_skill": "conjugations",
+            "difficulty": "steady",
+            "minutes": 10,
+        }
+        results = [
+            QuizResult(
+                prompt="Fill in the blank: Yo ___ por la manana.",
+                expected="estudio",
+                actual="estudio",
+                skill="conjugations",
+                topic="daily routines",
+                question_type="fill_blank",
+                correct=True,
+                feedback="Good.",
+            ),
+            QuizResult(
+                prompt="Fill in the blank: Tu ___ por la manana.",
+                expected="estudias",
+                actual="estudias",
+                skill="conjugations",
+                topic="daily routines",
+                question_type="fill_blank",
+                correct=True,
+                feedback="Good.",
+            ),
+            QuizResult(
+                prompt="Fill in the blank: Yo ___ cada dia.",
+                expected="trabajo",
+                actual="trabajar",
+                skill="conjugations",
+                topic="daily routines",
+                question_type="fill_blank",
+                correct=False,
+                feedback="Use trabajo.",
+                error_category="wrong_conjugation",
+                corrected_form="trabajo",
+                severity="medium",
+            ),
+        ]
+
+        update_progress(state, lesson, results)
+
+        rescheduled = language_state(state)["mistake_memory"][mistake["id"]]
+        due_at = datetime.fromisoformat(rescheduled["next_review"])
+        self.assertGreater(due_at, datetime.now(timezone.utc))
+        self.assertEqual(review_queue(state)[f"review_{mistake['id']}"]["due_at"], rescheduled["next_review"])
+        self.assertEqual(due_mistake_items(state), [])
 
     def test_due_spaced_review_overrides_recent_topic_rotation(self):
         state = default_state("Spanish")
@@ -1076,8 +1156,7 @@ class AgentTests(unittest.TestCase):
 
             persisted = load_state(Path(state_path), "Spanish")
             mistake = next(iter(language_state(persisted)["mistake_memory"].values()))
-            mistake["next_review"] = "2000-01-01T00:00:00+00:00"
-            review_queue(persisted)[f"review_{mistake['id']}"]["due_at"] = "2000-01-01T00:00:00+00:00"
+            selection = choose_topic_with_reason(persisted)
             lesson = generate_lesson(persisted)
 
         self.assertTrue(reply["ok"])
@@ -1092,8 +1171,12 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(mistake["error_category"], "wrong_conjugation")
         self.assertEqual(mistake["skill"], "conjugations")
         self.assertEqual(mistake["topic"], "daily routines")
+        self.assertLessEqual(datetime.fromisoformat(mistake["next_review"]), datetime.now(timezone.utc))
+        self.assertEqual(review_queue(persisted)[f"review_{mistake['id']}"]["due_at"], mistake["next_review"])
         self.assertEqual(reply["post_call_summary"]["correction_to_remember"], "Yo estudio por la manana.")
         self.assertEqual(reply["post_call_summary"]["phrase_to_review"], "Yo estudio por la manana.")
+        self.assertEqual(selection.source, "mistake_memory")
+        self.assertEqual(selection.topic, "daily routines")
         self.assertEqual(lesson["selection_source"], "mistake_memory")
         self.assertIn("'yo estudiar' -> 'Yo estudio'", lesson["reason"])
         self.assertIn("conversation", lesson["reason"])

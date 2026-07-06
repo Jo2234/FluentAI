@@ -916,6 +916,7 @@ def update_progress(state: dict[str, Any], lesson: dict[str, Any], results: list
 
     data["recent_topics"] = (data.get("recent_topics", []) + [lesson["topic"]])[-8:]
     update_review_schedule(state, lesson, correct_count, total)
+    update_mistake_review_schedule(state, lesson, results, language)
     daily_summary = data.setdefault("daily_summary", {})
     daily_summary["lessons_completed"] = int(daily_summary.get("lessons_completed", 0) + 1)
     daily_summary["last_sent_at"] = utc_now()
@@ -1045,6 +1046,50 @@ def update_review_schedule(state: dict[str, Any], lesson: dict[str, Any], correc
             },
         },
     )
+
+
+def update_mistake_review_schedule(
+    state: dict[str, Any],
+    lesson: dict[str, Any],
+    results: list[QuizResult],
+    language: str | None = None,
+) -> None:
+    if lesson.get("selection_source") != "mistake_memory":
+        return
+
+    lesson_topic = str(lesson.get("topic") or "").strip()
+    if not lesson_topic:
+        return
+
+    language_data = language_state(state, language)
+    mistakes = language_data.get("mistake_memory", {})
+    if not isinstance(mistakes, dict):
+        return
+
+    related_results = [result for result in results if result.topic == lesson_topic]
+    if not related_results:
+        related_results = results
+    related_total = max(1, len(related_results))
+    related_correct = sum(1 for result in related_results if result.correct)
+    practiced_successfully = related_correct > related_total / 2
+
+    now_dt = datetime.now(timezone.utc).replace(microsecond=0)
+    next_review = (now_dt + timedelta(days=1)).isoformat() if practiced_successfully else now_dt.isoformat()
+    queue = review_queue(state, language)
+    updated_at = utc_now()
+
+    for mistake in mistakes.values():
+        if not isinstance(mistake, dict):
+            continue
+        if str(mistake.get("topic") or "").strip() != lesson_topic:
+            continue
+        mistake["next_review"] = next_review
+        mistake["last_practiced_at"] = updated_at
+        mistake["last_practice_score"] = f"{related_correct}/{related_total}"
+        review_id = f"review_{mistake.get('id')}"
+        if isinstance(queue.get(review_id), dict):
+            queue[review_id]["due_at"] = next_review
+            queue[review_id]["updated_at"] = updated_at
 
 
 def _bounded_score(score: float) -> float:

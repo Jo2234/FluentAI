@@ -689,7 +689,7 @@ def apply_turn_progress(
             continue
         mistake = turn.get("mistake") if isinstance(turn.get("mistake"), dict) else {}
         lesson_topic = conversation_topic_to_lesson_topic(str(mistake.get("topic") or topic_name))
-        next_review = (datetime.now(timezone.utc) + timedelta(days=1)).replace(microsecond=0).isoformat()
+        next_review = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
         record_mistake(
             state,
             {
