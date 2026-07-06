@@ -54,6 +54,8 @@ from fluent_ai.state import (
 
 
 DEFAULT_PROGRESS_PATH = Path("data/progress.json")
+MODEL_FAILURE_MESSAGE = "The tutor model timed out or failed. Your progress is safe — try again."
+CHECKPOINT_MAX_AGE = timedelta(hours=24)
 SUPPORTED_LANGUAGES = {
     "hindi": "Hindi",
     "spanish": "Spanish",
@@ -451,6 +453,8 @@ def lesson_start(payload: dict[str, Any]) -> dict[str, Any]:
         f"[Lesson Generator Agent] Created a {lesson['minutes']}-minute {lesson['level']} lesson on {lesson['topic']}."
     )
     logs.append(f"[Adaptive Quiz Agent] Prepared {len(quiz)} questions for the learner to answer.")
+    _write_lesson_checkpoint(_path(payload), active_language(state), lesson, quiz, [])
+    logs.append("[Session Recovery Agent] Saved lesson checkpoint.")
 
     return {
         "ok": True,
@@ -478,6 +482,7 @@ def lesson_submit(payload: dict[str, Any]) -> dict[str, Any]:
     correct_count = sum(1 for result in results if result.correct)
     state = update_progress(state, lesson, results)
     save_state(_path(payload), state)
+    _delete_checkpoint(_checkpoint_path(_path(payload), "current_lesson.json"))
 
     return {
         "ok": True,
@@ -508,7 +513,7 @@ def conversation_start(payload: dict[str, Any]) -> dict[str, Any]:
     topic = choose_conversation_topic(state, video_on=video_on, video_object=video_object)
     topic["speaking_confidence_before"] = float(conversation_memory(state).get("speaking_confidence", 0.30) or 0.30)
     fallback = build_opening(topic, state)
-    tutor_text = _tutor_reply(provider, payload, topic, state, [], "opening", fallback)
+    tutor_text, recovery_used = _safe_tutor_reply(provider, payload, topic, state, [], "opening", fallback)
     if not tutor_text:
         return _openai_required(state, provider, f"OpenAI tutor generation failed: {provider.last_error or 'empty model response'}")
 
@@ -521,6 +526,8 @@ def conversation_start(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(topic.get("goal"), dict) and topic["goal"].get("instruction"):
         logs.append(f"[Conversation Orchestrator] Practicing lesson goal: {topic['goal']['instruction']}")
     logs.append("[OpenAI Model Agent] Generated the tutor opening.")
+    if recovery_used:
+        logs.append("[Conversation Orchestrator] Used recovery prompt after empty model response.")
 
     session = {
         "topic": topic,
@@ -577,7 +584,7 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
 
     transcript = [_turn_from_dict(item) for item in turns]
     fallback = build_follow_up(topic, learner_text, score, turn_number, state)
-    tutor_text = _tutor_reply(provider, payload, topic, state, transcript, "follow_up", fallback)
+    tutor_text, recovery_used = _safe_tutor_reply(provider, payload, topic, state, transcript, "follow_up", fallback)
 
     apply_conversation_turn_progress(state, topic, turn, is_first_turn=turn_number == 1)
     memory = conversation_memory(state)
@@ -601,7 +608,7 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
             f"[Fluency Evaluator Agent] Scored turn {turn_number}: {score:.2f}.",
             f"[Speaking Tutor Agent] Next prompt adapts to {topic['complexity']} complexity.",
             f"[Memory Agent] Saved conversation progress. Next goal: {memory['next_speaking_goal']}",
-        ],
+        ] + (["[Conversation Orchestrator] Used recovery prompt after empty model response."] if recovery_used else []),
     }
 
 
@@ -706,8 +713,90 @@ def home_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "recent_progress": _recent_progress(state),
         "speaking_confidence": _speaking_confidence_summary(state),
         "memory_counts": counts,
+        "session_checkpoints": session_checkpoints(payload).get("checkpoints", {}),
         "logs": _recovery_logs(state) + [log],
     }
+
+
+def session_checkpoints(payload: dict[str, Any]) -> dict[str, Any]:
+    path = _path(payload)
+    lesson = _read_checkpoint(_checkpoint_path(path, "current_lesson.json"))
+    call = _read_checkpoint(_checkpoint_path(path, "current_call.json"))
+    return {
+        "ok": True,
+        "checkpoints": {
+            "lesson": lesson,
+            "call": call,
+        },
+        "logs": ["[Session Recovery Agent] Checked interrupted-session checkpoints."],
+    }
+
+
+def lesson_checkpoint(payload: dict[str, Any]) -> dict[str, Any]:
+    path = _path(payload)
+    existing = _read_checkpoint(_checkpoint_path(path, "current_lesson.json"), delete_expired=False)
+    created_at = existing.get("created_at") if isinstance(existing, dict) else None
+    _write_lesson_checkpoint(
+        path,
+        _language(payload),
+        payload.get("lesson") if isinstance(payload.get("lesson"), dict) else {},
+        payload.get("quiz") if isinstance(payload.get("quiz"), list) else [],
+        payload.get("answers") if isinstance(payload.get("answers"), list) else [],
+        created_at=created_at,
+    )
+    return {"ok": True, "logs": ["[Session Recovery Agent] Saved lesson draft checkpoint."]}
+
+
+def lesson_checkpoint_discard(payload: dict[str, Any]) -> dict[str, Any]:
+    _delete_checkpoint(_checkpoint_path(_path(payload), "current_lesson.json"))
+    return {"ok": True, "logs": ["[Session Recovery Agent] Discarded interrupted lesson checkpoint."]}
+
+
+def call_checkpoint(payload: dict[str, Any]) -> dict[str, Any]:
+    path = _path(payload)
+    existing = _read_checkpoint(_checkpoint_path(path, "current_call.json"), delete_expired=False)
+    created_at = existing.get("created_at") if isinstance(existing, dict) else None
+    data = {
+        "type": "call",
+        "language": _language(payload),
+        "topic": payload.get("topic") if isinstance(payload.get("topic"), dict) else {},
+        "turns": payload.get("turns") if isinstance(payload.get("turns"), list) else [],
+        "video": "on" if payload.get("video") == "on" else "off",
+        "video_object": payload.get("video_object"),
+        "created_at": created_at or utc_now(),
+        "updated_at": utc_now(),
+    }
+    _write_checkpoint(_checkpoint_path(path, "current_call.json"), data)
+    return {"ok": True, "logs": ["[Session Recovery Agent] Saved call transcript checkpoint."]}
+
+
+def call_checkpoint_discard(payload: dict[str, Any]) -> dict[str, Any]:
+    _delete_checkpoint(_checkpoint_path(_path(payload), "current_call.json"))
+    return {"ok": True, "logs": ["[Session Recovery Agent] Discarded interrupted call checkpoint."]}
+
+
+def call_checkpoint_summarize(payload: dict[str, Any]) -> dict[str, Any]:
+    path = _path(payload)
+    checkpoint = _read_checkpoint(_checkpoint_path(path, "current_call.json"))
+    if not checkpoint:
+        return {
+            "ok": False,
+            "error": "No interrupted call checkpoint was found.",
+            "logs": ["[Session Recovery Agent] No interrupted call checkpoint to summarize."],
+        }
+    result = conversation_end(
+        {
+            **payload,
+            "topic": checkpoint.get("topic", {}),
+            "turns": checkpoint.get("turns", []),
+            "video": checkpoint.get("video", "off"),
+            "video_object": checkpoint.get("video_object"),
+        }
+    )
+    if result.get("ok"):
+        _delete_checkpoint(_checkpoint_path(path, "current_call.json"))
+        result["logs"] = result.get("logs", []) + ["[Session Recovery Agent] Summarized interrupted call checkpoint."]
+    return result
 
 
 def memory_inspect(payload: dict[str, Any]) -> dict[str, Any]:
@@ -880,6 +969,27 @@ def _tutor_reply(
         if generated:
             return generated
     return None
+
+
+def _safe_tutor_reply(
+    provider: OpenAIProvider,
+    payload: dict[str, Any],
+    topic: dict[str, Any],
+    state: dict[str, Any],
+    transcript: list[ConversationTurn],
+    phase: str,
+    fallback: str,
+) -> tuple[str | None, bool]:
+    first = _tutor_reply(provider, payload, topic, state, transcript, phase, fallback)
+    if first:
+        return first, False
+    second = _tutor_reply(provider, payload, topic, state, transcript, phase, fallback)
+    if second:
+        return second, False
+    cleaned = " ".join(str(fallback or "").strip().split())
+    if cleaned:
+        return cleaned[:500], True
+    return None, False
 
 
 def _turn_from_dict(value: dict[str, Any]) -> ConversationTurn:
@@ -1638,7 +1748,82 @@ def _path(payload: dict[str, Any]) -> Path:
     return Path(str(payload.get("state_path") or DEFAULT_PROGRESS_PATH))
 
 
+def _sessions_dir(path: Path) -> Path:
+    return path.parent / "sessions"
+
+
+def _checkpoint_path(path: Path, filename: str) -> Path:
+    return _sessions_dir(path) / filename
+
+
+def _write_checkpoint(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=True), encoding="utf-8")
+
+
+def _delete_checkpoint(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+def _read_checkpoint(path: Path, *, delete_expired: bool = True) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    created_at = _parse_timestamp(data.get("created_at"))
+    if created_at and datetime.now(timezone.utc) - created_at > CHECKPOINT_MAX_AGE:
+        if delete_expired:
+            _delete_checkpoint(path)
+        return None
+    return data
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _write_lesson_checkpoint(
+    path: Path,
+    language: str,
+    lesson: dict[str, Any],
+    quiz: list[Any],
+    answers: list[Any],
+    *,
+    created_at: str | None = None,
+) -> None:
+    data = {
+        "type": "lesson",
+        "language": language,
+        "lesson": lesson,
+        "quiz": quiz,
+        "answers": [str(answer) for answer in answers],
+        "created_at": created_at or utc_now(),
+        "updated_at": utc_now(),
+    }
+    _write_checkpoint(_checkpoint_path(path, "current_lesson.json"), data)
+
+
+def _provider_has_key(provider: OpenAIProvider) -> bool:
+    return bool(getattr(provider, "api_key", None))
+
+
 def _openai_required(state: dict[str, Any], provider: OpenAIProvider, message: str) -> dict[str, Any]:
+    if _provider_has_key(provider) and "OPENAI_API_KEY" not in message:
+        message = MODEL_FAILURE_MESSAGE
     return {
         "ok": False,
         "error": message,
@@ -1665,6 +1850,12 @@ COMMANDS = {
     "memory_export": memory_export,
     "memory_reset_language": memory_reset_language,
     "memory_delete_all": memory_delete_all,
+    "session_checkpoints": session_checkpoints,
+    "lesson_checkpoint": lesson_checkpoint,
+    "lesson_checkpoint_discard": lesson_checkpoint_discard,
+    "call_checkpoint": call_checkpoint,
+    "call_checkpoint_discard": call_checkpoint_discard,
+    "call_checkpoint_summarize": call_checkpoint_summarize,
     "status": status,
     "validate_key": validate_key,
     "realtime_client_secret": realtime_client_secret,

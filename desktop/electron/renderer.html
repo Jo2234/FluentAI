@@ -2351,24 +2351,42 @@
   </main>
 
   <script>
+    async function fetchWithTimeout(url, options = {}, { timeoutMs = 20000, retries = 0 } = {}) {
+      let lastError = null;
+      for (let attempt = 0; attempt <= retries; attempt += 1) {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, { ...options, signal: controller.signal });
+          window.clearTimeout(timer);
+          return response;
+        } catch (error) {
+          window.clearTimeout(timer);
+          lastError = error;
+          if (attempt >= retries) throw error;
+        }
+      }
+      throw lastError || new Error("Network request failed.");
+    }
+
     if (!window.fluentAI) {
-      async function bridge(command, payload) {
-        const response = await fetch(`/api/bridge/${command}`, {
+      async function bridge(command, payload, options = {}) {
+        const response = await fetchWithTimeout(`/api/bridge/${command}`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify(payload || {})
-        });
+        }, { timeoutMs: 20000, retries: options.idempotent ? 1 : 0 });
         return response.json();
       }
 
       window.fluentAI = {
-        status: (payload) => bridge("status", payload),
+        status: (payload) => bridge("status", payload, { idempotent: true }),
         onboardingStatus: (payload) => bridge("onboarding_status", payload),
         submitOnboarding: (payload) => bridge("onboarding_submit", payload),
         startPlacement: (payload) => bridge("placement_start", payload),
         submitPlacement: (payload) => bridge("placement_submit", payload),
-        homeSummary: (payload) => bridge("home_summary", payload),
-        memoryInspect: (payload) => bridge("memory_inspect", payload),
+        homeSummary: (payload) => bridge("home_summary", payload, { idempotent: true }),
+        memoryInspect: (payload) => bridge("memory_inspect", payload, { idempotent: true }),
         memoryExport: async (payload) => {
           const result = await bridge("memory_export", payload);
           if (result.ok && result.data) {
@@ -2385,6 +2403,12 @@
         },
         memoryResetLanguage: (payload) => bridge("memory_reset_language", payload),
         memoryDeleteAll: (payload) => bridge("memory_delete_all", payload),
+        sessionCheckpoints: (payload) => bridge("session_checkpoints", payload, { idempotent: true }),
+        lessonCheckpoint: (payload) => bridge("lesson_checkpoint", payload),
+        discardLessonCheckpoint: (payload) => bridge("lesson_checkpoint_discard", payload),
+        callCheckpoint: (payload) => bridge("call_checkpoint", payload),
+        discardCallCheckpoint: (payload) => bridge("call_checkpoint_discard", payload),
+        summarizeCallCheckpoint: (payload) => bridge("call_checkpoint_summarize", payload),
         startLesson: (payload) => bridge("lesson_start", payload),
         submitLesson: (payload) => bridge("lesson_submit", payload),
         realtimeClientSecret: (payload) => bridge("realtime_client_secret", payload),
@@ -2409,6 +2433,7 @@
       progressRecovered: false,
       recoveryNoticeDismissed: false,
       lessonSession: null,
+      sessionCheckpoints: { lesson: null, call: null },
       conversationSession: null,
       latestTutorMessage: "",
       chatMessages: [],
@@ -2419,6 +2444,9 @@
       localMediaStream: null,
       realtimePeer: null,
       realtimeChannel: null,
+      realtimeSecretExpiresAt: null,
+      realtimeRefreshTimer: null,
+      realtimeRefreshInFlight: false,
       remoteAudio: null,
       callActive: false,
       muted: false,
@@ -2527,6 +2555,14 @@
       if (className) node.className = className;
       node.textContent = value;
       return node;
+    }
+
+    function debounce(callback, delay) {
+      let timer = null;
+      return (...args) => {
+        if (timer) window.clearTimeout(timer);
+        timer = window.setTimeout(() => callback(...args), delay);
+      };
     }
 
     els.voiceMode.value = "openai";
@@ -2773,6 +2809,33 @@
     function bridgePayload(extra) {
       return { language: currentLanguage(), ...(extra || {}) };
     }
+
+    const queueLessonCheckpoint = debounce(async () => {
+      if (!state.lessonSession || !window.fluentAI.lessonCheckpoint) return;
+      try {
+        await window.fluentAI.lessonCheckpoint(bridgePayload({
+          lesson: state.lessonSession.lesson,
+          quiz: state.lessonSession.quiz,
+          answers: lessonAnswers()
+        }));
+      } catch {
+        appendLogs(["[Session Recovery Agent] Could not save lesson draft checkpoint."]);
+      }
+    }, 350);
+
+    const queueCallCheckpoint = debounce(async () => {
+      if (!window.fluentAI.callCheckpoint || !state.realtimeTurns.length) return;
+      try {
+        await window.fluentAI.callCheckpoint(bridgePayload({
+          turns: state.realtimeTurns,
+          topic: state.realtimeTopic || {},
+          video: els.video.value,
+          video_object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : null
+        }));
+      } catch {
+        appendLogs(["[Session Recovery Agent] Could not save call transcript checkpoint."]);
+      }
+    }, 350);
 
     const ONBOARDING_STEPS = [
       {
@@ -3392,26 +3455,209 @@
       renderChat();
     }
 
+    function parseRealtimeExpiresAt(secret) {
+      const value = secret ? secret.expires_at : null;
+      if (typeof value === "number") {
+        return value < 1000000000000 ? value * 1000 : value;
+      }
+      if (typeof value === "string" && value.trim()) {
+        const numeric = Number(value);
+        if (!Number.isNaN(numeric)) return numeric < 1000000000000 ? numeric * 1000 : numeric;
+        const parsed = Date.parse(value);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+      return Date.now() + 600000;
+    }
+
+    function stopRealtimeRefreshTimer() {
+      if (state.realtimeRefreshTimer) {
+        window.clearTimeout(state.realtimeRefreshTimer);
+        state.realtimeRefreshTimer = null;
+      }
+    }
+
+    function scheduleRealtimeRefresh(secret) {
+      stopRealtimeRefreshTimer();
+      state.realtimeSecretExpiresAt = parseRealtimeExpiresAt(secret);
+      const delay = Math.max(5000, state.realtimeSecretExpiresAt - Date.now() - 60000);
+      state.realtimeRefreshTimer = window.setTimeout(refreshRealtimeSession, delay);
+    }
+
+    async function requestRealtimeSecret() {
+      const secret = await window.fluentAI.realtimeClientSecret(bridgePayload({
+        video: els.video.value,
+        vision_summary: state.visualContext ? visualContextText() : ""
+      }));
+      if (!secret.ok || !secret.client_secret) {
+        throw new Error(secret.error || "Could not create OpenAI Realtime session.");
+      }
+      renderProfile(secret.profile);
+      appendLogs(secret.logs);
+      return secret;
+    }
+
+    async function connectRealtimePeer(secret, media, initialInstructions) {
+      const peer = new RTCPeerConnection();
+      const remoteAudio = new Audio();
+      remoteAudio.autoplay = true;
+      peer.ontrack = (event) => {
+        remoteAudio.srcObject = event.streams[0];
+        remoteAudio.play().catch(() => undefined);
+      };
+      media.getTracks().forEach((track) => peer.addTrack(track, media));
+      const channel = peer.createDataChannel("oai-events");
+      channel.onopen = () => {
+        channel.send(JSON.stringify({
+          type: "response.create",
+          response: { instructions: realtimeTutorInstruction(initialInstructions) }
+        }));
+      };
+      channel.onmessage = (event) => handleRealtimeEvent(event.data);
+
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      const response = await fetchWithTimeout("https://api.openai.com/v1/realtime/calls", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${secret.client_secret}`,
+          "Content-Type": "application/sdp"
+        },
+        body: offer.sdp
+      }, { timeoutMs: 20000, retries: 0 });
+      if (!response.ok) {
+        const detail = await response.text();
+        peer.close();
+        throw new Error(`OpenAI voice call failed: ${response.status} ${detail.slice(0, 180)}`);
+      }
+      await peer.setRemoteDescription({ type: "answer", sdp: await response.text() });
+      return { peer, channel, remoteAudio };
+    }
+
+    async function attachCameraIfAllowed() {
+      if (els.video.value !== "on") return false;
+      try {
+        setCallStatus("Requesting camera for this call...");
+        const videoStream = await navigator.mediaDevices.getUserMedia({ video: cameraConstraints(), audio: false });
+        videoStream.getVideoTracks().forEach((track) => state.localMediaStream.addTrack(track));
+        state.visualContext = null;
+        state.visionSequence += 1;
+        setCallStatus("Camera is live. Connecting voice...");
+        return true;
+      } catch {
+        els.video.value = "off";
+        state.visualContext = null;
+        state.visionSequence += 1;
+        setCallStatus("Camera is blocked. Continuing voice-only.");
+        return false;
+      }
+    }
+
+    async function refreshRealtimeSession() {
+      if (!state.callActive || state.realtimeRefreshInFlight || !state.localMediaStream) return;
+      state.realtimeRefreshInFlight = true;
+      setCallStatus("Voice session is refreshing.");
+      try {
+        const secret = await requestRealtimeSecret();
+        const priorPeer = state.realtimePeer;
+        const priorChannel = state.realtimeChannel;
+        const priorAudio = state.remoteAudio;
+        const transcript = state.realtimeTurns.map((turn) => `Learner: ${turn.learner_text}`).join(" ");
+        const next = await connectRealtimePeer(
+          secret,
+          state.localMediaStream,
+          `Continue the same tutoring call. Preserve context from this transcript: ${transcript || "No transcript yet."}`
+        );
+        state.realtimePeer = next.peer;
+        state.realtimeChannel = next.channel;
+        state.remoteAudio = next.remoteAudio;
+        if (priorChannel) priorChannel.close();
+        if (priorPeer) priorPeer.close();
+        if (priorAudio) {
+          priorAudio.pause();
+          priorAudio.srcObject = null;
+        }
+        scheduleRealtimeRefresh(secret);
+        setCallStatus("Voice session refreshed. Continue speaking naturally.");
+      } catch (error) {
+        await fallbackToTextAfterRealtimeRefreshFailure(error);
+      } finally {
+        state.realtimeRefreshInFlight = false;
+      }
+    }
+
+    async function fallbackToTextAfterRealtimeRefreshFailure(error) {
+      closeRealtimeTransport({ stopMedia: true });
+      els.voiceMode.value = "text";
+      els.conversationPane.classList.add("text-chat-active");
+      state.conversationSession = {
+        topic: state.realtimeTopic || { topic: "voice call", complexity: "live conversation", support: "", keywords: [] },
+        turns: [],
+        video_on: false,
+        video_object: null,
+        max_turns: Number(els.turns.value || 4)
+      };
+      state.chatMessages.push({
+        role: "system",
+        text: "Voice session could not refresh. Continuing in text mode with your transcript intact."
+      });
+      setBusy(false, "Voice refresh failed. Text mode is ready.");
+      setCallStatus((error && error.message) || "Voice session could not refresh. Continue in text mode.");
+      renderCallMedia();
+      renderChat();
+    }
+
+    function closeRealtimeTransport({ stopMedia = false } = {}) {
+      stopRealtimeRefreshTimer();
+      stopVisionLoop();
+      if (state.realtimeChannel) state.realtimeChannel.close();
+      if (state.realtimePeer) state.realtimePeer.close();
+      if (state.remoteAudio) {
+        state.remoteAudio.pause();
+        state.remoteAudio.srcObject = null;
+      }
+      if (stopMedia) stopLocalMedia();
+      state.realtimeChannel = null;
+      state.realtimePeer = null;
+      state.remoteAudio = null;
+      state.callActive = false;
+      state.muted = false;
+      state.realtimeSecretExpiresAt = null;
+    }
+
     async function startRealtimeCall() {
       if (!shouldUseVoice() || state.callActive) return;
       setCallStatus("Creating OpenAI Realtime voice session...");
       els.workspaceStatus.textContent = "Starting voice call...";
       els.voiceCallBtn.disabled = true;
       try {
-        const wantsVideo = els.video.value === "on";
+        let wantsVideo = els.video.value === "on";
+        let cameraFallback = false;
         const permission = await window.fluentAI.requestMediaAccess({
           video: els.video.value
         });
         if (permission && !permission.ok) {
-          throw new Error(permission.error || "Microphone permission is required to start the voice call.");
+          const micBlocked = permission.microphone && permission.microphone !== "granted";
+          const cameraBlocked = wantsVideo && permission.camera && permission.camera !== "granted";
+          if (cameraBlocked && !micBlocked) {
+            els.video.value = "off";
+            wantsVideo = false;
+            cameraFallback = true;
+            setCallStatus("Camera is blocked. Continuing voice-only.");
+          } else {
+            throw new Error(permission.error || "Microphone permission is required to start the voice call.");
+          }
         }
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error("Microphone access is unavailable in this environment.");
         }
 
         setCallStatus(wantsVideo ? "Requesting microphone and camera..." : "Requesting microphone...");
-        const media = await navigator.mediaDevices.getUserMedia(callMediaConstraints(wantsVideo));
+        const media = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(), video: false });
         state.localMediaStream = media;
+        if (wantsVideo) {
+          wantsVideo = await attachCameraIfAllowed();
+          cameraFallback = !wantsVideo;
+        }
         state.visualContext = null;
         state.realtimeTurns = [];
         state.latestRealtimeTutorText = "";
@@ -3424,66 +3670,18 @@
         state.visionSequence += 1;
         renderCallMedia();
 
-        if (wantsVideo) {
-          setCallStatus("Camera is live. Connecting voice...");
-        }
-
-        const secret = await window.fluentAI.realtimeClientSecret(bridgePayload({
-          video: els.video.value,
-          vision_summary: ""
-        }));
-        if (!secret.ok || !secret.client_secret) {
-          setCallStatus(secret.error || "Could not create OpenAI Realtime session.");
-          appendLogs(secret.logs);
-          els.voiceCallBtn.disabled = false;
-          stopLocalMedia();
-          return;
-        }
-        renderProfile(secret.profile);
-        appendLogs(secret.logs);
-
-        const peer = new RTCPeerConnection();
-        state.realtimePeer = peer;
-        state.remoteAudio = new Audio();
-        state.remoteAudio.autoplay = true;
-        peer.ontrack = (event) => {
-          state.remoteAudio.srcObject = event.streams[0];
-          state.remoteAudio.play().catch(() => undefined);
-        };
-        media.getTracks().forEach((track) => peer.addTrack(track, media));
-        const channel = peer.createDataChannel("oai-events");
-        state.realtimeChannel = channel;
-        channel.onopen = () => {
-          sendRealtimeEvent({
-            type: "response.create",
-            response: {
-              instructions: realtimeTutorInstruction(
-                `Start the tutoring call now. Greet the learner and ask the first simple ${currentLanguage()} question.`
-                  + (state.visualContext ? ` Use this camera context naturally: ${visualContextText()}.` : "")
-              )
-            }
-          });
-        };
-        channel.onmessage = (event) => handleRealtimeEvent(event.data);
-
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        const response = await fetch("https://api.openai.com/v1/realtime/calls", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${secret.client_secret}`,
-            "Content-Type": "application/sdp"
-          },
-          body: offer.sdp
-        });
-        if (!response.ok) {
-          const detail = await response.text();
-          endRealtimeCall();
-          setCallStatus(`OpenAI voice call failed: ${response.status} ${detail.slice(0, 180)}`);
-          return;
-        }
-        await peer.setRemoteDescription({ type: "answer", sdp: await response.text() });
+        const secret = await requestRealtimeSecret();
+        const connection = await connectRealtimePeer(
+          secret,
+          media,
+          `Start the tutoring call now. Greet the learner and ask the first simple ${currentLanguage()} question.`
+            + (state.visualContext ? ` Use this camera context naturally: ${visualContextText()}.` : "")
+        );
+        state.realtimePeer = connection.peer;
+        state.realtimeChannel = connection.channel;
+        state.remoteAudio = connection.remoteAudio;
         state.callActive = true;
+        scheduleRealtimeRefresh(secret);
         els.callBadge.textContent = `${secret.model || "gpt-realtime"} voice`;
         els.voiceCallBtn.textContent = "Live";
         els.voiceCallBtn.disabled = true;
@@ -3491,12 +3689,13 @@
         els.cameraBtn.disabled = false;
         els.endCallBtn.disabled = false;
         els.workspaceStatus.textContent = "Voice tutor is live.";
-        setCallStatus(wantsVideo ? "Connected. Video is live while OpenAI analyzes the view." : "Connected. Speak to the tutor naturally.");
+        setCallStatus(cameraFallback ? "Camera is blocked. Continuing voice-only." : wantsVideo ? "Connected. Video is live while OpenAI analyzes the view." : "Connected. Speak to the tutor naturally.");
         if (wantsVideo) {
           startVisionLoop("connected");
         }
       } catch (error) {
-        endRealtimeCall();
+        closeRealtimeTransport({ stopMedia: true });
+        els.voiceCallBtn.disabled = false;
         els.workspaceStatus.textContent = "Voice call needs attention.";
         setCallStatus(mediaErrorMessage(error));
       }
@@ -3670,6 +3869,7 @@
           video_object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : null
         });
         state.chatMessages.push({ role: "learner", text: event.transcript });
+        queueCallCheckpoint();
         renderChat();
       }
     }
@@ -3683,19 +3883,7 @@
         support: state.profile && state.profile.next_speaking_goal ? `Model answer: ${state.profile.next_speaking_goal}` : "Model answer: Answer in a complete sentence.",
         keywords: []
       };
-      stopVisionLoop();
-      if (state.realtimeChannel) state.realtimeChannel.close();
-      if (state.realtimePeer) state.realtimePeer.close();
-      if (state.remoteAudio) {
-        state.remoteAudio.pause();
-        state.remoteAudio.srcObject = null;
-      }
-      stopLocalMedia();
-      state.realtimeChannel = null;
-      state.realtimePeer = null;
-      state.remoteAudio = null;
-      state.callActive = false;
-      state.muted = false;
+      closeRealtimeTransport({ stopMedia: true });
       state.realtimeTurns = [];
       state.latestRealtimeTutorText = "";
       state.realtimeTopic = null;
@@ -3725,6 +3913,9 @@
           if (result.post_call_summary) {
             state.postCallSummary = result.post_call_summary;
             renderChat();
+          }
+          if (window.fluentAI.discardCallCheckpoint) {
+            await window.fluentAI.discardCallCheckpoint(bridgePayload());
           }
           await loadHomeSummary();
         } catch {
@@ -3813,7 +4004,7 @@
           startVisionLoop("toggle");
         } catch (error) {
           els.video.value = "off";
-          setCallStatus(error.message || "Camera could not be started.");
+          setCallStatus("Camera is blocked. Continuing voice-only.");
         }
       }
 
@@ -3865,7 +4056,12 @@
     }
 
     async function refreshStatus(persistLanguage = false) {
-      const result = await window.fluentAI.status(persistLanguage ? bridgePayload() : {});
+      let result = null;
+      try {
+        result = await window.fluentAI.status(persistLanguage ? bridgePayload() : {});
+      } catch {
+        result = { ok: false, error: "Status request timed out. Check the network and try again." };
+      }
       if (!result.ok) {
         showError(result.error || "Could not load status.");
         return;
@@ -3876,7 +4072,12 @@
     }
 
     async function loadHomeSummary() {
-      const result = await window.fluentAI.homeSummary(bridgePayload());
+      let result = null;
+      try {
+        result = await window.fluentAI.homeSummary(bridgePayload());
+      } catch {
+        result = { ok: false, error: "Home summary request timed out. Check the network and try again." };
+      }
       if (!result.ok) {
         showError(result.error || "Could not load home workspace.");
         appendLogs(result.logs);
@@ -3884,6 +4085,7 @@
       }
       trackRecovery(result);
       state.homeSummary = result;
+      state.sessionCheckpoints = result.session_checkpoints || { lesson: null, call: null };
       if (result.profile) renderProfile(result.profile);
       appendLogs(result.logs);
       renderHome(result);
@@ -3903,6 +4105,8 @@
       cta.textContent = today.cta || "Start today's lesson";
       cta.addEventListener("click", runTodayAction);
       els.todayPanel.replaceChildren(todayCopy, cta);
+      const recoveryCards = renderSessionRecoveryCards(summary.session_checkpoints || {});
+      if (recoveryCards) els.todayPanel.append(recoveryCards);
 
       const profile = summary.profile || state.profile || {};
       const goals = (profile.learning_goals || []).slice(0, 2).join(", ") || profile.first_practice_goal || "Build useful daily fluency.";
@@ -3986,6 +4190,100 @@
       );
     }
 
+    function renderSessionRecoveryCards(checkpoints) {
+      const lesson = checkpoints.lesson;
+      const call = checkpoints.call;
+      if (!lesson && !call) return null;
+      const stack = document.createElement("div");
+      stack.className = "home-action-row session-recovery";
+      if (lesson) {
+        const card = document.createElement("div");
+        card.className = "section-block tint";
+        card.append(
+          text("h3", "Resume interrupted lesson"),
+          text("p", `${titleCase(String(lesson.lesson && lesson.lesson.topic || "lesson"))} draft saved.`)
+        );
+        const resume = document.createElement("button");
+        resume.type = "button";
+        resume.textContent = "Resume";
+        resume.addEventListener("click", () => resumeLessonCheckpoint(lesson));
+        const discard = document.createElement("button");
+        discard.type = "button";
+        discard.className = "secondary overlay-secondary";
+        discard.textContent = "Discard";
+        discard.addEventListener("click", discardLessonCheckpoint);
+        card.append(resume, discard);
+        stack.append(card);
+      }
+      if (call) {
+        const card = document.createElement("div");
+        card.className = "section-block tint";
+        card.append(
+          text("h3", "Interrupted call"),
+          text("p", `${(call.turns || []).length} transcript turn${(call.turns || []).length === 1 ? "" : "s"} saved.`)
+        );
+        const summarize = document.createElement("button");
+        summarize.type = "button";
+        summarize.textContent = "Summarize your interrupted call";
+        summarize.addEventListener("click", summarizeCallCheckpoint);
+        const discard = document.createElement("button");
+        discard.type = "button";
+        discard.className = "secondary overlay-secondary";
+        discard.textContent = "Discard";
+        discard.addEventListener("click", discardCallCheckpoint);
+        card.append(summarize, discard);
+        stack.append(card);
+      }
+      return stack;
+    }
+
+    function resumeLessonCheckpoint(checkpoint) {
+      state.lessonSession = {
+        lesson: checkpoint.lesson,
+        quiz: checkpoint.quiz || []
+      };
+      setMode("lesson");
+      els.lessonEmpty.classList.add("hidden");
+      els.lessonPane.classList.add("lesson-active");
+      renderLesson(checkpoint.lesson, checkpoint.quiz || [], checkpoint.answers || []);
+      setBusy(false, "Resumed lesson draft.");
+      appendLogs(["[Session Recovery Agent] Restored interrupted lesson draft."]);
+    }
+
+    async function discardLessonCheckpoint() {
+      if (window.fluentAI.discardLessonCheckpoint) {
+        const result = await window.fluentAI.discardLessonCheckpoint(bridgePayload());
+        appendLogs(result.logs);
+      }
+      await loadHomeSummary();
+    }
+
+    async function summarizeCallCheckpoint() {
+      if (!window.fluentAI.summarizeCallCheckpoint) return;
+      setBusy(true, "Summarizing interrupted call...");
+      const result = await window.fluentAI.summarizeCallCheckpoint(bridgePayload());
+      setBusy(false, "Ready");
+      appendLogs(result.logs);
+      if (!result.ok) {
+        showError(result.error || "Could not summarize interrupted call.");
+        return;
+      }
+      if (result.profile) renderProfile(result.profile);
+      state.postCallSummary = result.post_call_summary;
+      state.chatMessages = [];
+      setMode("conversation");
+      renderChat();
+      await loadHomeSummary();
+    }
+
+    async function discardCallCheckpoint() {
+      if (window.fluentAI.discardCallCheckpoint) {
+        const result = await window.fluentAI.discardCallCheckpoint(bridgePayload());
+        appendLogs(result.logs);
+      }
+      await loadHomeSummary();
+    }
+
     function listOrEmpty(items, render, emptyText) {
       const list = document.createElement("ul");
       list.className = "home-list";
@@ -4026,7 +4324,12 @@
     async function openMemoryInspector() {
       if (!els.memoryInspectorPanel.open) return;
       appendLogs(["[Memory Inspector Agent] Opening sanitized memory inspector."]);
-      const result = await window.fluentAI.memoryInspect(bridgePayload());
+      let result = null;
+      try {
+        result = await window.fluentAI.memoryInspect(bridgePayload());
+      } catch {
+        result = { ok: false, error: "Memory inspector request timed out. Check the network and try again." };
+      }
       if (!result.ok) {
         showError(result.error || "Could not inspect memory.");
         appendLogs(result.logs);
@@ -4179,7 +4482,12 @@
       els.lessonContent.replaceChildren(block("Working", [
         "OpenAI is generating the lesson. This can take a moment."
       ], true));
-      const result = await window.fluentAI.startLesson(bridgePayload({}));
+      let result = null;
+      try {
+        result = await window.fluentAI.startLesson(bridgePayload({}));
+      } catch {
+        result = { ok: false, error: "Lesson request timed out. Your progress is safe — try again." };
+      }
       if (!result.ok) {
         showError(result.error || "Lesson failed.");
         setBusy(false, "Ready");
@@ -4188,11 +4496,12 @@
       state.lessonSession = { lesson: result.lesson, quiz: result.quiz };
       renderProfile(result.profile);
       appendLogs(result.logs);
-      renderLesson(result.lesson, result.quiz);
+      renderLesson(result.lesson, result.quiz, []);
+      queueLessonCheckpoint();
       setBusy(false, "Answer the quiz, then submit.");
     }
 
-    function renderLesson(lesson, quiz) {
+    function renderLesson(lesson, quiz, draftAnswers = []) {
       const grid = document.createElement("div");
       grid.className = "lesson-grid";
 
@@ -4211,7 +4520,7 @@
       right.id = "quizForm";
       right.className = "quiz-column";
       right.append(text("h3", "Adaptive Quiz"));
-      quiz.forEach((question, index) => right.append(questionNode(question, index)));
+      quiz.forEach((question, index) => right.append(questionNode(question, index, draftAnswers[index] || "")));
       const submit = document.createElement("button");
       submit.type = "submit";
       submit.className = "submit-quiz";
@@ -4221,6 +4530,7 @@
 
       grid.append(left, right);
       els.lessonContent.replaceChildren(grid);
+      quiz.forEach((_question, index) => markQuestionAnswered(index));
     }
 
     function lessonHero(lesson, questionCount) {
@@ -4318,7 +4628,7 @@
       return node;
     }
 
-    function questionNode(question, index) {
+    function questionNode(question, index, draftAnswer = "") {
       const node = document.createElement("div");
       node.className = "question";
       node.dataset.index = String(index);
@@ -4336,7 +4646,11 @@
           radio.type = "radio";
           radio.name = `q${index}`;
           radio.value = choice;
-          radio.addEventListener("change", () => markQuestionAnswered(index));
+          radio.checked = String(draftAnswer) === String(choice);
+          radio.addEventListener("change", () => {
+            markQuestionAnswered(index);
+            queueLessonCheckpoint();
+          });
           label.append(radio, document.createTextNode(choice));
           answers.append(label);
         });
@@ -4346,7 +4660,11 @@
         input.className = "free-answer";
         input.name = `q${index}`;
         input.placeholder = "Your answer";
-        input.addEventListener("input", () => markQuestionAnswered(index));
+        input.value = draftAnswer || "";
+        input.addEventListener("input", () => {
+          markQuestionAnswered(index);
+          queueLessonCheckpoint();
+        });
         node.append(input);
       }
       return node;
@@ -4363,25 +4681,35 @@
       if (status) status.textContent = answered ? "Answered" : "Try it";
     }
 
-    async function submitQuiz(event) {
-      event.preventDefault();
-      if (!state.lessonSession) return;
-      setBusy(true, "Grading quiz...");
-      const answers = state.lessonSession.quiz.map((question, index) => {
+    function lessonAnswers() {
+      if (!state.lessonSession) return [];
+      return state.lessonSession.quiz.map((question, index) => {
         const checked = document.querySelector(`input[name="q${index}"]:checked`);
         if (checked) return checked.value;
         const input = document.querySelector(`input[name="q${index}"]`);
         return input ? input.value : "";
       });
+    }
 
-      const result = await window.fluentAI.submitLesson(bridgePayload({
-        lesson: state.lessonSession.lesson,
-        quiz: state.lessonSession.quiz,
-        answers
-      }));
+    async function submitQuiz(event) {
+      event.preventDefault();
+      if (!state.lessonSession) return;
+      setBusy(true, "Grading quiz...");
+      const answers = lessonAnswers();
+
+      let result = null;
+      try {
+        result = await window.fluentAI.submitLesson(bridgePayload({
+          lesson: state.lessonSession.lesson,
+          quiz: state.lessonSession.quiz,
+          answers
+        }));
+      } catch {
+        result = { ok: false, error: "Your answers didn't go through — try again." };
+      }
       if (!result.ok) {
-        showError(result.error || "Quiz grading failed.");
-        setBusy(false, "Ready");
+        showError(result.error || "Your answers didn't go through — try again.");
+        setBusy(false, "Your answers didn't go through — try again.");
         return;
       }
       renderProfile(result.profile);
@@ -4455,11 +4783,16 @@
         text: "Tutor is preparing the first question with OpenAI..."
       }];
       renderChat();
-        const result = await window.fluentAI.startConversation(bridgePayload({
-          turns: Number(els.turns.value || 4),
-          video: els.video.value,
-          object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : ""
-        }));
+        let result = null;
+        try {
+          result = await window.fluentAI.startConversation(bridgePayload({
+            turns: Number(els.turns.value || 4),
+            video: els.video.value,
+            object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : ""
+          }));
+        } catch {
+          result = { ok: false, error: "Conversation request timed out. Your progress is safe — try again." };
+        }
       if (!result.ok) {
         showError(result.error || "Conversation failed.");
         setBusy(false, "Ready");
@@ -4529,14 +4862,26 @@
       renderChat();
       setBusy(true, "Tutor is listening...");
 
-      const result = await window.fluentAI.replyConversation(bridgePayload({
-        session: state.conversationSession,
-        message,
-        tutor_message: state.latestTutorMessage
-      }));
+      let result = null;
+      try {
+        result = await window.fluentAI.replyConversation(bridgePayload({
+          session: state.conversationSession,
+          message,
+          tutor_message: state.latestTutorMessage
+        }));
+      } catch {
+        result = { ok: false, error: "Your reply didn't go through — try again." };
+      }
       if (!result.ok) {
-        showError(result.error || "Reply failed.");
+        const last = state.chatMessages[state.chatMessages.length - 1];
+        if (last && last.role === "learner" && last.text === message) {
+          state.chatMessages.pop();
+          renderChat();
+        }
+        els.chatInput.value = message;
+        showError(result.error || "Your reply didn't go through — try again.");
         setBusy(false, "Your turn.");
+        els.chatInput.focus();
         return;
       }
 

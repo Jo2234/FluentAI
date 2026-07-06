@@ -450,6 +450,30 @@ ipcMain.handle("memory:delete_all", async (_event, payload) => {
   return runBridge("memory_delete_all", payload || {});
 });
 
+ipcMain.handle("session:checkpoints", async (_event, payload) => {
+  return runBridge("session_checkpoints", payload || {});
+});
+
+ipcMain.handle("lesson:checkpoint", async (_event, payload) => {
+  return runBridge("lesson_checkpoint", payload || {});
+});
+
+ipcMain.handle("lesson:checkpoint_discard", async (_event, payload) => {
+  return runBridge("lesson_checkpoint_discard", payload || {});
+});
+
+ipcMain.handle("call:checkpoint", async (_event, payload) => {
+  return runBridge("call_checkpoint", payload || {});
+});
+
+ipcMain.handle("call:checkpoint_discard", async (_event, payload) => {
+  return runBridge("call_checkpoint_discard", payload || {});
+});
+
+ipcMain.handle("call:checkpoint_summarize", async (_event, payload) => {
+  return runBridge("call_checkpoint_summarize", payload || {});
+});
+
 ipcMain.handle("lesson:start", async (_event, payload) => {
   return runBridge("lesson_start", payload || {});
 });
@@ -497,9 +521,11 @@ ipcMain.handle("media:request_access", async (_event, payload = {}) => {
 
   result.ok = result.microphone === "granted" && (!wantsVideo || result.camera === "granted");
   if (!result.ok) {
-    result.error = wantsVideo
-      ? "Microphone or camera permission is blocked for FluentAI. Allow access in System Settings, then press Call again."
-      : "Microphone permission is blocked for FluentAI. Allow access in System Settings, then press Call again.";
+    if (result.microphone !== "granted") {
+      result.error = "Microphone permission is blocked for FluentAI. Allow access in System Settings, then press Call again.";
+    } else if (wantsVideo && result.camera !== "granted") {
+      result.error = "Camera is blocked. Continuing voice-only.";
+    }
   }
   return result;
 });

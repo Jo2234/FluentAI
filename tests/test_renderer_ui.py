@@ -52,6 +52,27 @@ class RendererUITests(unittest.TestCase):
         self.assertIn("realtimeTurns", self.html)
         self.assertIn("endConversation: (payload) => bridge(\"conversation_end\", payload)", self.html)
 
+    def test_reliability_matrix_renderer_hooks_exist(self):
+        for marker in [
+            "AbortController",
+            "timeoutMs = 20000",
+            "retries: options.idempotent ? 1 : 0",
+            "function scheduleRealtimeRefresh",
+            "state.realtimeSecretExpiresAt - Date.now() - 60000",
+            "Voice session is refreshing.",
+            "Voice session could not refresh. Continuing in text mode with your transcript intact.",
+            "Resume interrupted lesson",
+            "Summarize your interrupted call",
+            "discardLessonCheckpoint",
+            "discardCallCheckpoint",
+            "Your reply didn't go through — try again.",
+            "Your answers didn't go through — try again.",
+            "Camera is blocked. Continuing voice-only.",
+            "queueLessonCheckpoint",
+            "queueCallCheckpoint",
+        ]:
+            self.assertIn(marker, self.html)
+
     def test_onboarding_overlay_markup_and_copy_exist(self):
         self.assertIn('section class="onboarding-overlay hidden" id="onboardingOverlay"', self.html)
         self.assertIn('div class="onboarding-stage" id="onboardingStage"', self.html)
@@ -160,8 +181,8 @@ class RendererUITests(unittest.TestCase):
         self.assertIn('Type DELETE ALL MEMORY to delete all memory.', self.html)
 
     def test_web_fallback_includes_home_memory_bridge_methods(self):
-        self.assertIn("homeSummary: (payload) => bridge(\"home_summary\", payload)", self.html)
-        self.assertIn("memoryInspect: (payload) => bridge(\"memory_inspect\", payload)", self.html)
+        self.assertIn("homeSummary: (payload) => bridge(\"home_summary\", payload, { idempotent: true })", self.html)
+        self.assertIn("memoryInspect: (payload) => bridge(\"memory_inspect\", payload, { idempotent: true })", self.html)
         self.assertIn("const result = await bridge(\"memory_export\", payload)", self.html)
         self.assertIn("new Blob([JSON.stringify(result.data, null, 2)]", self.html)
         self.assertIn("memoryResetLanguage: (payload) => bridge(\"memory_reset_language\", payload)", self.html)
@@ -180,6 +201,12 @@ class RendererUITests(unittest.TestCase):
             "memoryExport: (payload) => ipcRenderer.invoke(\"memory:export\", payload)",
             "memoryResetLanguage: (payload) => ipcRenderer.invoke(\"memory:reset_language\", payload)",
             "memoryDeleteAll: (payload) => ipcRenderer.invoke(\"memory:delete_all\", payload)",
+            "sessionCheckpoints: (payload) => ipcRenderer.invoke(\"session:checkpoints\", payload)",
+            "lessonCheckpoint: (payload) => ipcRenderer.invoke(\"lesson:checkpoint\", payload)",
+            "discardLessonCheckpoint: (payload) => ipcRenderer.invoke(\"lesson:checkpoint_discard\", payload)",
+            "callCheckpoint: (payload) => ipcRenderer.invoke(\"call:checkpoint\", payload)",
+            "discardCallCheckpoint: (payload) => ipcRenderer.invoke(\"call:checkpoint_discard\", payload)",
+            "summarizeCallCheckpoint: (payload) => ipcRenderer.invoke(\"call:checkpoint_summarize\", payload)",
         ]:
             self.assertIn(marker, preload)
         for marker in [
@@ -196,6 +223,12 @@ class RendererUITests(unittest.TestCase):
             "fs.writeFileSync",
             'runBridge("memory_reset_language"',
             'runBridge("memory_delete_all"',
+            'ipcMain.handle("session:checkpoints"',
+            'runBridge("session_checkpoints"',
+            'ipcMain.handle("lesson:checkpoint"',
+            'runBridge("lesson_checkpoint"',
+            'ipcMain.handle("call:checkpoint"',
+            'runBridge("call_checkpoint"',
         ]:
             self.assertIn(marker, main)
 
