@@ -11,7 +11,8 @@
     "test:python": "python -m unittest discover -s tests -q",
     "test:js": "node --check desktop/electron/main.js && node --check desktop/electron/preload.js && node --check mockups/duolingo-inspired/render-screenshots.js",
     "smoke": "python scripts/smoke_demo.py",
-    "check": "npm run test:js && npm run test:python && npm run smoke"
+    "check": "npm run test:js && npm run test:python && npm run smoke",
+    "package:bridge": "./scripts/build_bridge.sh"
   },
   "devDependencies": {
     "electron": "^39.2.4"

@@ -7,9 +7,11 @@ __pycache__/
 venv/
 node_modules/
 dist/
+dist-py/
 build/
 *.egg-info/
 dist-electron/
+*.spec.bak
 .env
 .env.*
 !.env.example
