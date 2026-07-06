@@ -271,7 +271,7 @@
       color: #26323a;
     }
 
-    input, select {
+    input, select, textarea {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -282,7 +282,12 @@
       min-height: 42px;
     }
 
-    input:focus, select:focus, button:focus {
+    textarea {
+      resize: vertical;
+      min-height: 92px;
+    }
+
+    input:focus, select:focus, textarea:focus, button:focus {
       outline: 2px solid rgba(239, 68, 68, 0.28);
       outline-offset: 2px;
     }
@@ -461,6 +466,191 @@
 
     .hidden {
       display: none !important;
+    }
+
+    .onboarding-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      background:
+        radial-gradient(circle at 14% 12%, rgba(124,124,255,0.26), transparent 360px),
+        radial-gradient(circle at 84% 18%, rgba(139,211,255,0.16), transparent 320px),
+        rgba(7, 8, 12, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .onboarding-card {
+      width: min(760px, 100%);
+      max-height: min(760px, calc(100vh - 56px));
+      overflow: auto;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 24px;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.028)),
+        rgba(12, 14, 21, 0.94);
+      box-shadow: 0 28px 90px rgba(0,0,0,0.44), inset 0 1px 0 rgba(255,255,255,0.06);
+      padding: 24px;
+    }
+
+    .onboarding-progress {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .onboarding-stage {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .onboarding-stage h2 {
+      font-size: 34px;
+      line-height: 1.04;
+    }
+
+    .onboarding-stage p {
+      color: var(--muted);
+      max-width: 62ch;
+    }
+
+    .onboarding-form {
+      display: grid;
+      gap: 18px;
+    }
+
+    .onboarding-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .onboarding-field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .chip-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .goal-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      color: var(--ink);
+      padding: 9px 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .goal-chip:has(input:checked) {
+      border-color: rgba(139,211,255,0.46);
+      background: rgba(139,211,255,0.13);
+      color: #f7f8f8;
+    }
+
+    .goal-chip input {
+      width: auto;
+      min-height: auto;
+    }
+
+    .privacy-note {
+      border: 1px solid rgba(139,211,255,0.22);
+      border-radius: 18px;
+      background: rgba(139,211,255,0.10);
+      color: #dfe8ff;
+      padding: 14px;
+    }
+
+    .privacy-note p {
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .placement-stage {
+      display: grid;
+      gap: 16px;
+    }
+
+    .placement-items {
+      display: grid;
+      gap: 12px;
+    }
+
+    .onboarding-hint {
+      color: #ffd4d4;
+      font-size: 13px;
+      font-weight: 750;
+      min-height: 18px;
+    }
+
+    .onboarding-overlay button.overlay-secondary {
+      border: 1px solid rgba(139,211,255,0.24);
+      background: rgba(10,12,18,0.86);
+      color: #f7f8f8;
+      min-height: 42px;
+      padding: 11px 13px;
+      text-align: center;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 10px 24px rgba(0,0,0,0.20);
+    }
+
+    .onboarding-overlay button.overlay-secondary:hover {
+      border-color: rgba(139,211,255,0.42);
+      background: rgba(18,22,32,0.96);
+    }
+
+    .placement-item {
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.045);
+      padding: 16px;
+      box-shadow: 0 14px 34px rgba(0,0,0,0.22);
+    }
+
+    .placement-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .placement-result {
+      border: 1px solid rgba(69,212,131,0.28);
+      border-radius: 20px;
+      background: rgba(69,212,131,0.09);
+      padding: 18px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .memory-affordance {
+      grid-column: 1;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      min-height: 0;
+    }
+
+    .memory-refresh-btn {
+      min-height: 36px;
+      padding: 8px 11px;
+      border: 1px solid rgba(139,211,255,0.20);
+      background: rgba(255,255,255,0.045);
+      color: var(--muted);
+      box-shadow: none;
+      font-size: 12px;
     }
 
     .empty-state {
@@ -1383,6 +1573,7 @@
     .language-select,
     input,
     select,
+    textarea,
     .free-answer {
       background: rgba(255,255,255,0.05);
       color: var(--ink);
@@ -1607,15 +1798,50 @@
       .workspace-head,
       .control-dock,
       .control-group,
+      .onboarding-grid,
       .call-shell,
       .chat-form,
       .call-transcript {
         grid-template-columns: 1fr;
       }
+
+      .onboarding-overlay {
+        padding: 14px;
+        align-items: stretch;
+      }
+
+      .onboarding-card {
+        max-height: calc(100vh - 28px);
+        padding: 18px;
+      }
+
+      .onboarding-stage h2 {
+        font-size: 28px;
+      }
     }
   </style>
 </head>
 <body>
+  <section class="onboarding-overlay hidden" id="onboardingOverlay" aria-modal="true" role="dialog" aria-labelledby="onboardingTitle">
+    <div class="onboarding-card" id="onboardingCard">
+      <div class="onboarding-progress" id="onboardingProgress">Step 1 of 8</div>
+      <div class="onboarding-stage" id="onboardingStage"></div>
+      <form class="onboarding-form" id="onboardingForm">
+        <div id="onboardingFields"></div>
+        <div class="onboarding-hint hidden" id="onboardingHint"></div>
+        <button id="onboardingNextBtn" type="submit">Next</button>
+      </form>
+      <div class="placement-stage hidden" id="placementStage">
+        <div class="placement-items" id="placementItems"></div>
+        <div class="placement-result-container hidden" id="placementResult"></div>
+        <div class="placement-actions">
+          <button class="ghost overlay-secondary" id="placementSkipBtn" type="button">Start as beginner instead</button>
+          <button id="placementSubmitBtn" type="button">Quick placement check (2 min)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <header>
     <h1><span class="brand-mark">F</span>FluentAI</h1>
     <p class="header-meta" id="headerMeta">Loading local learner memory...</p>
@@ -1681,6 +1907,10 @@
         <p><strong>Level:</strong> loading</p>
         <p><strong>Weak topics:</strong> loading</p>
         <p><strong>Speaking goal:</strong> loading</p>
+      </div>
+
+      <div class="memory-affordance">
+        <button class="memory-refresh-btn" id="meetTutorAgainBtn" type="button">Meet your tutor again</button>
       </div>
 
       <div class="pane" id="lessonPane">
@@ -1758,6 +1988,10 @@
 
       window.fluentAI = {
         status: (payload) => bridge("status", payload),
+        onboardingStatus: (payload) => bridge("onboarding_status", payload),
+        submitOnboarding: (payload) => bridge("onboarding_submit", payload),
+        startPlacement: (payload) => bridge("placement_start", payload),
+        submitPlacement: (payload) => bridge("placement_submit", payload),
         startLesson: (payload) => bridge("lesson_start", payload),
         submitLesson: (payload) => bridge("lesson_submit", payload),
         realtimeClientSecret: (payload) => bridge("realtime_client_secret", payload),
@@ -1796,10 +2030,31 @@
       lastVisionFrameHash: null,
       lastVisionAt: 0,
       mediaDiagnostics: { fakeMedia: false },
-      lessonAutoStarted: false
+      lessonAutoStarted: false,
+      onboarding: {
+        open: false,
+        step: 0,
+        status: null,
+        answers: {},
+        previousFocus: null
+      },
+      placementSession: null
     };
 
     const els = {
+      onboardingOverlay: document.getElementById("onboardingOverlay"),
+      onboardingStage: document.getElementById("onboardingStage"),
+      onboardingCard: document.getElementById("onboardingCard"),
+      onboardingProgress: document.getElementById("onboardingProgress"),
+      onboardingForm: document.getElementById("onboardingForm"),
+      onboardingFields: document.getElementById("onboardingFields"),
+      onboardingHint: document.getElementById("onboardingHint"),
+      onboardingNextBtn: document.getElementById("onboardingNextBtn"),
+      placementStage: document.getElementById("placementStage"),
+      placementItems: document.getElementById("placementItems"),
+      placementResult: document.getElementById("placementResult"),
+      placementSkipBtn: document.getElementById("placementSkipBtn"),
+      placementSubmitBtn: document.getElementById("placementSubmitBtn"),
       headerMeta: document.getElementById("headerMeta"),
       headerPills: document.getElementById("headerPills"),
       languageSelect: document.getElementById("languageSelect"),
@@ -1836,6 +2091,7 @@
       startConversationBtn: document.getElementById("startConversationBtn"),
       startTextFallbackBtn: document.getElementById("startTextFallbackBtn"),
       startVoiceFromTextBtn: document.getElementById("startVoiceFromTextBtn"),
+      meetTutorAgainBtn: document.getElementById("meetTutorAgainBtn"),
       agentLogPanel: document.getElementById("agentLogPanel"),
       agentLogToggle: document.getElementById("agentLogToggle"),
       agentLogs: document.getElementById("agentLogs")
@@ -1965,6 +2221,539 @@
 
     function bridgePayload(extra) {
       return { language: currentLanguage(), ...(extra || {}) };
+    }
+
+    const ONBOARDING_STEPS = [
+      {
+        key: "display_name",
+        title: "What should I call you?",
+        body: "Your tutor will use this name in lessons and conversation practice.",
+        render: () => inputField("display_name", "Name or nickname", "Johan", state.onboarding.answers.display_name || "")
+      },
+      {
+        key: "language",
+        title: "Which language are we learning?",
+        body: "Pick the target language for your first lessons and tutor calls.",
+        render: () => selectField("language", "Target language", ["Spanish", "Hindi", "French"], state.onboarding.answers.language || currentLanguage())
+      },
+      {
+        key: "motivation",
+        title: "Why are you learning?",
+        body: "A short goal helps the tutor choose useful topics.",
+        render: () => {
+          const wrap = document.createElement("div");
+          wrap.className = "onboarding-field";
+          wrap.append(inputField("motivation", "Your goal", "Travel, work, family, culture...", state.onboarding.answers.motivation || ""));
+          const chips = document.createElement("div");
+          chips.className = "chip-grid";
+          const selected = new Set(state.onboarding.answers.goals || []);
+          [
+            "Hold a 5-minute conversation",
+            "Understand native speakers",
+            "Travel with confidence",
+            "Build daily study habit"
+          ].forEach((goal) => {
+            const label = document.createElement("label");
+            label.className = "goal-chip";
+            const input = document.createElement("input");
+            input.type = "checkbox";
+            input.name = "goals";
+            input.value = goal;
+            input.checked = selected.has(goal);
+            label.append(input, document.createTextNode(goal));
+            chips.append(label);
+          });
+          wrap.append(text("label", "Optional focus"), chips);
+          return wrap;
+        }
+      },
+      {
+        key: "self_reported_level",
+        title: "Where should we start?",
+        body: "Your placement check can adjust this, so a rough answer is fine.",
+        render: () => selectField("self_reported_level", "Self-estimated level", ["new", "A1", "A2", "B1+", "not sure"], state.onboarding.answers.self_reported_level || "not sure")
+      },
+      {
+        key: "speaking_comfort",
+        title: "How comfortable is speaking?",
+        body: "This helps the tutor choose gentle or more direct prompts.",
+        render: () => selectField("speaking_comfort", "Speaking comfort", ["quiet", "some", "comfortable"], state.onboarding.answers.speaking_comfort || "some")
+      },
+      {
+        key: "session_minutes",
+        title: "How long should sessions feel?",
+        body: "Short sessions work best when the tutor can keep momentum.",
+        render: () => selectField("session_minutes", "Session length", ["5", "10", "15"], String(state.onboarding.answers.session_minutes || "10"))
+      },
+      {
+        key: "media",
+        title: "Voice first, video optional.",
+        body: "You can use a voice tutor call, and video stays off unless you turn it on.",
+        render: () => {
+          const grid = document.createElement("div");
+          grid.className = "onboarding-grid";
+          grid.append(
+            selectField("voice_default", "Voice preference", ["openai", "off"], state.onboarding.answers.voice_default || "openai"),
+            selectField("video_default", "Video default", ["off", "on"], state.onboarding.answers.video_default || "off")
+          );
+          const note = document.createElement("div");
+          note.className = "privacy-note";
+          note.append(text("strong", "No mic or camera request yet."), text("p", "The tutor will ask only when you start a voice or video session."));
+          const wrap = document.createElement("div");
+          wrap.className = "onboarding-field";
+          wrap.append(grid, note);
+          return wrap;
+        }
+      },
+      {
+        key: "privacy",
+        title: "Your local memory stays here.",
+        body: "FluentAI stores progress locally so future lessons can adapt.",
+        render: () => {
+          const wrap = document.createElement("div");
+          wrap.className = "privacy-note";
+          wrap.append(
+            text("strong", "Local memory, no raw audio or video."),
+            text("p", "We save lesson progress and camera summaries for tutoring context, not raw audio or raw video."),
+            checkboxField("privacy_ack", "I understand FluentAI keeps learning memory locally.", Boolean(state.onboarding.answers.privacy_ack))
+          );
+          return wrap;
+        }
+      }
+    ];
+
+    async function initOnboarding() {
+      let result = null;
+      try {
+        result = await window.fluentAI.onboardingStatus(bridgePayload());
+      } catch (error) {
+        showError(error.message || "Could not check onboarding status.");
+      }
+      if (!result || !result.ok) {
+        if (result && result.error) showError(result.error);
+        await refreshStatus(true);
+        await ensureLessonStarted();
+        return;
+      }
+      appendLogs(result.logs);
+      if (result.requires_onboarding) {
+        showOnboardingOverlay(result);
+        return;
+      }
+      if (result.profile && result.profile.language) {
+        renderProfile(result.profile);
+      }
+      await refreshStatus(true);
+      await ensureLessonStarted();
+    }
+
+    function showOnboardingOverlay(status) {
+      state.onboarding = {
+        open: true,
+        step: 0,
+        status,
+        answers: {
+          language: status && status.defaults ? status.defaults.language || "Spanish" : currentLanguage(),
+          session_minutes: status && status.defaults ? status.defaults.session_minutes || 10 : 10,
+          video_default: status && status.defaults ? status.defaults.video_default || "off" : "off",
+          voice_default: "openai",
+          speaking_comfort: "some",
+          self_reported_level: "not sure",
+          privacy_ack: false
+        },
+        previousFocus: document.activeElement
+      };
+      state.placementSession = null;
+      els.onboardingOverlay.classList.remove("hidden");
+      els.onboardingForm.classList.remove("hidden");
+      els.placementStage.classList.add("hidden");
+      els.placementItems.classList.remove("hidden");
+      els.placementResult.classList.add("hidden");
+      els.placementResult.replaceChildren();
+      els.onboardingNextBtn.disabled = false;
+      renderOnboardingStep(0);
+      focusFirstOverlayControl();
+    }
+
+    function renderOnboardingStep(index) {
+      state.onboarding.step = Math.max(0, Math.min(index, ONBOARDING_STEPS.length - 1));
+      const step = ONBOARDING_STEPS[state.onboarding.step];
+      els.onboardingProgress.textContent = `Step ${state.onboarding.step + 1} of ${ONBOARDING_STEPS.length}`;
+      els.onboardingStage.replaceChildren(
+        text("h2", step.title)
+      );
+      els.onboardingStage.querySelector("h2").id = "onboardingTitle";
+      els.onboardingStage.append(text("p", step.body));
+      els.onboardingFields.replaceChildren(step.render());
+      els.onboardingNextBtn.textContent = state.onboarding.step === ONBOARDING_STEPS.length - 1 ? "Start placement" : "Next";
+      setOnboardingHint("");
+      scrollOnboardingToTop();
+      focusFirstOverlayControl();
+    }
+
+    function collectOnboardingAnswers() {
+      const answers = { ...(state.onboarding.answers || {}) };
+      const step = ONBOARDING_STEPS[state.onboarding.step];
+      if (!step) return answers;
+      if (step.key === "motivation") {
+        const motivation = document.getElementById("motivation");
+        answers.motivation = motivation ? motivation.value.trim() : "";
+        answers.goals = Array.from(document.querySelectorAll("input[name='goals']:checked")).map((input) => input.value);
+      } else if (step.key === "media") {
+        answers.voice_default = fieldValue("voice_default") || "openai";
+        answers.video_default = fieldValue("video_default") || "off";
+      } else if (step.key === "privacy") {
+        const ack = document.getElementById("privacy_ack");
+        answers.privacy_ack = Boolean(ack && ack.checked);
+      } else {
+        answers[step.key] = fieldValue(step.key);
+      }
+      if (step.key === "display_name" && !answers.display_name) {
+        answers.display_name = "Learner";
+      }
+      state.onboarding.answers = answers;
+      return {
+        display_name: String(answers.display_name || "Learner").trim() || "Learner",
+        language: SUPPORTED_LANGUAGES.has(answers.language) ? answers.language : currentLanguage(),
+        motivation: String(answers.motivation || "").trim(),
+        goals: Array.isArray(answers.goals) ? answers.goals : [],
+        self_reported_level: answers.self_reported_level || "not sure",
+        speaking_comfort: answers.speaking_comfort || "some",
+        session_minutes: Number(answers.session_minutes || 10),
+        voice_default: answers.voice_default || "openai",
+        video_default: answers.video_default || "off",
+        privacy_local_only: Boolean(answers.privacy_ack)
+      };
+    }
+
+    async function submitOnboarding(event) {
+      event.preventDefault();
+      const payload = collectOnboardingAnswers();
+      const step = ONBOARDING_STEPS[state.onboarding.step];
+      const error = onboardingStepError(step.key, payload);
+      if (error) {
+        setOnboardingHint(error);
+        scrollOnboardingToTop();
+        return;
+      }
+      setOnboardingHint("");
+      if (state.onboarding.step < ONBOARDING_STEPS.length - 1) {
+        renderOnboardingStep(state.onboarding.step + 1);
+        return;
+      }
+      els.onboardingNextBtn.disabled = true;
+      els.onboardingProgress.textContent = "Saving tutor intake...";
+      const result = await window.fluentAI.submitOnboarding(bridgePayload(payload));
+      if (!result.ok) {
+        els.onboardingProgress.textContent = result.error || "Could not save onboarding.";
+        els.onboardingNextBtn.disabled = false;
+        appendLogs(result.logs);
+        return;
+      }
+      appendLogs(result.logs);
+      result.logs = [];
+      if (result.profile) renderProfile(result.profile);
+      if (result.requires_placement) {
+        renderPlacementOffer();
+        return;
+      }
+      finishOnboarding(result);
+    }
+
+    function renderPlacementOffer() {
+      els.onboardingForm.classList.add("hidden");
+      els.placementStage.classList.remove("hidden");
+      els.placementItems.classList.remove("hidden");
+      els.placementResult.classList.add("hidden");
+      els.placementResult.replaceChildren();
+      els.onboardingProgress.textContent = "Placement";
+      els.onboardingStage.replaceChildren(
+        text("h2", "Find the right starting point"),
+        text("p", "Take a quick placement check, or start gently as a beginner and let the tutor adapt.")
+      );
+      els.onboardingStage.querySelector("h2").id = "onboardingTitle";
+      els.placementItems.replaceChildren(
+        block("Quick placement check (2 min)", [
+          "A few quiz items plus optional written and conversation prompts."
+        ], true)
+      );
+      els.placementSkipBtn.classList.remove("hidden");
+      els.placementSkipBtn.textContent = "Start as beginner instead";
+      els.placementSubmitBtn.textContent = "Quick placement check (2 min)";
+      els.placementSubmitBtn.disabled = false;
+      els.placementSubmitBtn.onclick = startPlacement;
+      scrollOnboardingToTop();
+      focusFirstOverlayControl();
+    }
+
+    async function startPlacement() {
+      els.placementSubmitBtn.disabled = true;
+      els.onboardingProgress.textContent = "Building placement check...";
+      const result = await window.fluentAI.startPlacement(bridgePayload({
+        include_written: true,
+        include_conversation: true
+      }));
+      if (!result.ok) {
+        els.onboardingProgress.textContent = result.error || "Could not start placement.";
+        els.placementSubmitBtn.disabled = false;
+        appendLogs(result.logs);
+        return;
+      }
+      state.placementSession = result.session;
+      appendLogs(result.logs);
+      if (result.profile) renderProfile(result.profile);
+      renderPlacement(result.session);
+    }
+
+    function renderPlacement(session) {
+      els.onboardingProgress.textContent = "Placement check";
+      els.onboardingStage.replaceChildren(
+        text("h2", "Show me what feels familiar"),
+        text("p", "Answer what you can. Empty answers are fine; the tutor uses this only to choose your starting level.")
+      );
+      els.onboardingStage.querySelector("h2").id = "onboardingTitle";
+      const items = document.createElement("div");
+      items.className = "placement-items";
+      (session.items || []).forEach((question, index) => {
+        items.append(placementQuestionNode(question, index));
+      });
+      if (session.written_prompt && session.written_prompt.prompt) {
+        items.append(placementTextPrompt("placement-written-answer", "Written prompt", session.written_prompt.prompt));
+      }
+      if (session.conversation_prompt && session.conversation_prompt.prompt) {
+        items.append(placementTextPrompt("placement-conversation-answer", "Conversation prompt", session.conversation_prompt.prompt));
+      }
+      els.placementItems.classList.remove("hidden");
+      els.placementResult.classList.add("hidden");
+      els.placementResult.replaceChildren();
+      els.placementItems.replaceChildren(items);
+      els.placementSubmitBtn.disabled = false;
+      els.placementSubmitBtn.textContent = "Submit placement";
+      els.placementSubmitBtn.onclick = () => submitPlacement({ skipBeginner: false });
+      scrollOnboardingToTop();
+      focusFirstOverlayControl();
+    }
+
+    async function submitPlacement({ skipBeginner = false } = {}) {
+      els.placementSubmitBtn.disabled = true;
+      els.placementSkipBtn.disabled = true;
+      els.onboardingProgress.textContent = skipBeginner ? "Starting as beginner..." : "Judging placement...";
+      const payload = {
+        session: state.placementSession || { language: currentLanguage() },
+        answers: placementAnswers(),
+        written_answer: fieldValue("placement-written-answer"),
+        conversation_answer: fieldValue("placement-conversation-answer"),
+        skip_beginner: skipBeginner
+      };
+      const result = await window.fluentAI.submitPlacement(bridgePayload(payload));
+      if (!result.ok) {
+        els.onboardingProgress.textContent = result.error || "Could not finish placement.";
+        els.placementSubmitBtn.disabled = false;
+        els.placementSkipBtn.disabled = false;
+        appendLogs(result.logs);
+        return;
+      }
+      if (result.profile) renderProfile(result.profile);
+      appendLogs(result.logs);
+      result.logs = [];
+      renderPlacementResult(result);
+    }
+
+    function finishOnboarding(result) {
+      els.onboardingOverlay.classList.add("hidden");
+      state.onboarding.open = false;
+      if (result && result.profile) renderProfile(result.profile);
+      if (result && result.logs) appendLogs(result.logs);
+      refreshStatus(true).then(ensureLessonStarted);
+      if (state.onboarding.previousFocus && state.onboarding.previousFocus.focus) {
+        state.onboarding.previousFocus.focus();
+      }
+    }
+
+    function renderPlacementResult(result) {
+      const placement = result.placement || {};
+      els.onboardingProgress.textContent = "Placement complete";
+      els.onboardingStage.replaceChildren(
+        text("h2", "Your tutor is ready"),
+        text("p", "Here is the starting point I will use for your first lesson and conversation.")
+      );
+      els.onboardingStage.querySelector("h2").id = "onboardingTitle";
+      const card = document.createElement("div");
+      card.className = "placement-result";
+      card.append(
+        text("h3", `Starting level: ${placement.judged_level || "A1"}`),
+        text("p", `Strongest: ${(placement.strongest_skills || []).join(", ") || "building vocabulary"}`),
+        text("p", `Focus next: ${(placement.weakest_skills || []).join(", ") || "simple conversation"}`),
+        text("p", placement.first_practice_goal || "Build basic introductions and daily phrases."),
+        text("p", placement.first_conversation_goal || "Answer simple introduction questions in full sentences.")
+      );
+      els.placementItems.classList.add("hidden");
+      els.placementResult.classList.remove("hidden");
+      els.placementResult.replaceChildren(card);
+      els.placementSkipBtn.classList.add("hidden");
+      els.placementSubmitBtn.disabled = false;
+      els.placementSubmitBtn.textContent = "Meet your tutor";
+      els.placementSubmitBtn.onclick = () => finishOnboarding(result);
+      scrollOnboardingToTop();
+      focusFirstOverlayControl();
+    }
+
+    function placementQuestionNode(question, index) {
+      const node = document.createElement("div");
+      node.className = "placement-item question";
+      node.dataset.placementIndex = String(index);
+      node.append(text("p", `Placement ${index + 1}`, "question-kicker"));
+      node.append(text("p", question.prompt || "Answer this practice item.", "question-prompt"));
+      if (question.choices && question.choices.length) {
+        const answers = document.createElement("div");
+        answers.className = "answer-grid";
+        question.choices.forEach((choice) => {
+          const label = document.createElement("label");
+          label.className = "choice";
+          const radio = document.createElement("input");
+          radio.type = "radio";
+          radio.name = `placement-q${index}`;
+          radio.value = choice;
+          label.append(radio, document.createTextNode(choice));
+          answers.append(label);
+        });
+        node.append(answers);
+      } else {
+        const input = document.createElement("input");
+        input.className = "free-answer";
+        input.name = `placement-q${index}`;
+        input.placeholder = "Your answer";
+        node.append(input);
+      }
+      return node;
+    }
+
+    function placementTextPrompt(id, labelText, prompt) {
+      const node = document.createElement("div");
+      node.className = "placement-item";
+      const label = document.createElement("label");
+      label.htmlFor = id;
+      label.textContent = labelText;
+      const input = document.createElement("input");
+      input.id = id;
+      input.placeholder = prompt;
+      node.append(label, text("p", prompt, "question-prompt"), input);
+      return node;
+    }
+
+    function placementAnswers() {
+      const session = state.placementSession || {};
+      return (session.items || []).map((_question, index) => {
+        const checked = document.querySelector(`input[name="placement-q${index}"]:checked`);
+        if (checked) return checked.value;
+        const input = document.querySelector(`input[name="placement-q${index}"]`);
+        return input ? input.value.trim() : "";
+      });
+    }
+
+    function inputField(id, labelText, placeholder, value) {
+      const wrap = document.createElement("div");
+      wrap.className = "onboarding-field";
+      const label = document.createElement("label");
+      label.htmlFor = id;
+      label.textContent = labelText;
+      const input = document.createElement("input");
+      input.id = id;
+      input.name = id;
+      input.placeholder = placeholder;
+      input.value = value || "";
+      wrap.append(label, input);
+      return wrap;
+    }
+
+    function selectField(id, labelText, options, value) {
+      const wrap = document.createElement("div");
+      wrap.className = "onboarding-field";
+      const label = document.createElement("label");
+      label.htmlFor = id;
+      label.textContent = labelText;
+      const select = document.createElement("select");
+      select.id = id;
+      select.name = id;
+      options.forEach((option) => {
+        const node = document.createElement("option");
+        node.value = option;
+        node.textContent = option;
+        node.selected = String(option) === String(value);
+        select.append(node);
+      });
+      wrap.append(label, select);
+      return wrap;
+    }
+
+    function checkboxField(id, labelText, checked) {
+      const label = document.createElement("label");
+      label.className = "goal-chip";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.id = id;
+      input.checked = checked;
+      label.append(input, document.createTextNode(labelText));
+      return label;
+    }
+
+    function fieldValue(id) {
+      const field = document.getElementById(id);
+      return field && "value" in field ? String(field.value).trim() : "";
+    }
+
+    function onboardingStepError(key, payload) {
+      if (key === "language" && !payload.language) return "Choose a target language.";
+      if (key === "privacy" && !payload.privacy_local_only) return "Please acknowledge to continue.";
+      return "";
+    }
+
+    function setOnboardingHint(message) {
+      els.onboardingHint.textContent = message || "";
+      els.onboardingHint.classList.toggle("hidden", !message);
+    }
+
+    function scrollOnboardingToTop() {
+      if (els.onboardingCard) els.onboardingCard.scrollTop = 0;
+      els.onboardingOverlay.scrollTop = 0;
+    }
+
+    function focusFirstOverlayControl() {
+      if (!state.onboarding.open) return;
+      window.setTimeout(() => {
+        const focusable = overlayFocusable();
+        if (focusable[0]) focusable[0].focus();
+      }, 0);
+    }
+
+    function overlayFocusable() {
+      return Array.from(els.onboardingOverlay.querySelectorAll("button, input, select, textarea, [tabindex]:not([tabindex='-1'])"))
+        .filter((node) => !node.disabled && node.offsetParent !== null);
+    }
+
+    function trapOnboardingFocus(event) {
+      if (!state.onboarding.open) return;
+      if (event.key === "Enter" && !event.shiftKey && event.target.tagName !== "TEXTAREA") {
+        event.preventDefault();
+        if (!els.onboardingForm.classList.contains("hidden")) {
+          els.onboardingNextBtn.click();
+        } else if (!els.placementSubmitBtn.disabled) {
+          els.placementSubmitBtn.click();
+        }
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = overlayFocusable();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
 
     function realtimeTutorInstruction(context) {
@@ -2997,6 +3786,13 @@
     els.startConversationBtn.addEventListener("click", startConversation);
     els.startTextFallbackBtn.addEventListener("click", startTextFallback);
     els.startVoiceFromTextBtn.addEventListener("click", showVoiceCallInterface);
+    els.onboardingForm.addEventListener("submit", submitOnboarding);
+    els.placementSkipBtn.addEventListener("click", () => submitPlacement({ skipBeginner: true }));
+    els.meetTutorAgainBtn.addEventListener("click", () => showOnboardingOverlay({ rerun: true, defaults: {
+      language: currentLanguage(),
+      session_minutes: state.profile && state.profile.preferred_session_length_minutes ? state.profile.preferred_session_length_minutes : 10,
+      video_default: els.video.value || "off"
+    } }));
     els.voiceCallBtn.addEventListener("click", startVoiceCallFromButton);
     els.muteBtn.addEventListener("click", toggleMute);
     els.cameraBtn.addEventListener("click", toggleCallCamera);
@@ -3036,12 +3832,13 @@
     window.addEventListener("beforeunload", () => {
       endRealtimeCall();
     });
+    document.addEventListener("keydown", trapOnboardingFocus);
 
     updateVideoPreview();
     syncAgentLogPanel();
     loadMediaDiagnostics().then(() => renderCallMedia());
     setMode("lesson");
-    refreshStatus().then(ensureLessonStarted);
+    initOnboarding();
   </script>
 </body>
 </html>

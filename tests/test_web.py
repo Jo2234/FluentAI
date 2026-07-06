@@ -97,6 +97,26 @@ class WebSmokeTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=2)
 
+    def test_web_root_serves_renderer_with_onboarding_overlay(self):
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.web.OpenAIProvider", FakeOpenAIProvider):
+            FluentAIHandler.state_path = Path(tmpdir) / "progress.json"
+            FluentAIHandler.language = "Spanish"
+            server = self._start_server()
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                html = self._get(f"http://127.0.0.1:{port}/")
+                self.assertIn('id="onboardingOverlay"', html)
+                self.assertIn('id="placementStage"', html)
+                self.assertIn("Start as beginner instead", html)
+                self.assertIn("function initOnboarding", html)
+                self.assertIn("onboardingStatus: (payload) => bridge(\"onboarding_status\", payload)", html)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
     def _start_server(self):
         try:
             return ThreadingHTTPServer(("127.0.0.1", 0), FluentAIHandler)

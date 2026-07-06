@@ -52,6 +52,55 @@ class RendererUITests(unittest.TestCase):
         self.assertIn("realtimeTurns", self.html)
         self.assertIn("endConversation: (payload) => bridge(\"conversation_end\", payload)", self.html)
 
+    def test_onboarding_overlay_markup_and_copy_exist(self):
+        self.assertIn('section class="onboarding-overlay hidden" id="onboardingOverlay"', self.html)
+        self.assertIn('div class="onboarding-stage" id="onboardingStage"', self.html)
+        self.assertIn('div class="onboarding-progress" id="onboardingProgress"', self.html)
+        self.assertIn('form class="onboarding-form" id="onboardingForm"', self.html)
+        self.assertIn('div class="placement-stage hidden" id="placementStage"', self.html)
+        self.assertIn('div class="placement-items" id="placementItems"', self.html)
+        self.assertIn('button id="onboardingNextBtn"', self.html)
+        self.assertIn('button class="ghost overlay-secondary" id="placementSkipBtn"', self.html)
+        self.assertIn('button id="placementSubmitBtn"', self.html)
+        self.assertIn('div class="placement-result-container hidden" id="placementResult"', self.html)
+        self.assertIn("Start as beginner instead", self.html)
+        self.assertIn("Quick placement check (2 min)", self.html)
+        self.assertIn("Your local memory stays here.", self.html)
+        self.assertIn("no raw audio or video", self.html)
+        self.assertIn("Meet your tutor", self.html)
+        self.assertIn(".onboarding-overlay button.overlay-secondary", self.html)
+        self.assertIn("color: #f7f8f8", self.html)
+
+    def test_onboarding_renderer_functions_and_startup_path_exist(self):
+        for function_name in [
+            "initOnboarding",
+            "showOnboardingOverlay",
+            "renderOnboardingStep",
+            "collectOnboardingAnswers",
+            "submitOnboarding",
+            "startPlacement",
+            "renderPlacement",
+            "submitPlacement",
+            "renderPlacementResult",
+            "finishOnboarding",
+            "scrollOnboardingToTop",
+        ]:
+            self.assertIn(f"function {function_name}", self.html)
+        self.assertIn("initOnboarding();", self.html)
+        self.assertNotIn("refreshStatus().then(ensureLessonStarted);", self.html)
+        self.assertIn("if (result.requires_onboarding)", self.html)
+        self.assertIn("showOnboardingOverlay(result)", self.html)
+        self.assertNotIn('key === "motivation" && !payload.motivation', self.html)
+        self.assertIn('answers.display_name = "Learner";', self.html)
+        self.assertIn('els.placementItems.classList.add("hidden")', self.html)
+        self.assertIn('els.placementResult.replaceChildren(card)', self.html)
+
+    def test_web_fallback_includes_onboarding_bridge_methods(self):
+        self.assertIn("onboardingStatus: (payload) => bridge(\"onboarding_status\", payload)", self.html)
+        self.assertIn("submitOnboarding: (payload) => bridge(\"onboarding_submit\", payload)", self.html)
+        self.assertIn("startPlacement: (payload) => bridge(\"placement_start\", payload)", self.html)
+        self.assertIn("submitPlacement: (payload) => bridge(\"placement_submit\", payload)", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()
