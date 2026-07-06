@@ -24,6 +24,112 @@ function resolvePythonExecutable() {
 
 app.setName("FluentAI");
 
+function resolveStatePath() {
+  if (process.env.FLUENTAI_STATE_PATH) {
+    return process.env.FLUENTAI_STATE_PATH;
+  }
+
+  if (app.isPackaged) {
+    return path.join(app.getPath("userData"), "progress.json");
+  }
+
+  return path.join(projectRoot, "data", "progress.json");
+}
+
+function resolveLegacyStatePath() {
+  if (process.env.FLUENTAI_LEGACY_STATE_PATH && fs.existsSync(process.env.FLUENTAI_LEGACY_STATE_PATH)) {
+    return process.env.FLUENTAI_LEGACY_STATE_PATH;
+  }
+
+  if (!process.env.FLUENTAI_PROJECT_ROOT) {
+    return null;
+  }
+
+  const repoStatePath = path.join(process.env.FLUENTAI_PROJECT_ROOT, "data", "progress.json");
+  return fs.existsSync(repoStatePath) ? repoStatePath : null;
+}
+
+function migratePackagedStateIfNeeded() {
+  if (!app.isPackaged || process.env.FLUENTAI_STATE_PATH) {
+    return;
+  }
+
+  const statePath = resolveStatePath();
+  if (fs.existsSync(statePath)) {
+    return;
+  }
+
+  const legacyStatePath = resolveLegacyStatePath();
+  if (!legacyStatePath) {
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  fs.copyFileSync(legacyStatePath, statePath, fs.constants.COPYFILE_EXCL);
+  console.log("[Memory Agent] Migrated learner profile to Application Support.");
+}
+
+function buildPackagedEnv(statePath) {
+  const env = {};
+  for (const key of ["PATH", "HOME", "TMPDIR", "LANG"]) {
+    if (process.env[key]) {
+      env[key] = process.env[key];
+    }
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    env.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  }
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.startsWith("FLUENTAI_")) {
+      env[key] = value;
+    }
+  }
+
+  env.FLUENTAI_STATE_PATH = statePath;
+  return env;
+}
+
+function resolveBridgeCommand(bridgeCommand) {
+  const statePath = resolveStatePath();
+
+  if (app.isPackaged) {
+    const userDataPath = app.getPath("userData");
+    fs.mkdirSync(userDataPath, { recursive: true });
+    return {
+      command: path.join(process.resourcesPath, "bridge", "fluentai-bridge", "fluentai-bridge"),
+      args: [bridgeCommand],
+      cwd: userDataPath,
+      env: buildPackagedEnv(statePath),
+      statePath
+    };
+  }
+
+  return {
+    command: pythonExecutable,
+    args: ["-m", "fluent_ai.desktop_bridge", bridgeCommand],
+    cwd: projectRoot,
+    env: {
+      ...process.env,
+      PYTHONPATH: projectRoot
+    },
+    statePath
+  };
+}
+
+function withStatePath(payload, statePath) {
+  const bridgePayload = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? { ...payload }
+    : {};
+
+  if (!bridgePayload.state_path) {
+    bridgePayload.state_path = statePath;
+  }
+
+  return bridgePayload;
+}
+
 if (process.env.FLUENTAI_REMOTE_DEBUGGING_PORT) {
   app.commandLine.appendSwitch("remote-debugging-port", process.env.FLUENTAI_REMOTE_DEBUGGING_PORT);
 }
@@ -36,12 +142,10 @@ if (process.env.FLUENTAI_FAKE_MEDIA === "1") {
 
 function runBridge(command, payload = {}) {
   return new Promise((resolve) => {
-    const child = spawn(pythonExecutable, ["-m", "fluent_ai.desktop_bridge", command], {
-      cwd: projectRoot,
-      env: {
-        ...process.env,
-        PYTHONPATH: projectRoot
-      }
+    const bridge = resolveBridgeCommand(command);
+    const child = spawn(bridge.command, bridge.args, {
+      cwd: bridge.cwd,
+      env: bridge.env
     });
 
     let output = "";
@@ -65,7 +169,7 @@ function runBridge(command, payload = {}) {
         resolve({ ok: false, error: `Agent returned non-JSON output: ${error.message}`, raw: output.trim() });
       }
     });
-    child.stdin.write(JSON.stringify(payload));
+    child.stdin.write(JSON.stringify(withStatePath(payload, bridge.statePath)));
     child.stdin.end();
   });
 }
@@ -113,6 +217,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  migratePackagedStateIfNeeded();
   createWindow();
 
   app.on("activate", () => {
@@ -192,4 +297,8 @@ ipcMain.handle("conversation:start", async (_event, options) => {
 
 ipcMain.handle("conversation:reply", async (_event, payload) => {
   return runBridge("conversation_reply", payload);
+});
+
+ipcMain.handle("conversation:end", async (_event, payload) => {
+  return runBridge("conversation_end", payload || {});
 });

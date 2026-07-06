@@ -1,0 +1,17 @@
+appId: local.fluentai.desktop
+productName: FluentAI
+files:
+  - desktop/electron/**
+  - package.json
+extraResources:
+  - from: dist-py/fluentai-bridge
+    to: bridge/fluentai-bridge
+mac:
+  target:
+    - dir
+  category: public.app-category.education
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  extendInfo:
+    NSMicrophoneUsageDescription: FluentAI uses the microphone for live language tutoring calls.
+    NSCameraUsageDescription: FluentAI uses the camera only when you enable video context for tutoring.
