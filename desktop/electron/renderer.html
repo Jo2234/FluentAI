@@ -429,7 +429,7 @@
     }
 
     .workspace.conversation-active {
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr) 188px;
       grid-template-rows: minmax(0, 1fr);
     }
 
@@ -438,7 +438,7 @@
     }
 
     .workspace.conversation-active .agent-log-panel {
-      display: none;
+      display: grid;
     }
 
     .workspace.conversation-active .control-dock {
@@ -450,7 +450,7 @@
     }
 
     .workspace.conversation-active #conversationPane {
-      grid-column: 1 / -1;
+      grid-column: 1;
       grid-row: 1 / -1;
     }
 
@@ -1343,23 +1343,174 @@
     .video-context-card { background: rgba(10,12,18,0.78); color: var(--ink); border: 1px solid rgba(255,255,255,0.10); }
 
     .workspace.conversation-active .agent-log-panel { display: grid; }
+    .workspace.logs-open {
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
+    }
+    .workspace.logs-closed {
+      grid-template-columns: minmax(0, 1fr) 188px;
+    }
+    .workspace.conversation-active.logs-open {
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
+      grid-template-rows: minmax(0, 1fr);
+    }
+    .workspace.conversation-active.logs-closed {
+      grid-template-columns: minmax(0, 1fr) 188px;
+      grid-template-rows: minmax(0, 1fr);
+    }
     .agent-log-panel {
-      position: fixed;
-      right: 22px;
-      bottom: 22px;
-      width: min(430px, calc(100vw - 44px));
-      max-height: min(52vh, 460px);
-      z-index: 40;
-      align-self: auto;
+      grid-column: 2;
+      grid-row: 1 / -1;
+      width: 100%;
+      height: 100%;
+      max-height: none;
+      z-index: 3;
+      align-self: stretch;
       grid-template-rows: auto minmax(0, 1fr);
     }
-    .agent-log-panel:not([open]) { width: 210px; max-height: 56px; }
+    .agent-log-panel:not([open]) { height: 56px; align-self: end; }
     .agent-log-panel summary { color: var(--ink); font-weight: 650; }
     .log-toggle { background: rgba(124,124,255,0.14); color: #c4c7ff; border-color: rgba(124,124,255,0.28); }
     .log-box { color: #d7dcee; border-top-color: rgba(255,255,255,0.08); }
 
-    #conversationPane:not(.video-call-active) .call-shell { grid-template-columns: 320px minmax(0, 1fr); }
-    #conversationPane:not(.video-call-active) .call-stage { padding: 22px; }
+
+    /* FluentAI studio redesign: full-bleed, readable aurora/ink palette. */
+    main { padding: 10px 12px 12px; }
+    header { height: 72px; border-bottom-color: rgba(255,255,255,0.08); }
+    main { height: calc(100vh - 72px); }
+    .workspace {
+      border-radius: 24px;
+      padding: 12px;
+      gap: 12px;
+      border-color: rgba(255,255,255,0.10);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025)),
+        rgba(8, 10, 16, 0.86);
+      box-shadow: 0 28px 90px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    .pane { border-radius: 20px; }
+    .lesson-grid {
+      min-height: 100%;
+      grid-template-columns: minmax(300px, 0.74fr) minmax(460px, 1.26fr);
+      gap: 14px;
+      padding: 14px;
+    }
+    .lesson-column {
+      position: sticky;
+      top: 14px;
+      align-self: start;
+      max-height: calc(100vh - 126px);
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .lesson-hero {
+      border-radius: 22px;
+      background:
+        radial-gradient(circle at 16% 18%, rgba(139,211,255,0.45), transparent 180px),
+        radial-gradient(circle at 88% 10%, rgba(186,145,255,0.38), transparent 180px),
+        linear-gradient(135deg, #161a2a, #263c70 54%, #111827);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .section-block,
+    .question,
+    .vocab-list li,
+    .example-list li,
+    .choice,
+    .feedback {
+      border-radius: 18px;
+    }
+    .phrase-lab-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .phrase-chip {
+      border: 1px solid rgba(139,211,255,0.22);
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(139,211,255,0.12), rgba(124,124,255,0.10));
+      color: var(--ink);
+      padding: 11px 12px;
+      font-weight: 760;
+    }
+    .phrase-chip span { display:block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .question {
+      position: relative;
+      transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+    }
+    .question-status {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 999px;
+      padding: 4px 8px;
+      color: var(--muted);
+      background: rgba(255,255,255,0.04);
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .question.answered {
+      border-color: rgba(139,211,255,0.38);
+      background: rgba(139,211,255,0.055);
+    }
+    .question.answered .question-status { color: #bceaff; border-color: rgba(139,211,255,0.34); }
+    .question.correct { border-color: rgba(69,212,131,0.42); background: rgba(69,212,131,0.075); }
+    .question.needs-review { border-color: rgba(255,204,102,0.45); background: rgba(255,204,102,0.075); }
+    .choice:has(input:checked) {
+      border-color: rgba(139,211,255,0.48);
+      background: rgba(139,211,255,0.12);
+      color: #f7f8f8;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+    }
+    .call-stage {
+      grid-template-areas:
+        "head"
+        "center"
+        "context"
+        "controls";
+      grid-template-rows: auto minmax(220px, 1fr) auto auto;
+      border-radius: 20px 0 0 20px;
+    }
+    .call-head { grid-area: head; }
+    .call-center { grid-area: center; }
+    .video-context-card {
+      grid-area: context;
+      position: relative;
+      left: auto;
+      bottom: auto;
+      width: 100%;
+      z-index: 2;
+      background: rgba(10,12,18,0.86);
+    }
+    .call-controls {
+      grid-area: controls;
+      padding: 0;
+      margin-top: 0;
+    }
+    .round-btn { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); }
+
+    #conversationPane:not(.video-call-active) .call-shell { grid-template-columns: minmax(360px, 0.42fr) minmax(0, 1fr); }
+    #conversationPane:not(.video-call-active) .call-stage {
+      padding: 18px 20px;
+      gap: 10px;
+      grid-template-rows: auto minmax(120px, 1fr) auto auto;
+    }
+    #conversationPane:not(.video-call-active) .ai-face {
+      width: 132px;
+      height: 132px;
+      font-size: 48px;
+    }
+    #conversationPane:not(.video-call-active) .video-context-card {
+      padding: 12px;
+    }
+    #conversationPane:not(.video-call-active) .round-btn {
+      min-width: 58px;
+      height: 58px;
+    }
+    .text-fallback .fallback-start {
+      background: linear-gradient(135deg, rgba(124,124,255,0.92), rgba(94,157,255,0.92));
+      color: #ffffff;
+      border-color: rgba(167,167,255,0.60);
+      box-shadow: 0 10px 24px rgba(94,106,210,0.24);
+    }
     #conversationPane.text-chat-active .call-transcript,
     #conversationPane:not(.video-call-active) .call-transcript { padding: 28px; }
 
@@ -1706,6 +1857,8 @@
 
     function syncAgentLogPanel() {
       const expanded = els.agentLogPanel.open;
+      els.workspace.classList.toggle("logs-open", expanded);
+      els.workspace.classList.toggle("logs-closed", !expanded);
       els.workspace.classList.toggle("logs-collapsed", !expanded);
       els.agentLogToggle.textContent = expanded ? "Hide" : "Show";
     }
@@ -2280,6 +2433,7 @@
       left.append(
         lessonHero(lesson, quiz.length),
         vocabBlock(lesson.vocabulary || []),
+        phraseLabBlock(lesson),
         block("Grammar Focus", [lesson.grammar_explanation || ""], false),
         examplesBlock(lesson.examples || []),
         block("Coach Challenge", [lesson.micro_task || ""], true)
@@ -2341,6 +2495,28 @@
       return node;
     }
 
+    function phraseLabBlock(lesson) {
+      const node = document.createElement("div");
+      node.className = "section-block tint phrase-lab";
+      node.append(text("h3", "Phrase Lab"));
+      const lab = document.createElement("div");
+      lab.className = "phrase-lab-grid";
+      const examples = lesson.examples || [];
+      const vocabulary = lesson.vocabulary || [];
+      [
+        ["Say it aloud", examples[0] ? examples[0][0] : `Build one ${lesson.language || currentLanguage()} sentence.`],
+        ["Flip the meaning", examples[0] ? examples[0][1] : "Explain it in your own words."],
+        ["Use one word", vocabulary[0] ? `${vocabulary[0][0]} → ${vocabulary[0][1]}` : "Pick a new word and make it yours."],
+      ].forEach(([title, detail]) => {
+        const chip = document.createElement("div");
+        chip.className = "phrase-chip";
+        chip.append(document.createTextNode(title), text("span", detail));
+        lab.append(chip);
+      });
+      node.append(lab);
+      return node;
+    }
+
     function vocabBlock(items) {
       const node = document.createElement("div");
       node.className = "section-block";
@@ -2376,6 +2552,7 @@
       node.className = "question";
       node.dataset.index = String(index);
       node.append(text("p", `Question ${index + 1}`, "question-kicker"));
+      node.append(text("span", "Try it", "question-status"));
       node.append(text("p", question.prompt, "question-prompt"));
 
       if (question.choices && question.choices.length) {
@@ -2388,6 +2565,7 @@
           radio.type = "radio";
           radio.name = `q${index}`;
           radio.value = choice;
+          radio.addEventListener("change", () => markQuestionAnswered(index));
           label.append(radio, document.createTextNode(choice));
           answers.append(label);
         });
@@ -2397,9 +2575,21 @@
         input.className = "free-answer";
         input.name = `q${index}`;
         input.placeholder = "Your answer";
+        input.addEventListener("input", () => markQuestionAnswered(index));
         node.append(input);
       }
       return node;
+    }
+
+    function markQuestionAnswered(index) {
+      const question = document.querySelector(`.question[data-index="${index}"]`);
+      if (!question) return;
+      const checked = document.querySelector(`input[name="q${index}"]:checked`);
+      const input = document.querySelector(`.question[data-index="${index}"] input[name="q${index}"]:not([type="radio"])`);
+      const answered = Boolean(checked || (input && input.value.trim()));
+      question.classList.toggle("answered", answered);
+      const status = question.querySelector(".question-status");
+      if (status) status.textContent = answered ? "Answered" : "Try it";
     }
 
     async function submitQuiz(event) {
@@ -2437,6 +2627,10 @@
       results.forEach((result, index) => {
         const question = document.querySelector(`.question[data-index="${index}"]`);
         if (!question) return;
+        question.classList.toggle("correct", Boolean(result.correct));
+        question.classList.toggle("needs-review", !result.correct);
+        const status = question.querySelector(".question-status");
+        if (status) status.textContent = result.correct ? "Correct" : "Review";
         const feedback = document.createElement("div");
         feedback.className = `feedback${result.correct ? "" : " review"}`;
         feedback.append(
