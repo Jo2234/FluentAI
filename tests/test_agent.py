@@ -4,18 +4,23 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest.mock import patch
 
-from fluent_ai.agent import choose_topic, categorize_error, due_review_items, evaluate_answers, generate_lesson, generate_quiz, update_progress
+from fluent_ai.agent import QuizResult, choose_topic, categorize_error, due_review_items, evaluate_answers, generate_lesson, generate_quiz, update_progress
 from fluent_ai.conversation import (
     asks_for_english_help,
+    apply_turn_progress,
+    build_post_call_summary,
     build_follow_up,
     build_opening,
     choose_conversation_topic,
+    evaluate_reply_with_metadata,
+    persist_post_call_summary,
     run_conversation,
     visual_reply_options,
 )
 from fluent_ai.desktop_bridge import (
     _load,
     apply_conversation_turn_progress,
+    conversation_end,
     conversation_reply,
     conversation_start,
     lesson_start,
@@ -23,7 +28,7 @@ from fluent_ai.desktop_bridge import (
     profile_for,
     status,
 )
-from fluent_ai.openai_provider import OpenAIProvider
+from fluent_ai.openai_provider import OpenAIProvider, _realtime_instructions
 from fluent_ai.state import conversation_memory, default_state, language_state, load_state, profile_state, record_mistake, review_queue, save_state
 
 
@@ -104,6 +109,18 @@ class InvalidEntryQuizProvider(MalformedQuizProvider):
             '[{"correct": false, "error_category": "not_allowed", "feedback": "Bad", '
             '"corrected_form": "Quisiera un cafe, por favor.", "severity": "high", "confidence": 0.9}]'
         )
+
+
+class PromptCaptureProvider(OpenAIProvider):
+    captured_prompt = ""
+
+    @property
+    def available(self):
+        return True
+
+    def _text_response(self, prompt):
+        type(self).captured_prompt = prompt
+        return "Hola, practicamos."
 
 
 class AgentTests(unittest.TestCase):
@@ -239,6 +256,61 @@ class AgentTests(unittest.TestCase):
 
         self.assertEqual(language_state(state)["mistake_memory"], {})
         self.assertEqual(profile_state(state)["xp"], 15)
+        self.assertIsNone(conversation_memory(state)["next_conversation_goal"])
+
+    def test_missed_lesson_sets_next_conversation_goal_and_clean_lesson_clears_it(self):
+        state = default_state("Spanish")
+        lesson = {
+            "language": "Spanish",
+            "level": "A1",
+            "topic": "daily routines",
+            "focus_skill": "conjugations",
+            "difficulty": "steady",
+            "minutes": 10,
+        }
+        missed = [
+            QuizResult(
+                prompt="Fill in the blank: Yo ___ cada dia.",
+                expected="trabajo",
+                actual="trabajar",
+                skill="conjugations",
+                topic="daily routines",
+                question_type="fill_blank",
+                correct=False,
+                feedback="Use trabajo.",
+                error_category="wrong_conjugation",
+                corrected_form="trabajo",
+                severity="medium",
+                confidence=0.9,
+            )
+        ]
+
+        update_progress(state, lesson, missed)
+
+        goal = conversation_memory(state)["next_conversation_goal"]
+        self.assertEqual(goal["topic"], "daily routines")
+        self.assertEqual(goal["skill"], "conjugations")
+        self.assertEqual(goal["error_category"], "wrong_conjugation")
+        self.assertIn("first-person present tense", goal["instruction"])
+        self.assertEqual(goal["source"], "lesson")
+        self.assertEqual(language_state(state)["history"][-1]["payload"]["next_conversation_goal"], goal)
+
+        clean = [
+            QuizResult(
+                prompt="Fill in the blank: Yo ___ cada dia.",
+                expected="trabajo",
+                actual="trabajo",
+                skill="conjugations",
+                topic="daily routines",
+                question_type="fill_blank",
+                correct=True,
+                feedback="Good.",
+            )
+        ]
+        update_progress(state, lesson, clean)
+
+        self.assertIsNone(conversation_memory(state)["next_conversation_goal"])
+        self.assertIsNone(language_state(state)["history"][-1]["payload"]["next_conversation_goal"])
 
     def test_personal_intro_variation_stays_correct_with_advisory(self):
         question = {
@@ -484,6 +556,59 @@ class AgentTests(unittest.TestCase):
         self.assertIn("manzana", transcript[0].tutor_text)
         self.assertEqual(conversation_memory(updated_state)["last_video_context"]["primary_object"], "apple")
 
+    def test_goal_driven_conversation_topic_and_video_still_wins(self):
+        state = default_state("Spanish")
+        conversation_memory(state)["next_conversation_goal"] = {
+            "topic": "daily routines",
+            "skill": "conjugations",
+            "error_category": "wrong_conjugation",
+            "instruction": "Ask simple daily-routine questions that force first-person present tense.",
+            "source": "lesson",
+            "set_at": "2026-07-08T00:00:00+00:00",
+        }
+
+        topic = choose_conversation_topic(state, video_on=False, video_object=None)
+        opening = build_opening(topic, state)
+        visual_topic = choose_conversation_topic(state, video_on=True, video_object="apple")
+
+        self.assertEqual(topic["topic"], "daily routines")
+        self.assertEqual(topic["goal"]["topic"], "daily routines")
+        self.assertIn("Today, steer toward", opening)
+        self.assertIn("first-person present tense", opening)
+        self.assertIn("manzana", visual_topic["topic"])
+        self.assertNotIn("goal", visual_topic)
+
+    def test_tutor_prompts_and_realtime_instructions_include_lesson_goal(self):
+        state = default_state("Spanish")
+        goal = {
+            "topic": "cafe orders",
+            "skill": "vocabulary",
+            "error_category": "vocabulary_missing",
+            "instruction": "Use cafe-order phrases in a short role-play.",
+            "source": "lesson",
+            "set_at": "2026-07-08T00:00:00+00:00",
+        }
+        topic = {
+            "topic": "likes and food",
+            "complexity": "beginner",
+            "opening": "Hola. ¿Te gusta la comida?",
+            "support": "Model answer: Si, me gusta.",
+            "keywords": ["gusta"],
+            "goal": goal,
+        }
+        provider = PromptCaptureProvider()
+
+        provider.conversation_tutor_reply(topic, state, [], "opening", build_opening(topic, state))
+        realtime = _realtime_instructions(
+            target_language="Spanish",
+            level="A1",
+            weak_topics=[],
+            goal_instruction=goal["instruction"],
+        )
+
+        self.assertIn("Today, steer toward: Use cafe-order phrases in a short role-play.", PromptCaptureProvider.captured_prompt)
+        self.assertIn("Today, steer toward: Use cafe-order phrases in a short role-play.", realtime)
+
     def test_advanced_conversation_uses_complex_topics(self):
         state = default_state("Spanish")
         profile_state(state)["current_level"] = "C1"
@@ -505,6 +630,48 @@ class AgentTests(unittest.TestCase):
         follow_up = build_follow_up(topic, "What does that mean in English?", 0.2, 1, state)
         self.assertIn("In English", follow_up)
         self.assertIn("Hace sol", follow_up)
+
+    def test_conversation_correction_records_real_mistake_and_maps_to_teachable_lesson_topic(self):
+        state = default_state("Spanish")
+        topic = {
+            "topic": "likes and food",
+            "complexity": "beginner",
+            "support": "Model answer: Si, me gustan las manzanas.",
+            "keywords": ["gusta", "manzana"],
+        }
+        score, feedback, correction, mistake = evaluate_reply_with_metadata(topic, "No se todavia", state)
+        turn = {
+            "turn_number": 1,
+            "tutor_text": "¿Te gustan las manzanas?",
+            "learner_text": "No se todavia",
+            "topic": topic["topic"],
+            "complexity": topic["complexity"],
+            "video_on": False,
+            "video_object": None,
+            "score": score,
+            "feedback": feedback,
+            "correction": correction,
+            "mistake": mistake,
+        }
+
+        apply_turn_progress(state, topic, turn, is_first_turn=True)
+
+        mistake_record = next(iter(language_state(state)["mistake_memory"].values()))
+        self.assertEqual(mistake_record["incorrect_form"], "No se todavia")
+        self.assertEqual(mistake_record["corrected_form"], "Si, me gustan las manzanas.")
+        self.assertEqual(mistake_record["topic"], "vocabulary")
+        self.assertEqual(mistake_record["source"], "conversation")
+        self.assertTrue(mistake_record["blocked_meaning"])
+        self.assertIn("next_review", mistake_record)
+
+        mistake_record["next_review"] = "2000-01-01T00:00:00+00:00"
+        review_queue(state)[f"review_{mistake_record['id']}"]["due_at"] = "2000-01-01T00:00:00+00:00"
+        lesson = generate_lesson(state)
+
+        self.assertEqual(lesson["topic"], "vocabulary")
+        self.assertEqual(lesson["selection_source"], "mistake_memory")
+        self.assertIn("'No se todavia' -> 'Si, me gustan las manzanas.'", lesson["reason"])
+        self.assertIn("conversation", lesson["reason"])
 
     def test_desktop_bridge_switches_supported_languages(self):
         with TemporaryDirectory() as tmpdir:
@@ -840,6 +1007,90 @@ class AgentTests(unittest.TestCase):
         types = [event["type"] for event in language_state(state)["history"]]
         self.assertEqual(types[:2], ["conversation_started", "learner_replied"])
         self.assertTrue(language_state(state)["mistake_memory"])
+
+    def test_post_call_summary_fields_persistence_and_cap(self):
+        state = default_state("Spanish")
+        topic = {
+            "topic": "weather",
+            "complexity": "beginner",
+            "support": "Model answer: Hace sol.",
+            "keywords": ["hace", "sol"],
+            "speaking_confidence_before": conversation_memory(state)["speaking_confidence"],
+        }
+        turn = {
+            "turn_number": 1,
+            "tutor_text": "¿Que tiempo hace?",
+            "learner_text": "Hace sol hoy.",
+            "topic": "weather",
+            "complexity": "beginner",
+            "video_on": False,
+            "video_object": None,
+            "score": 0.72,
+            "feedback": "Good conversation turn.",
+            "correction": None,
+        }
+        apply_turn_progress(state, topic, turn, is_first_turn=True)
+
+        summary = build_post_call_summary(state, topic, [turn])
+
+        self.assertEqual(summary["topic"], "weather")
+        self.assertEqual(summary["turn_count"], 1)
+        self.assertEqual(summary["average_score"], 0.72)
+        self.assertIn("Hace sol hoy", summary["did_well"])
+        self.assertIsNone(summary["correction_to_remember"])
+        self.assertEqual(summary["phrase_to_review"], "Hace sol.")
+        self.assertEqual(summary["confidence_change"], "improved")
+        self.assertTrue(summary["ended_at"])
+
+        for index in range(11):
+            persisted = persist_post_call_summary(state, {**topic, "session_id": f"session_{index}"}, [turn])
+
+        summaries = conversation_memory(state)["post_call_summaries"]
+        self.assertEqual(len(summaries), 10)
+        self.assertEqual(summaries[-1], persisted)
+        self.assertEqual(summaries[0]["session_id"], "session_1")
+        self.assertEqual(language_state(state)["history"][-1]["payload"]["post_call_summary"], persisted)
+
+    def test_conversation_end_scores_and_persists_raw_voice_turns(self):
+        with TemporaryDirectory() as tmpdir:
+            state_path = str(Path(tmpdir) / "progress.json")
+            save_state(Path(state_path), default_state("Spanish"))
+
+            result = conversation_end(
+                {
+                    "state_path": state_path,
+                    "language": "Spanish",
+                    "topic": {
+                        "topic": "weather",
+                        "complexity": "beginner",
+                        "support": "Model answer: Hace sol.",
+                        "keywords": ["hace", "sol"],
+                    },
+                    "turns": [{"tutor_text": "¿Que tiempo hace?", "learner_text": "No se"}],
+                }
+            )
+
+            persisted = load_state(Path(state_path), "Spanish")
+            mistake = next(iter(language_state(persisted)["mistake_memory"].values()))
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["post_call_summary"]["topic"], "weather")
+            self.assertEqual(result["post_call_summary"]["turn_count"], 1)
+            self.assertEqual(len(conversation_memory(persisted)["post_call_summaries"]), 1)
+            self.assertEqual(mistake["incorrect_form"], "No se")
+            self.assertEqual(mistake["topic"], "vocabulary")
+
+    def test_conversation_end_empty_transcript_noops_without_summary_write(self):
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "progress.json"
+            save_state(path, default_state("Spanish"))
+
+            result = conversation_end({"state_path": str(path), "language": "Spanish", "turns": []})
+            persisted = load_state(path, "Spanish")
+
+            self.assertTrue(result["ok"])
+            self.assertIsNone(result["post_call_summary"])
+            self.assertIn("Call ended with no scored turns.", result["logs"][0])
+            self.assertEqual(conversation_memory(persisted)["post_call_summaries"], [])
 
 
 if __name__ == "__main__":

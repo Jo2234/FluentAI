@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import unicodedata
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 from fluent_ai.agent import current_level
 from fluent_ai.state import (
@@ -325,6 +326,7 @@ class ConversationTurn:
     score: float
     feedback: str
     correction: str | None
+    mistake: dict[str, Any] | None = None
 
 
 TutorReplyFn = Callable[[dict[str, Any], dict[str, Any], list[ConversationTurn], str, str], str | None]
@@ -344,16 +346,78 @@ def choose_conversation_topic(state: dict[str, Any], video_on: bool, video_objec
                 "visual": visual,
             }
 
+    goal = conversation_memory(state).get("next_conversation_goal")
+    if isinstance(goal, dict) and goal.get("instruction"):
+        goal_topic = _topic_for_conversation_goal(state, goal, level)
+        if goal_topic:
+            selected = dict(goal_topic)
+            selected["goal"] = dict(goal)
+            return selected
+
     candidates = conversation_topics_for(state, level)
     recent = set(conversation_memory(state).get("recent_topics", [])[-3:])
     fresh = [candidate for candidate in candidates if candidate["topic"] not in recent]
-    return random.choice(fresh or candidates)
+    return dict(random.choice(fresh or candidates))
 
 
 def conversation_topics_for(state: dict[str, Any], level: str) -> list[dict[str, Any]]:
     language = active_language(state)
     language_topics = LANGUAGE_TOPIC_OVERRIDES.get(language, {})
     return language_topics.get(level) or TOPIC_LADDER.get(level, TOPIC_LADDER["A1"])
+
+
+def _topic_for_conversation_goal(state: dict[str, Any], goal: dict[str, Any], level: str) -> dict[str, Any] | None:
+    goal_topic = normalize(str(goal.get("topic") or ""))
+    current_level_topics = conversation_topics_for(state, level)
+    for candidate in current_level_topics:
+        if normalize(str(candidate.get("topic") or "")) == goal_topic:
+            return candidate
+
+    for candidate in _all_conversation_topics_for_language(state):
+        if normalize(str(candidate.get("topic") or "")) == goal_topic:
+            return candidate
+
+    fallback_topic = _goal_fallback_topic_name(goal)
+    if fallback_topic:
+        for candidate in current_level_topics:
+            if normalize(str(candidate.get("topic") or "")) == normalize(fallback_topic):
+                return candidate
+        for candidate in _all_conversation_topics_for_language(state):
+            if normalize(str(candidate.get("topic") or "")) == normalize(fallback_topic):
+                return candidate
+    return None
+
+
+def _all_conversation_topics_for_language(state: dict[str, Any]) -> list[dict[str, Any]]:
+    language = active_language(state)
+    topics: list[dict[str, Any]] = []
+    for level in LEVEL_ORDER:
+        topics.extend(LANGUAGE_TOPIC_OVERRIDES.get(language, {}).get(level) or TOPIC_LADDER.get(level, []))
+    return topics
+
+
+LEVEL_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"]
+
+
+def _goal_fallback_topic_name(goal: dict[str, Any]) -> str | None:
+    topic = normalize(str(goal.get("topic") or ""))
+    skill = normalize(str(goal.get("skill") or ""))
+    category = normalize(str(goal.get("error_category") or ""))
+    explicit = {
+        "cafe orders": "likes and food",
+        "conjugations": "daily routines",
+        "past tense": "past weekend",
+        "vocabulary": "likes and food",
+    }
+    if topic in explicit:
+        return explicit[topic]
+    if skill == "conjugations" or category in {"wrong_conjugation", "wrong_tense"}:
+        return "daily routines"
+    if skill == "vocabulary" or category == "vocabulary_missing":
+        return "likes and food"
+    if category == "too_short":
+        return "introductions"
+    return None
 
 
 def resolve_visible_object(value: str | None, language: str = "Spanish") -> dict[str, Any] | None:
@@ -387,14 +451,16 @@ def run_conversation(
     video_object: str | None,
     tutor_reply_fn: TutorReplyFn | None = None,
 ) -> tuple[list[ConversationTurn], dict[str, Any], dict[str, Any]]:
+    confidence_before = float(conversation_memory(state).get("speaking_confidence", 0.30) or 0.30)
     topic = choose_conversation_topic(state, video_on, video_object)
+    topic["speaking_confidence_before"] = confidence_before
     transcript: list[ConversationTurn] = []
     fallback_opening = build_opening(topic, state)
     tutor_text = _model_or_raise(tutor_reply_fn, topic, state, transcript, "opening", fallback_opening)
 
     for index in range(1, turns + 1):
         learner_text = get_learner_reply(topic, state, index, mode, tutor_text)
-        score, feedback, correction = evaluate_reply(topic, learner_text, state)
+        score, feedback, correction, mistake = evaluate_reply_with_metadata(topic, learner_text, state)
         transcript.append(
             ConversationTurn(
                 turn_number=index,
@@ -407,6 +473,7 @@ def run_conversation(
                 score=score,
                 feedback=feedback,
                 correction=correction,
+                mistake=mistake,
             )
         )
         fallback_follow_up = build_follow_up(topic, learner_text, score, index, state)
@@ -434,9 +501,11 @@ def _model_or_raise(
 
 def build_opening(topic: dict[str, Any], state: dict[str, Any]) -> str:
     level = current_level(state)
+    goal_guidance = _goal_guidance(topic)
+    suffix = f" Tutor guidance: {goal_guidance}" if goal_guidance else ""
     if level in {"A1", "A2"}:
-        return f"{topic['opening']} ({topic['support']})"
-    return topic["opening"]
+        return f"{topic['opening']} ({topic['support']}){suffix}"
+    return f"{topic['opening']}{suffix}"
 
 
 def get_learner_reply(topic: dict[str, Any], state: dict[str, Any], turn_number: int, mode: str, tutor_text: str) -> str:
@@ -494,6 +563,11 @@ def visual_reply_options(visual: dict[str, Any], state: dict[str, Any]) -> list[
 
 
 def evaluate_reply(topic: dict[str, Any], learner_text: str, state: dict[str, Any]) -> tuple[float, str, str | None]:
+    score, feedback, correction, _mistake = evaluate_reply_with_metadata(topic, learner_text, state)
+    return score, feedback, correction
+
+
+def evaluate_reply_with_metadata(topic: dict[str, Any], learner_text: str, state: dict[str, Any]) -> tuple[float, str, str | None, dict[str, Any] | None]:
     normalized = normalize(learner_text)
     keywords = [normalize(keyword) for keyword in topic.get("keywords", [])]
     keyword_hits = sum(1 for keyword in keywords if keyword and keyword in normalized)
@@ -507,10 +581,19 @@ def evaluate_reply(topic: dict[str, Any], learner_text: str, state: dict[str, An
         score = min(0.95, 0.30 + keyword_hits * 0.18 + length_bonus)
 
     if score >= target:
-        return score, "Good conversation turn. You answered in a way I can build on.", None
+        return score, "Good conversation turn. You answered in a way I can build on.", None, None
 
     correction = correction_for(topic)
-    return score, "Good attempt. I will simplify and give you a model sentence.", correction
+    topic_name = str(topic.get("topic") or "conversation")
+    mistake = {
+        "incorrect_form": _trim_mistake_text(learner_text),
+        "corrected_form": correction,
+        "error_category": "other",
+        "skill": "speaking",
+        "topic": topic_name,
+        "blocked_meaning": score < 0.30,
+    }
+    return score, "Good attempt. I will simplify and give you a model sentence.", correction, mistake
 
 
 def correction_for(topic: dict[str, Any]) -> str:
@@ -582,6 +665,7 @@ def update_conversation_progress(
                     "score": turn.score,
                     "feedback": turn.feedback,
                     "correction": turn.correction,
+                    "mistake": turn.mistake,
                 }
                 for turn in transcript
             ],
@@ -656,15 +740,21 @@ def apply_turn_progress(
     for turn in turn_events:
         if not isinstance(turn, dict) or not turn.get("correction"):
             continue
+        mistake = turn.get("mistake") if isinstance(turn.get("mistake"), dict) else {}
+        lesson_topic = conversation_topic_to_lesson_topic(str(mistake.get("topic") or topic_name))
+        next_review = (datetime.now(timezone.utc) + timedelta(days=1)).replace(microsecond=0).isoformat()
         record_mistake(
             state,
             {
-                "incorrect_form": str(turn.get("learner_text") or ""),
-                "corrected_form": str(turn.get("correction")),
+                "incorrect_form": str(mistake.get("incorrect_form") or turn.get("learner_text") or "")[:80],
+                "corrected_form": str(mistake.get("corrected_form") or turn.get("correction")),
                 "context": f"Conversation turn on {topic_name}.",
-                "skill": "speaking",
-                "topic": topic_name,
-                "error_category": "other",
+                "skill": str(mistake.get("skill") or "speaking"),
+                "topic": lesson_topic,
+                "error_category": str(mistake.get("error_category") or "other"),
+                "blocked_meaning": bool(mistake.get("blocked_meaning", float(turn.get("score", score) or score) < 0.30)),
+                "source": "conversation",
+                "next_review": next_review,
             },
             language,
         )
@@ -727,6 +817,91 @@ def apply_turn_progress(
     data["weak_topics"] = recalculate_weak_topics(state, language=language)
 
 
+def conversation_topic_to_lesson_topic(topic_name: str) -> str:
+    normalized = normalize(topic_name)
+    mapping = {
+        "introductions": "introductions",
+        "daily routines": "daily routines",
+        "cafe orders": "cafe orders",
+        "past weekend": "past tense",
+        "past tense": "past tense",
+        "likes and food": "vocabulary",
+        "weather": "vocabulary",
+    }
+    if normalized.startswith("visible object"):
+        return "vocabulary"
+    return mapping.get(normalized, "vocabulary")
+
+
+def build_post_call_summary(state: dict[str, Any], topic: dict[str, Any], turns: list[Any]) -> dict[str, Any]:
+    scored_turns = [turn for turn in turns if _turn_score(turn) is not None]
+    ended_at = utc_now()
+    topic_name = str(topic.get("topic") or (scored_turns and _turn_value(scored_turns[0], "topic")) or "conversation")
+    average_score = sum(float(_turn_score(turn) or 0.0) for turn in scored_turns) / max(1, len(scored_turns))
+    best_turn = max(scored_turns, key=lambda turn: float(_turn_score(turn) or 0.0), default=None)
+    correction = None
+    for turn in reversed(scored_turns):
+        correction = _turn_value(turn, "correction")
+        if correction:
+            break
+
+    memory = conversation_memory(state)
+    missed = memory.get("missed_phrases", []) if isinstance(memory.get("missed_phrases"), list) else []
+    confidence_before = topic.get("speaking_confidence_before")
+    try:
+        confidence_delta = float(memory.get("speaking_confidence", 0.30)) - float(confidence_before)
+    except (TypeError, ValueError):
+        confidence_delta = 0.0
+    if confidence_delta > 0.005:
+        confidence_change = "improved"
+    elif confidence_delta < -0.005:
+        confidence_change = "dipped"
+    else:
+        confidence_change = "steady"
+
+    next_goal = memory.get("next_conversation_goal")
+    if isinstance(next_goal, dict) and next_goal.get("instruction"):
+        next_practice = str(next_goal["instruction"])
+    elif correction:
+        next_practice = f"Review the model phrase '{correction}' in the next conversation."
+    else:
+        next_practice = str(memory.get("next_speaking_goal") or f"Keep practicing {topic_name}.")
+
+    return {
+        "session_id": str(topic.get("session_id") or f"conversation_{ended_at.replace(':', '').replace('-', '')}"),
+        "topic": topic_name,
+        "turn_count": len(scored_turns),
+        "average_score": round(average_score, 3),
+        "did_well": _did_well_sentence(best_turn, topic_name),
+        "correction_to_remember": str(correction) if correction else None,
+        "phrase_to_review": str(missed[-1]) if missed else correction_for(topic),
+        "next_speaking_goal": str(memory.get("next_speaking_goal") or ""),
+        "confidence_change": confidence_change,
+        "next_conversation_should_practice": next_practice,
+        "ended_at": ended_at,
+    }
+
+
+def persist_post_call_summary(state: dict[str, Any], topic: dict[str, Any], turns: list[Any]) -> dict[str, Any] | None:
+    if not turns:
+        return None
+    summary = build_post_call_summary(state, topic, turns)
+    memory = conversation_memory(state)
+    memory["post_call_summaries"] = (memory.get("post_call_summaries", []) + [summary])[-10:]
+    add_event(
+        state,
+        {
+            "type": "progress_updated",
+            "source": "conversation_mode",
+            "summary": f"Post-call summary for {summary['topic']}: {summary['turn_count']} turns.",
+            "payload": {
+                "post_call_summary": summary,
+            },
+        },
+    )
+    return summary
+
+
 def next_speaking_goal(state: dict[str, Any], average_score: float, topic: dict[str, Any]) -> str:
     level = current_level(state)
     if average_score < 0.35 and level in {"A1", "A2"}:
@@ -738,6 +913,42 @@ def next_speaking_goal(state: dict[str, Any], average_score: float, topic: dict[
     if level in {"B1", "B2"}:
         return "Give an opinion plus one reason in the next conversation."
     return "Use nuance, concession, and a concrete example in the next discussion."
+
+
+def _goal_guidance(topic: dict[str, Any]) -> str:
+    goal = topic.get("goal")
+    if isinstance(goal, dict) and goal.get("instruction"):
+        return f"Today, steer toward: {goal['instruction']}"
+    return ""
+
+
+def _trim_mistake_text(value: str) -> str:
+    return " ".join(str(value or "").strip().split())[:80]
+
+
+def _turn_score(turn: Any) -> float | None:
+    value = _turn_value(turn, "score")
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _turn_value(turn: Any, key: str, default: Any = None) -> Any:
+    if isinstance(turn, dict):
+        return turn.get(key, default)
+    return getattr(turn, key, default)
+
+
+def _did_well_sentence(turn: Any, topic_name: str) -> str:
+    if turn is None:
+        return f"You stayed engaged with the {topic_name} conversation."
+    learner_text = str(_turn_value(turn, "learner_text", "") or "").strip()
+    if learner_text:
+        return f"You did well when you said '{learner_text[:80]}' because the tutor could build on it."
+    return f"You did well by completing a turn on {topic_name}."
 
 
 def normalize(value: str) -> str:

@@ -11,6 +11,7 @@ from fluent_ai.state import (
     LEVELS,
     active_language,
     add_event,
+    conversation_memory,
     language_state,
     profile_state,
     recalculate_weak_topics,
@@ -909,6 +910,7 @@ def update_progress(state: dict[str, Any], lesson: dict[str, Any], results: list
     total = max(1, len(results))
     language = active_language(state)
     data = language_state(state, language)
+    memory = conversation_memory(state, language)
     profile = profile_state(state, language)
     before_skills = skill_scores(state, language)
     before_topics = topic_scores(state, language)
@@ -958,6 +960,12 @@ def update_progress(state: dict[str, Any], lesson: dict[str, Any], results: list
                 },
                 language,
             )
+
+    next_conversation_goal = _derive_next_conversation_goal(results)
+    if next_conversation_goal:
+        memory["next_conversation_goal"] = next_conversation_goal
+    elif isinstance(memory.get("next_conversation_goal"), dict) and memory["next_conversation_goal"].get("source") == "lesson":
+        memory["next_conversation_goal"] = None
 
     next_xp = int(profile.get("xp", 0) + correct_count * 10 + 5)
     next_level = level_from_mastery(sum(skill_updates.values()) / len(skill_updates))
@@ -1050,11 +1058,59 @@ def update_progress(state: dict[str, Any], lesson: dict[str, Any], results: list
                     if topic_updates[topic] != before_topics.get(topic, 0.30)
                 },
                 "adaptation": recommendation(state),
+                "next_conversation_goal": memory.get("next_conversation_goal"),
             },
         },
         language,
     )
     return state
+
+
+def _derive_next_conversation_goal(results: list[QuizResult]) -> dict[str, Any] | None:
+    misses = [result for result in results if not result.correct]
+    if not misses:
+        return None
+
+    counts: dict[tuple[str, str], int] = {}
+    first_seen: dict[tuple[str, str], QuizResult] = {}
+    for result in misses:
+        category = result.error_category or "other"
+        topic = result.topic
+        key = (category, topic)
+        counts[key] = counts.get(key, 0) + 1
+        first_seen.setdefault(key, result)
+
+    category, topic = max(counts, key=lambda key: (counts[key], -list(first_seen).index(key)))
+    result = first_seen[(category, topic)]
+    skill = "conjugations" if result.skill == "conjugation" else result.skill
+    return {
+        "topic": topic,
+        "skill": skill,
+        "error_category": category,
+        "instruction": _conversation_goal_instruction(category, topic, skill),
+        "source": "lesson",
+        "set_at": utc_now(),
+    }
+
+
+def _conversation_goal_instruction(error_category: str, topic: str, skill: str) -> str:
+    if error_category == "wrong_conjugation" and topic == "daily routines":
+        return "Ask simple daily-routine questions that force first-person present tense."
+    if error_category == "vocabulary_missing" and topic == "cafe orders":
+        return "Use cafe-order phrases in a short role-play."
+    if error_category == "wrong_tense" or topic == "past tense":
+        return "Ask about yesterday or last weekend so the learner practices past-tense answers."
+    if error_category == "wrong_conjugation" or skill == "conjugations":
+        return "Ask short questions that require the learner to choose the right verb form."
+    if error_category == "word_order":
+        return f"Ask short {topic} questions and model natural word order after each answer."
+    if error_category == "too_short":
+        return f"Prompt for complete-sentence answers about {topic}."
+    if error_category == "comprehension":
+        return f"Use very simple questions about {topic} and check meaning before moving on."
+    if error_category == "vocabulary_missing" or skill == "vocabulary":
+        return f"Recycle key {topic} vocabulary in a short role-play."
+    return f"Steer the next conversation toward {topic} and correct the missed pattern gently."
 
 
 def update_review_schedule(state: dict[str, Any], lesson: dict[str, Any], correct_count: int, total: int) -> None:

@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld("fluentAI", {
   requestMediaAccess: (payload) => ipcRenderer.invoke("media:request_access", payload),
   mediaDiagnostics: () => ipcRenderer.invoke("media:diagnostics"),
   startConversation: (options) => ipcRenderer.invoke("conversation:start", options),
-  replyConversation: (payload) => ipcRenderer.invoke("conversation:reply", payload)
+  replyConversation: (payload) => ipcRenderer.invoke("conversation:reply", payload),
+  endConversation: (payload) => ipcRenderer.invoke("conversation:end", payload)
 });

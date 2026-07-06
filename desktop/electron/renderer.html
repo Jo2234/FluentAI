@@ -1153,6 +1153,47 @@
       font-size: 13px;
     }
 
+    .post-call-summary {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .post-call-summary h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .post-call-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .post-call-grid p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .post-call-grid strong {
+      color: var(--ink);
+    }
+
+    .confidence-arrow {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--accent-dark);
+      font-weight: 900;
+      margin-right: 8px;
+    }
+
     .voice-btn {
       background: #ffffff;
       border: 1px solid #fecaca;
@@ -1358,7 +1399,8 @@
     }
     .section-block.tint,
     .bubble.tutor,
-    .voice-card { background: rgba(124,124,255,0.11); border-color: rgba(124,124,255,0.24); color: var(--ink); }
+    .voice-card,
+    .post-call-summary { background: rgba(124,124,255,0.11); border-color: rgba(124,124,255,0.24); color: var(--ink); }
     .bubble.learner { background: rgba(139,211,255,0.12); border-color: rgba(139,211,255,0.26); }
     .bubble.system { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.10); color: #d9deff; }
     .bubble { animation: bubbleIn 220ms ease-out; }
@@ -1723,7 +1765,8 @@
         requestMediaAccess: async () => ({ ok: true }),
         mediaDiagnostics: async () => ({ ok: true, fakeMedia: false }),
         startConversation: (payload) => bridge("conversation_start", payload),
-        replyConversation: (payload) => bridge("conversation_reply", payload)
+        replyConversation: (payload) => bridge("conversation_reply", payload),
+        endConversation: (payload) => bridge("conversation_end", payload)
       };
     }
 
@@ -1735,6 +1778,10 @@
       conversationSession: null,
       latestTutorMessage: "",
       chatMessages: [],
+      postCallSummary: null,
+      realtimeTurns: [],
+      latestRealtimeTutorText: "",
+      realtimeTopic: null,
       localMediaStream: null,
       realtimePeer: null,
       realtimeChannel: null,
@@ -1930,6 +1977,9 @@
         `If they ask what something means or fall back to English, explain briefly in English, then offer one simple ${currentLanguage()} phrase and invite them back.`,
       ];
       if (context) base.push(context);
+      if (state.profile && state.profile.next_conversation_goal && state.profile.next_conversation_goal.instruction) {
+        base.push(`Today, steer toward: ${state.profile.next_conversation_goal.instruction}`);
+      }
       return base.join(" ");
     }
 
@@ -2020,6 +2070,14 @@
         const media = await navigator.mediaDevices.getUserMedia(callMediaConstraints(wantsVideo));
         state.localMediaStream = media;
         state.visualContext = null;
+        state.realtimeTurns = [];
+        state.latestRealtimeTutorText = "";
+        state.realtimeTopic = {
+          topic: state.profile && state.profile.next_conversation_goal ? state.profile.next_conversation_goal.topic : "voice call",
+          complexity: "live conversation",
+          support: state.profile && state.profile.next_speaking_goal ? `Model answer: ${state.profile.next_speaking_goal}` : "Model answer: Answer in a complete sentence.",
+          keywords: []
+        };
         state.visionSequence += 1;
         renderCallMedia();
 
@@ -2256,16 +2314,32 @@
         return;
       }
       if (event.type === "response.output_audio_transcript.done" && event.transcript) {
+        state.latestRealtimeTutorText = event.transcript;
         state.chatMessages.push({ role: "tutor", text: event.transcript });
         renderChat();
       }
       if (event.type === "conversation.item.input_audio_transcription.completed" && event.transcript) {
+        state.realtimeTurns.push({
+          tutor_text: state.latestRealtimeTutorText || "",
+          learner_text: event.transcript,
+          topic: state.realtimeTopic ? state.realtimeTopic.topic : "voice call",
+          video_on: els.video.value === "on",
+          video_object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : null
+        });
         state.chatMessages.push({ role: "learner", text: event.transcript });
         renderChat();
       }
     }
 
-    function endRealtimeCall() {
+    async function endRealtimeCall() {
+      const shouldPersistSummary = shouldUseVoice() && state.mode === "conversation" && (state.callActive || state.realtimeTurns.length > 0);
+      const transcriptForSummary = state.realtimeTurns.slice();
+      const topicForSummary = state.realtimeTopic || {
+        topic: state.visualContext ? `visible object: ${state.visualContext.primary_object || state.visualContext.summary}` : "voice call",
+        complexity: "live conversation",
+        support: state.profile && state.profile.next_speaking_goal ? `Model answer: ${state.profile.next_speaking_goal}` : "Model answer: Answer in a complete sentence.",
+        keywords: []
+      };
       stopVisionLoop();
       if (state.realtimeChannel) state.realtimeChannel.close();
       if (state.realtimePeer) state.realtimePeer.close();
@@ -2279,6 +2353,9 @@
       state.remoteAudio = null;
       state.callActive = false;
       state.muted = false;
+      state.realtimeTurns = [];
+      state.latestRealtimeTutorText = "";
+      state.realtimeTopic = null;
       state.visionSequence += 1;
       state.visionInFlight = false;
       state.lastVisionSignature = "";
@@ -2291,6 +2368,24 @@
       if (state.mode === "conversation") {
         els.workspaceStatus.textContent = "Call ended.";
         setCallStatus("Call ended. Press Call to reconnect.");
+      }
+      if (shouldPersistSummary && window.fluentAI.endConversation) {
+        try {
+          const result = await window.fluentAI.endConversation(bridgePayload({
+            turns: transcriptForSummary,
+            topic: topicForSummary,
+            video: els.video.value,
+            video_object: topicForSummary.topic
+          }));
+          appendLogs(result.logs);
+          if (result.profile) renderProfile(result.profile);
+          if (result.post_call_summary) {
+            state.postCallSummary = result.post_call_summary;
+            renderChat();
+          }
+        } catch {
+          appendLogs(["[Conversation Orchestrator] Could not persist call summary."]);
+        }
       }
     }
 
@@ -2708,6 +2803,7 @@
       state.conversationSession = null;
       state.latestTutorMessage = "";
       state.chatMessages = [];
+      state.postCallSummary = null;
       renderChat();
 
       if (shouldUseVoice()) {
@@ -2734,6 +2830,7 @@
         return;
       }
       state.conversationSession = result.session;
+      state.realtimeTopic = result.session ? result.session.topic : null;
       state.latestTutorMessage = result.tutor_message;
       state.chatMessages = [{ role: "tutor", text: result.tutor_message }];
       renderProfile(result.profile);
@@ -2753,6 +2850,7 @@
       state.conversationSession = null;
       state.latestTutorMessage = "";
       state.chatMessages = [];
+      state.postCallSummary = null;
       els.conversationPane.classList.add("text-chat-active");
       setCallStatus("Text fallback selected. Starting typed tutor...");
       renderCallMedia();
@@ -2773,6 +2871,7 @@
       state.conversationSession = null;
       state.latestTutorMessage = "";
       state.chatMessages = [];
+      state.postCallSummary = null;
       state.visualContext = null;
       state.visionSequence += 1;
       state.lastVisionSignature = "";
@@ -2807,6 +2906,9 @@
 
       state.conversationSession = result.session;
       state.latestTutorMessage = result.tutor_message;
+      if (result.post_call_summary) {
+        state.postCallSummary = result.post_call_summary;
+      }
       state.chatMessages.push({
         role: "system",
         text: result.turn.correction
@@ -2846,7 +2948,45 @@
         bubble.append(text("small", label), text("p", message.text));
         els.chatLog.append(bubble);
       });
+      if (state.postCallSummary) {
+        els.chatLog.append(postCallSummaryCard(state.postCallSummary));
+      }
       els.chatLog.scrollTop = els.chatLog.scrollHeight;
+    }
+
+    function postCallSummaryCard(summary) {
+      const card = document.createElement("div");
+      card.className = "post-call-summary";
+      const grid = document.createElement("div");
+      grid.className = "post-call-grid";
+      const confidence = String(summary.confidence_change || "steady");
+      grid.append(
+        summaryLine("Did well", summary.did_well),
+        summaryLine("Correction", summary.correction_to_remember || "None"),
+        summaryLine("Phrase to review", summary.phrase_to_review || "Keep the model phrase from this call."),
+        summaryLine("Next goal", summary.next_speaking_goal || summary.next_conversation_should_practice || "Keep practicing."),
+        summaryLine("Confidence", `${confidenceArrow(confidence)} ${confidence}`)
+      );
+      card.append(text("h3", "Post-call summary"), grid);
+      return card;
+    }
+
+    function summaryLine(label, value) {
+      const row = document.createElement("p");
+      const strong = text("strong", `${label}: `);
+      if (label === "Confidence") {
+        const arrow = text("span", value.split(" ")[0], "confidence-arrow");
+        row.append(arrow, document.createTextNode(value.split(" ").slice(1).join(" ")));
+        return row;
+      }
+      row.append(strong, document.createTextNode(value));
+      return row;
+    }
+
+    function confidenceArrow(change) {
+      if (change === "improved") return "↑";
+      if (change === "dipped") return "↓";
+      return "→";
     }
 
     els.lessonModeBtn.addEventListener("click", () => setMode("lesson"));

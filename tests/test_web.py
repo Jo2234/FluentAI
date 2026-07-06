@@ -47,6 +47,7 @@ class WebSmokeTests(unittest.TestCase):
                     {"turns": 2, "video": "on", "object": "apple"},
                 )
                 self.assertIn("manzana", conversation["text"])
+                self.assertIn("Post-call summary", conversation["text"])
             finally:
                 server.shutdown()
                 server.server_close()

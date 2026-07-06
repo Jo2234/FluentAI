@@ -42,6 +42,16 @@ class RendererUITests(unittest.TestCase):
         self.assertIn("grid-template-areas", self.html)
         self.assertIn(".video-context-card", self.html)
 
+    def test_post_call_summary_card_and_voice_end_wiring_exist(self):
+        self.assertIn("postCallSummary", self.html)
+        self.assertIn("function postCallSummaryCard", self.html)
+        self.assertIn("Post-call summary", self.html)
+        self.assertIn("correction_to_remember", self.html)
+        self.assertIn("phrase_to_review", self.html)
+        self.assertIn("confidenceArrow", self.html)
+        self.assertIn("realtimeTurns", self.html)
+        self.assertIn("endConversation: (payload) => bridge(\"conversation_end\", payload)", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()

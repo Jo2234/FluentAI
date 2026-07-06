@@ -9,7 +9,7 @@ from typing import Any
 
 from fluent_ai.agent import answer_quiz, evaluate_answers, generate_lesson, generate_quiz, progress_report, snapshot_progress, update_progress
 from fluent_ai.app import DEFAULT_PROGRESS_PATH
-from fluent_ai.conversation import run_conversation
+from fluent_ai.conversation import persist_post_call_summary, run_conversation
 from fluent_ai.desktop_bridge import COMMANDS as BRIDGE_COMMANDS
 from fluent_ai.desktop_bridge import profile_for
 from fluent_ai.openai_provider import OpenAIProvider
@@ -380,6 +380,7 @@ def run_conversation_cycle(state_path: Path, language: str, turns: int, video_on
         )
     except Exception as exc:
         return f"[OpenAI Model Agent] OpenAI conversation generation failed: {exc.__class__.__name__}: {exc}"
+    summary = persist_post_call_summary(state, topic, transcript)
     save_state(state_path, state)
 
     source = f"OpenAI Responses API ({provider.model})"
@@ -398,6 +399,17 @@ def run_conversation_cycle(state_path: Path, language: str, turns: int, video_on
             lines.append(f"Model phrase: {turn.correction}")
         lines.append("")
     lines.append(f"[Memory Agent] Next speaking goal: {conversation_memory(state)['next_speaking_goal']}")
+    if summary:
+        lines.extend(
+            [
+                "",
+                "Post-call summary:",
+                f"- Did well: {summary['did_well']}",
+                f"- Correction: {summary['correction_to_remember'] or 'None'}",
+                f"- Phrase to review: {summary['phrase_to_review']}",
+                f"- Next goal: {summary['next_speaking_goal']}",
+            ]
+        )
     return "\n".join(lines)
 
 

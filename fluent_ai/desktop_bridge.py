@@ -23,8 +23,10 @@ from fluent_ai.conversation import (
     apply_turn_progress,
     build_follow_up,
     build_opening,
+    conversation_topic_to_lesson_topic,
     choose_conversation_topic,
-    evaluate_reply,
+    evaluate_reply_with_metadata,
+    persist_post_call_summary,
 )
 from fluent_ai.openai_provider import OpenAIProvider
 from fluent_ai.state import (
@@ -181,6 +183,7 @@ def conversation_start(payload: dict[str, Any]) -> dict[str, Any]:
         return _openai_required(state, provider, "Conversation Mode requires OPENAI_API_KEY.")
 
     topic = choose_conversation_topic(state, video_on=video_on, video_object=video_object)
+    topic["speaking_confidence_before"] = float(conversation_memory(state).get("speaking_confidence", 0.30) or 0.30)
     fallback = build_opening(topic, state)
     tutor_text = _tutor_reply(provider, payload, topic, state, [], "opening", fallback)
     if not tutor_text:
@@ -192,6 +195,8 @@ def conversation_start(payload: dict[str, Any]) -> dict[str, Any]:
         f"[Vision Context Agent] Video {'on' if video_on else 'off'}"
         + (f"; OpenAI vision context: {video_object}." if video_on and video_object else "."),
     ]
+    if isinstance(topic.get("goal"), dict) and topic["goal"].get("instruction"):
+        logs.append(f"[Conversation Orchestrator] Practicing lesson goal: {topic['goal']['instruction']}")
     logs.append("[OpenAI Model Agent] Generated the tutor opening.")
 
     session = {
@@ -231,7 +236,7 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
             "profile": profile_for(state, provider),
         }
 
-    score, feedback, correction = evaluate_reply(topic, learner_text, state)
+    score, feedback, correction, mistake = evaluate_reply_with_metadata(topic, learner_text, state)
     turn = {
         "turn_number": turn_number,
         "tutor_text": str(payload.get("tutor_message") or ""),
@@ -243,6 +248,7 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
         "score": score,
         "feedback": feedback,
         "correction": correction,
+        "mistake": mistake,
     }
     turns.append(turn)
 
@@ -251,11 +257,15 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
     tutor_text = _tutor_reply(provider, payload, topic, state, transcript, "follow_up", fallback)
 
     apply_conversation_turn_progress(state, topic, turn, is_first_turn=turn_number == 1)
-    save_state(_path(payload), state)
     memory = conversation_memory(state)
 
     session["turns"] = turns
     reached_goal = len(turns) >= int(session.get("max_turns", 4))
+    post_call_summary = None
+    if reached_goal and not session.get("post_call_summary"):
+        post_call_summary = persist_post_call_summary(state, topic, turns)
+        session["post_call_summary"] = post_call_summary
+    save_state(_path(payload), state)
     return {
         "ok": True,
         "profile": profile_for(state, provider),
@@ -263,10 +273,91 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
         "turn": turn,
         "tutor_message": tutor_text,
         "done": reached_goal,
+        "post_call_summary": post_call_summary,
         "logs": [
             f"[Fluency Evaluator Agent] Scored turn {turn_number}: {score:.2f}.",
             f"[Speaking Tutor Agent] Next prompt adapts to {topic['complexity']} complexity.",
             f"[Memory Agent] Saved conversation progress. Next goal: {memory['next_speaking_goal']}",
+        ],
+    }
+
+
+def conversation_end(payload: dict[str, Any]) -> dict[str, Any]:
+    state = _load(payload)
+    provider = OpenAIProvider()
+    raw_turns = payload.get("turns") if isinstance(payload.get("turns"), list) else []
+    topic = _coerce_conversation_topic(payload.get("topic"), state)
+    if not raw_turns:
+        return {
+            "ok": True,
+            "profile": profile_for(state, provider),
+            "post_call_summary": None,
+            "logs": ["[Conversation Orchestrator] Call ended with no scored turns."],
+        }
+
+    topic["speaking_confidence_before"] = float(conversation_memory(state).get("speaking_confidence", 0.30) or 0.30)
+    turns = []
+    for index, raw_turn in enumerate(raw_turns, start=1):
+        if not isinstance(raw_turn, dict):
+            continue
+        learner_text = str(raw_turn.get("learner_text") or raw_turn.get("learner") or "").strip()
+        if not learner_text:
+            continue
+        score = raw_turn.get("score")
+        feedback = str(raw_turn.get("feedback") or "")
+        correction = raw_turn.get("correction")
+        mistake = raw_turn.get("mistake") if isinstance(raw_turn.get("mistake"), dict) else None
+        if score is None:
+            score, feedback, correction, mistake = evaluate_reply_with_metadata(topic, learner_text, state)
+        turns.append(
+            {
+                "turn_number": _bounded_int(raw_turn.get("turn_number"), 1, 100, index),
+                "tutor_text": str(raw_turn.get("tutor_text") or raw_turn.get("tutor") or ""),
+                "learner_text": learner_text,
+                "topic": str(topic.get("topic") or "voice call"),
+                "complexity": str(topic.get("complexity") or "live conversation"),
+                "video_on": bool(raw_turn.get("video_on", payload.get("video") == "on")),
+                "video_object": raw_turn.get("video_object"),
+                "score": float(score),
+                "feedback": feedback or "Conversation turn scored from realtime transcript.",
+                "correction": correction,
+                "mistake": mistake,
+            }
+        )
+
+    if not turns:
+        return {
+            "ok": True,
+            "profile": profile_for(state, provider),
+            "post_call_summary": None,
+            "logs": ["[Conversation Orchestrator] Call ended with no scored turns."],
+        }
+
+    average_score = sum(float(turn["score"]) for turn in turns) / len(turns)
+    apply_turn_progress(
+        state,
+        topic,
+        {
+            "turns": turns,
+            "score": average_score,
+            "aggregate_turns": len(turns),
+            "video_on": bool(payload.get("video") == "on"),
+            "video_object": payload.get("video_object"),
+            "fluency_weight": 0.25,
+            "confidence_delta": 0.035 if average_score >= 0.45 else -0.02,
+            "speaking_delta": 0.035 if average_score >= 0.45 else -0.015,
+        },
+        is_first_turn=True,
+    )
+    summary = persist_post_call_summary(state, topic, turns)
+    save_state(_path(payload), state)
+    return {
+        "ok": True,
+        "profile": profile_for(state, provider),
+        "post_call_summary": summary,
+        "logs": [
+            f"[Conversation Orchestrator] Persisted voice call summary for {topic['topic']}.",
+            f"[Fluency Evaluator Agent] Scored {len(turns)} realtime turns; average {average_score:.2f}.",
         ],
     }
 
@@ -310,6 +401,7 @@ def profile_for(state: dict[str, Any], provider: OpenAIProvider | None = None) -
         "fluency_score": memory.get("fluency_score", 0.30),
         "speaking_confidence": memory.get("speaking_confidence", 0.30),
         "next_speaking_goal": memory.get("next_speaking_goal", ""),
+        "next_conversation_goal": memory.get("next_conversation_goal"),
         "review_count": len(queue),
         "due_review_count": len(due_reviews),
         "next_review_topic": next_review_topic,
@@ -346,7 +438,24 @@ def _turn_from_dict(value: dict[str, Any]) -> ConversationTurn:
         score=float(value["score"]),
         feedback=str(value["feedback"]),
         correction=value.get("correction"),
+        mistake=value.get("mistake") if isinstance(value.get("mistake"), dict) else None,
     )
+
+
+def _coerce_conversation_topic(value: Any, state: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(value, dict):
+        topic = dict(value)
+    else:
+        topic_name = str(value or "voice call").strip() or "voice call"
+        topic = {"topic": topic_name}
+    topic.setdefault("topic", "voice call")
+    topic.setdefault("complexity", "live conversation")
+    topic.setdefault("support", f"Model answer: {conversation_memory(state).get('next_speaking_goal', 'Answer in a complete sentence.')}")
+    topic.setdefault("keywords", [])
+    if not isinstance(topic.get("keywords"), list):
+        topic["keywords"] = []
+    topic["lesson_topic"] = conversation_topic_to_lesson_topic(str(topic.get("topic") or ""))
+    return topic
 
 
 def _load(payload: dict[str, Any]) -> dict[str, Any]:
@@ -394,6 +503,7 @@ COMMANDS = {
     "lesson_submit": lesson_submit,
     "conversation_start": conversation_start,
     "conversation_reply": conversation_reply,
+    "conversation_end": conversation_end,
 }
 
 

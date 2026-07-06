@@ -70,11 +70,13 @@ class OpenAIProvider:
         voice = os.getenv("OPENAI_REALTIME_VOICE", "alloy")
         target_language = active_language(state)
         visual = f" If video context is enabled, use this camera analysis: {video_context}." if video_on and video_context else ""
+        goal_instruction = _next_conversation_goal_instruction(state)
         instructions = _realtime_instructions(
             target_language=target_language,
             level=current_level(state),
             weak_topics=language_state(state).get("weak_topics", []),
             visual=visual,
+            goal_instruction=goal_instruction,
         )
         turn_detection = _realtime_turn_detection(state)
         payload = {
@@ -317,6 +319,7 @@ Items:
             for turn in transcript[-3:]
         )
         visual = topic.get("visual", {})
+        goal_guidance = _topic_goal_guidance(topic)
         prompt = f"""
 You are FluentAI's Conversation Tutor Agent.
 Return only the next tutor utterance. No labels. No Markdown.
@@ -330,6 +333,7 @@ Product behavior:
 - Match the learner's level: {current_level(state)}.
 - Current topic: {topic['topic']}.
 - Complexity: {topic['complexity']}.
+- Tutor guidance: {goal_guidance or 'No lesson-specific goal for this call.'}
 - If beginner, use one short sentence plus one simple question.
 - If advanced, ask for opinions, reasons, tradeoffs, or examples.
 - If video context exists, use it naturally.
@@ -394,12 +398,21 @@ Phase: {phase}
         return str(response)
 
 
-def _realtime_instructions(*, target_language: str, level: str, weak_topics: list[Any], visual: str = "") -> str:
+def _realtime_instructions(
+    *,
+    target_language: str,
+    level: str,
+    weak_topics: list[Any],
+    visual: str = "",
+    goal_instruction: str = "",
+) -> str:
     weak = ", ".join(str(topic) for topic in weak_topics) or "none"
+    goal = f" Today, steer toward: {goal_instruction}. " if goal_instruction else ""
     return (
         f"You are FluentAI, a warm live {target_language} tutor in a FaceTime-style call. "
         f"The learner level is {level}. Weak topics: {weak}. "
-        f"Initiate the conversation in {target_language}, then adapt turn-by-turn. "
+        + goal
+        + f"Initiate the conversation in {target_language}, then adapt turn-by-turn. "
         "Detect whether the learner replies in Hindi, Spanish, French, or English. "
         "When the learner clearly speaks Hindi, Spanish, or French, respond in that same language. "
         f"When the learner speaks English because they need help, answer in English first, then give one simple {target_language} model phrase and invite them back. "
@@ -409,6 +422,20 @@ def _realtime_instructions(*, target_language: str, level: str, weak_topics: lis
         + NATURAL_TURN_POLICY
         + visual
     )
+
+
+def _topic_goal_guidance(topic: dict[str, Any]) -> str:
+    goal = topic.get("goal")
+    if isinstance(goal, dict) and goal.get("instruction"):
+        return f"Today, steer toward: {goal['instruction']}"
+    return ""
+
+
+def _next_conversation_goal_instruction(state: dict[str, Any]) -> str:
+    goal = conversation_memory(state).get("next_conversation_goal")
+    if isinstance(goal, dict) and goal.get("instruction"):
+        return str(goal["instruction"])
+    return ""
 
 
 def _realtime_turn_detection(state: dict[str, Any] | None = None) -> dict[str, Any]:

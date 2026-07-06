@@ -15,7 +15,7 @@ from fluent_ai.agent import (
     snapshot_progress,
     update_progress,
 )
-from fluent_ai.conversation import run_conversation
+from fluent_ai.conversation import persist_post_call_summary, run_conversation
 from fluent_ai.openai_provider import OpenAIProvider
 from fluent_ai.state import conversation_memory, language_state, load_state, profile_state, save_state
 
@@ -160,6 +160,11 @@ def run_conversation_loop(
 
     average_score = sum(turn.score for turn in transcript) / max(1, len(transcript))
     agent_log("Fluency Evaluator Agent", f"Average speaking score: {average_score:.2f}.")
+    summary = persist_post_call_summary(state, topic, transcript)
+    if summary:
+        agent_log("Conversation Summary Agent", summary["did_well"])
+        if summary["correction_to_remember"]:
+            agent_log("Conversation Summary Agent", f"Correction to remember: {summary['correction_to_remember']}")
     agent_log(
         "Memory Agent",
         f"Next speaking goal: {conversation_memory(state)['next_speaking_goal']}",
