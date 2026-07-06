@@ -8,6 +8,7 @@ from typing import Any
 
 from fluent_ai.agent import current_level
 from fluent_ai.config import load_env_file, openai_model
+from fluent_ai.state import active_language, conversation_memory, language_state, profile_state
 
 
 NATURAL_TURN_POLICY = """
@@ -54,12 +55,12 @@ class OpenAIProvider:
 
         realtime_model = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
         voice = os.getenv("OPENAI_REALTIME_VOICE", "alloy")
-        target_language = str(state.get("learner", {}).get("target_language", "Spanish"))
+        target_language = active_language(state)
         visual = f" If video context is enabled, use this camera analysis: {video_context}." if video_on and video_context else ""
         instructions = _realtime_instructions(
             target_language=target_language,
             level=current_level(state),
-            weak_topics=state.get("weak_topics", []),
+            weak_topics=language_state(state).get("weak_topics", []),
             visual=visual,
         )
         turn_detection = _realtime_turn_detection(state)
@@ -120,7 +121,7 @@ class OpenAIProvider:
             return {"ok": False, "error": "Camera frame must be an image data URL."}
 
         vision_model = os.getenv("OPENAI_VISION_MODEL", "gpt-4.1-mini")
-        target_language = str(state.get("learner", {}).get("target_language", "Spanish"))
+        target_language = active_language(state)
         prompt = (
             f"You are the Vision Context Agent for a live {target_language} tutoring call. "
             "The image is a camera frame from the learner's current video feed. "
@@ -193,15 +194,16 @@ class OpenAIProvider:
         if not self.available:
             return lesson
 
+        profile = profile_state(state)
         prompt = f"""
 You are the Lesson Generator Agent for FluentAI.
 Return JSON only. Do not use Markdown.
 
 Learner profile:
-- target language: {state['learner']['target_language']}
+- target language: {active_language(state)}
 - level: {current_level(state)}
-- weak topics: {', '.join(state.get('weak_topics', []))}
-- learning goals: {'; '.join(state['learner'].get('learning_goals', []))}
+- weak topics: {', '.join(language_state(state).get('weak_topics', []))}
+- learning goals: {'; '.join(profile.get('learning_goals', []))}
 
 Keep this lesson topic and focus:
 - topic: {lesson['topic']}
@@ -249,7 +251,7 @@ Requirements:
         if not self.available:
             return None
 
-        target_language = str(state.get("learner", {}).get("target_language", "Spanish"))
+        target_language = active_language(state)
         recent_turns = "\n".join(
             f"Tutor: {turn.tutor_text}\nLearner: {turn.learner_text}\nFeedback: {turn.feedback}"
             for turn in transcript[-3:]
@@ -350,9 +352,9 @@ def _realtime_instructions(*, target_language: str, level: str, weak_topics: lis
 
 
 def _realtime_turn_detection(state: dict[str, Any] | None = None) -> dict[str, Any]:
-    memory = (state or {}).get("conversation_memory", {}) if isinstance(state, dict) else {}
+    memory = conversation_memory(state or {"active_language": "Spanish", "languages": {}}) if isinstance(state, dict) else {}
     confidence = float(memory.get("speaking_confidence", 0.3) or 0.3)
-    level = current_level(state or {"learner": {"current_level": "A1"}})
+    level = current_level(state or {"active_language": "Spanish", "languages": {}})
     if level in {"A1", "A2"} or confidence < 0.45:
         default_silence = 2800
     elif confidence > 0.72 or level in {"C1", "C2"}:

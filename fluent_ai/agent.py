@@ -2,11 +2,25 @@ from __future__ import annotations
 
 import copy
 import random
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fluent_ai.state import LEVELS, recalculate_weak_topics, utc_now
+from fluent_ai.state import (
+    LEVELS,
+    active_language,
+    add_event,
+    language_state,
+    profile_state,
+    recalculate_weak_topics,
+    review_queue,
+    set_skill_score,
+    set_topic_score,
+    skill_scores,
+    topic_scores,
+    utc_now,
+)
 
 
 TOPICS_BY_LEVEL = {
@@ -173,32 +187,39 @@ class QuizResult:
 
 
 def snapshot_progress(state: dict[str, Any]) -> dict[str, Any]:
+    profile = profile_state(state)
     return {
-        "skills": copy.deepcopy(state.get("skills", {})),
-        "topic_mastery": copy.deepcopy(state.get("topic_mastery", {})),
-        "xp": state.get("learner", {}).get("xp", 0),
+        "skills": copy.deepcopy(skill_scores(state)),
+        "topic_mastery": copy.deepcopy(topic_scores(state)),
+        "xp": profile.get("xp", 0),
         "level": current_level(state),
     }
 
 
 def current_level(state: dict[str, Any]) -> str:
-    learner = state.get("learner", {})
-    return learner.get("current_level") or learner.get("level", "A1")
+    return str(profile_state(state).get("current_level") or "A1")
 
 
 def weakest_skill(state: dict[str, Any]) -> str:
-    return min(state["skills"], key=state["skills"].get)
+    scores = skill_scores(state)
+    return min(scores, key=scores.get)
 
 
 def performance_band(state: dict[str, Any]) -> str:
-    history = state.get("history", [])[-3:]
+    history = [
+        event
+        for event in language_state(state).get("history", [])
+        if isinstance(event, dict) and event.get("type") == "lesson_completed"
+    ][-3:]
     if not history:
         return "steady"
 
     scores = []
-    for item in history:
-        correct = item.get("correct_count", 0)
-        total = max(1, item.get("total_questions", 1))
+    for event in history:
+        payload = event.get("payload", {}) if isinstance(event.get("payload"), dict) else {}
+        legacy = payload.get("legacy", {}) if isinstance(payload.get("legacy"), dict) else {}
+        correct = payload.get("correct_count", legacy.get("correct_count", 0))
+        total = max(1, payload.get("total_questions", legacy.get("total_questions", 1)))
         scores.append(correct / total)
 
     average = sum(scores) / len(scores)
@@ -213,12 +234,15 @@ def due_review_items(state: dict[str, Any], now: datetime | None = None) -> list
     """Return valid due review topics ordered by oldest due date first."""
     now = now or datetime.now(timezone.utc)
     due_items: list[tuple[datetime, str]] = []
-    queue = state.get("review_queue", {})
+    queue = review_queue(state)
     if not isinstance(queue, dict):
         return due_items
 
-    for topic, item in queue.items():
-        if topic not in LESSON_BANK or not isinstance(item, dict):
+    for key, item in queue.items():
+        if not isinstance(item, dict):
+            continue
+        topic = str(item.get("target") or item.get("topic") or key)
+        if topic not in LESSON_BANK:
             continue
         due_at = _parse_due_at(item.get("due_at"))
         if due_at and due_at <= now:
@@ -253,8 +277,9 @@ def choose_topic(state: dict[str, Any]) -> str:
 
     level = current_level(state)
     level_topics = TOPICS_BY_LEVEL.get(level, TOPICS_BY_LEVEL["A1"])
-    weak_topics = state.get("weak_topics", [])
-    recent = set(state.get("recent_topics", [])[-3:])
+    data = language_state(state)
+    weak_topics = data.get("weak_topics", [])
+    recent = set(data.get("recent_topics", [])[-3:])
 
     for topic in weak_topics:
         if topic in LESSON_BANK and topic not in recent:
@@ -265,7 +290,7 @@ def choose_topic(state: dict[str, Any]) -> str:
 
 
 def generate_lesson(state: dict[str, Any]) -> dict[str, Any]:
-    language = state["learner"]["target_language"]
+    language = active_language(state)
     level = current_level(state)
     topic = choose_topic(state)
     bank = LESSON_BANK.get(topic, _generic_lesson_bank(language, topic)) if language == "Spanish" else _generic_lesson_bank(language, topic)
@@ -279,7 +304,7 @@ def generate_lesson(state: dict[str, Any]) -> dict[str, Any]:
         "focus_skill": focus_skill,
         "difficulty": difficulty,
         "minutes": state["preferences"].get("lesson_minutes", 10),
-        "learning_goals": state["learner"].get("learning_goals", []),
+        "learning_goals": profile_state(state).get("learning_goals", []),
         "vocabulary": bank["vocabulary"],
         "grammar_explanation": bank["grammar"],
         "examples": bank["examples"],
@@ -573,7 +598,8 @@ def answer_quiz(quiz: list[dict[str, Any]], state: dict[str, Any], mode: str) ->
             answers.append(input("Your answer: ").strip())
         return answers
 
-    avg_skill = sum(state["skills"].values()) / len(state["skills"])
+    scores = skill_scores(state)
+    avg_skill = sum(scores.values()) / len(scores)
     correct_probability = min(0.9, max(0.35, avg_skill + 0.22))
     answers = []
     for question in quiz:
@@ -648,55 +674,141 @@ def _normalize_word(value: str) -> str:
 def update_progress(state: dict[str, Any], lesson: dict[str, Any], results: list[QuizResult]) -> dict[str, Any]:
     correct_count = sum(1 for result in results if result.correct)
     total = max(1, len(results))
+    language = active_language(state)
+    data = language_state(state, language)
+    profile = profile_state(state, language)
+    before_skills = skill_scores(state, language)
+    before_topics = topic_scores(state, language)
 
     missed_topics: list[str] = []
+    skill_updates = dict(before_skills)
+    topic_updates = dict(before_topics)
+    outcomes = []
     for result in results:
         skill_delta = 0.045 if result.correct else -0.025
         topic_delta = 0.050 if result.correct else -0.035
-        state["skills"][result.skill] = _bounded_score(state["skills"].get(result.skill, 0.30) + skill_delta)
-        state["topic_mastery"][result.topic] = _bounded_score(state["topic_mastery"].get(result.topic, 0.30) + topic_delta)
+        skill = "conjugations" if result.skill == "conjugation" else result.skill
+        skill_updates[skill] = _bounded_score(skill_updates.get(skill, 0.30) + skill_delta)
+        topic_updates[result.topic] = _bounded_score(topic_updates.get(result.topic, 0.30) + topic_delta)
         if not result.correct and result.topic not in missed_topics:
             missed_topics.append(result.topic)
+        outcomes.append(
+            {
+                "prompt": result.prompt,
+                "expected": result.expected,
+                "actual": result.actual,
+                "skill": skill,
+                "topic": result.topic,
+                "question_type": result.question_type,
+                "correct": result.correct,
+                "feedback": result.feedback,
+            }
+        )
 
-    learner = state["learner"]
-    learner["xp"] = int(learner.get("xp", 0) + correct_count * 10 + 5)
-    learner["current_level"] = level_from_mastery(sum(state["skills"].values()) / len(state["skills"]))
-    learner["level"] = learner["current_level"]
+    next_xp = int(profile.get("xp", 0) + correct_count * 10 + 5)
+    next_level = level_from_mastery(sum(skill_updates.values()) / len(skill_updates))
+    profile["xp"] = next_xp
+    profile["current_level"] = next_level
 
-    state["weak_topics"] = recalculate_weak_topics(state)
-    for topic in reversed(missed_topics):
-        if topic in state["weak_topics"]:
-            state["weak_topics"].remove(topic)
-        state["weak_topics"].insert(0, topic)
-    state["weak_topics"] = state["weak_topics"][:4]
-
-    state["recent_topics"] = (state.get("recent_topics", []) + [lesson["topic"]])[-8:]
-    update_review_schedule(state, lesson, correct_count, total)
-    state.setdefault("daily_summary", {})
-    state["daily_summary"]["lessons_completed"] = int(state["daily_summary"].get("lessons_completed", 0) + 1)
-    state["daily_summary"]["last_sent_at"] = utc_now()
-    state["history"].append(
+    lesson_event = add_event(
+        state,
         {
-            "topic": lesson["topic"],
-            "focus_skill": lesson["focus_skill"],
-            "difficulty": lesson["difficulty"],
-            "correct_count": correct_count,
-            "total_questions": total,
-            "score": f"{correct_count}/{total}",
-            "level_after": learner["current_level"],
-            "weak_topics_after": state["weak_topics"],
-            "adaptation": recommendation(state),
-        }
+            "type": "lesson_completed",
+            "source": "lesson_mode",
+            "summary": f"Completed {lesson['topic']} lesson with score {correct_count}/{total}.",
+            "payload": {
+                "topic": lesson["topic"],
+                "focus_skill": lesson["focus_skill"],
+                "difficulty": lesson["difficulty"],
+                "correct_count": correct_count,
+                "total_questions": total,
+                "score": f"{correct_count}/{total}",
+                "level_after": next_level,
+                "question_outcomes": outcomes,
+            },
+        },
+        language,
     )
-    state["history"] = state["history"][-25:]
+    for skill, after_score in skill_updates.items():
+        before_score = before_skills.get(skill, 0.30)
+        if after_score != before_score:
+            set_skill_score(
+                state,
+                skill,
+                after_score,
+                language,
+                evidence={
+                    "event_id": lesson_event["id"],
+                    "mode": "lesson",
+                    "topic": lesson["topic"],
+                    "delta": round(after_score - before_score, 3),
+                    "note": f"Quiz result {correct_count}/{total}",
+                },
+            )
+    for topic, after_score in topic_updates.items():
+        before_score = before_topics.get(topic, 0.30)
+        if after_score != before_score:
+            set_topic_score(
+                state,
+                topic,
+                after_score,
+                language,
+                evidence={
+                    "event_id": lesson_event["id"],
+                    "mode": "lesson",
+                    "topic": topic,
+                    "delta": round(after_score - before_score, 3),
+                    "note": f"Quiz result {correct_count}/{total}",
+                },
+            )
+
+    data["weak_topics"] = recalculate_weak_topics(state, language=language)
+    for topic in reversed(missed_topics):
+        if topic in data["weak_topics"]:
+            data["weak_topics"].remove(topic)
+        data["weak_topics"].insert(0, topic)
+    data["weak_topics"] = data["weak_topics"][:4]
+
+    data["recent_topics"] = (data.get("recent_topics", []) + [lesson["topic"]])[-8:]
+    update_review_schedule(state, lesson, correct_count, total)
+    daily_summary = data.setdefault("daily_summary", {})
+    daily_summary["lessons_completed"] = int(daily_summary.get("lessons_completed", 0) + 1)
+    daily_summary["last_sent_at"] = utc_now()
+    add_event(
+        state,
+        {
+            "type": "progress_updated",
+            "source": "lesson_mode",
+            "summary": f"Progress updated after {lesson['topic']} lesson.",
+            "payload": {
+                "topic": lesson["topic"],
+                "xp_after": next_xp,
+                "level_after": next_level,
+                "weak_topics_after": data["weak_topics"],
+                "skill_deltas": {
+                    skill: round(skill_updates[skill] - before_skills.get(skill, 0.30), 3)
+                    for skill in skill_updates
+                    if skill_updates[skill] != before_skills.get(skill, 0.30)
+                },
+                "topic_deltas": {
+                    topic: round(topic_updates[topic] - before_topics.get(topic, 0.30), 3)
+                    for topic in topic_updates
+                    if topic_updates[topic] != before_topics.get(topic, 0.30)
+                },
+                "adaptation": recommendation(state),
+            },
+        },
+        language,
+    )
     return state
 
 
 def update_review_schedule(state: dict[str, Any], lesson: dict[str, Any], correct_count: int, total: int) -> None:
-    queue = state.setdefault("review_queue", {})
+    queue = review_queue(state)
     topic = lesson["topic"]
+    review_id = f"review_topic_{_slugify(topic)}"
     score = correct_count / max(1, total)
-    existing = queue.get(topic, {}) if isinstance(queue.get(topic), dict) else {}
+    existing = queue.get(review_id, {}) if isinstance(queue.get(review_id), dict) else {}
 
     if score >= 0.85:
         previous_interval = int(existing.get("interval_days", 1) or 1)
@@ -707,19 +819,48 @@ def update_review_schedule(state: dict[str, Any], lesson: dict[str, Any], correc
         missed_count = int(existing.get("missed_count", 0) or 0) + 1
 
     due_at = datetime.now(timezone.utc) + timedelta(days=interval_days)
-    queue[topic] = {
+    now = utc_now()
+    queue[review_id] = {
+        "id": review_id,
+        "item_type": "topic",
+        "target": topic,
         "topic": topic,
+        "skill": lesson["focus_skill"],
         "focus_skill": lesson["focus_skill"],
+        "source": "lesson",
         "due_at": due_at.replace(microsecond=0).isoformat(),
         "interval_days": interval_days,
         "missed_count": missed_count,
+        "success_count": int(existing.get("success_count", 0) or 0) + (1 if score >= 0.85 else 0),
         "last_score": f"{correct_count}/{total}",
-        "updated_at": utc_now(),
+        "created_at": existing.get("created_at", now),
+        "updated_at": now,
     }
+    add_event(
+        state,
+        {
+            "type": "review_scheduled",
+            "source": "lesson_mode",
+            "summary": f"Scheduled review for {topic}.",
+            "payload": {
+                "review_id": review_id,
+                "topic": topic,
+                "focus_skill": lesson["focus_skill"],
+                "due_at": queue[review_id]["due_at"],
+                "interval_days": interval_days,
+                "last_score": f"{correct_count}/{total}",
+            },
+        },
+    )
 
 
 def _bounded_score(score: float) -> float:
     return round(min(0.99, max(0.05, score)), 3)
+
+
+def _slugify(value: Any) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", str(value).lower()).strip("_")
+    return slug or "item"
 
 
 def level_from_mastery(avg_skill: float) -> str:
@@ -738,19 +879,20 @@ def level_from_mastery(avg_skill: float) -> str:
 
 def recommendation(state: dict[str, Any]) -> str:
     level = current_level(state)
-    weak_topics = ", ".join(state.get("weak_topics", [])[:2])
+    weak_topics = ", ".join(language_state(state).get("weak_topics", [])[:2])
     return f"Next cycle should stay at {level} and focus on {weak_topics or weakest_skill(state)}."
 
 
 def progress_report(before: dict[str, Any], state: dict[str, Any]) -> str:
     skill_changes = []
-    for skill, after_score in state.get("skills", {}).items():
+    for skill, after_score in skill_scores(state).items():
         before_score = before.get("skills", {}).get(skill, after_score)
         skill_changes.append((skill, after_score - before_score))
     best_skill, best_delta = max(skill_changes, key=lambda item: item[1])
     percent = round(best_delta * 100)
-    streak = state["learner"].get("streak_days", 1)
-    completed = state.get("daily_summary", {}).get("lessons_completed", 0)
+    data = language_state(state)
+    streak = profile_state(state).get("streak_days", 1)
+    completed = data.get("daily_summary", {}).get("lessons_completed", 0)
     if percent > 0:
         change = f"You improved {percent}% in {best_skill} this cycle."
     else:

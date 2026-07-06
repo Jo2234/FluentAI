@@ -17,7 +17,7 @@ from fluent_ai.agent import (
 )
 from fluent_ai.conversation import run_conversation
 from fluent_ai.openai_provider import OpenAIProvider
-from fluent_ai.state import load_state, save_state
+from fluent_ai.state import conversation_memory, language_state, load_state, profile_state, save_state
 
 
 DEFAULT_PROGRESS_PATH = Path("data/progress.json")
@@ -55,13 +55,15 @@ def run_loop(
     while True:
         state = load_state(state_path, language)
         before = snapshot_progress(state)
-        weak_topics = ", ".join(state.get("weak_topics", []))
-        goals = "; ".join(state["learner"].get("learning_goals", []))
+        data = language_state(state)
+        profile = profile_state(state)
+        weak_topics = ", ".join(data.get("weak_topics", []))
+        goals = "; ".join(profile.get("learning_goals", []))
 
         print("\n" + "=" * 72)
         agent_log(
             "Memory Agent",
-            f"Loaded level {current_level(state)}, streak {state['learner'].get('streak_days', 1)} days, weak topics: {weak_topics}.",
+            f"Loaded level {current_level(state)}, streak {profile.get('streak_days', 1)} days, weak topics: {weak_topics}.",
         )
         agent_log("Memory Agent", f"Learning goals: {goals}")
 
@@ -94,7 +96,7 @@ def run_loop(
         save_state(state_path, state)
 
         agent_log("Progress Reporter Agent", progress_report(before, state))
-        agent_log("Evaluator Agent", f"Updated weak topics: {', '.join(state['weak_topics'])}.")
+        agent_log("Evaluator Agent", f"Updated weak topics: {', '.join(language_state(state).get('weak_topics', []))}.")
         agent_log("Orchestrator", f"Saved progress. {recommendation(state)}")
 
         cycle += 1
@@ -129,7 +131,7 @@ def run_conversation_loop(
     if not provider.available:
         raise SystemExit("FluentAI requires OPENAI_API_KEY. Add it to .env before running Conversation Mode.")
 
-    weak_topics = ", ".join(state.get("weak_topics", []))
+    weak_topics = ", ".join(language_state(state).get("weak_topics", []))
     agent_log(
         "Memory Agent",
         f"Loaded level {current_level(state)} with weak topics: {weak_topics}.",
@@ -159,7 +161,7 @@ def run_conversation_loop(
     agent_log("Fluency Evaluator Agent", f"Average speaking score: {average_score:.2f}.")
     agent_log(
         "Memory Agent",
-        f"Next speaking goal: {state['conversation_memory']['next_speaking_goal']}",
+        f"Next speaking goal: {conversation_memory(state)['next_speaking_goal']}",
     )
     save_state(state_path, state)
     agent_log("Conversation Orchestrator", "Saved conversation progress.")

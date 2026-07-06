@@ -11,8 +11,9 @@ from fluent_ai.agent import answer_quiz, evaluate_answers, generate_lesson, gene
 from fluent_ai.app import DEFAULT_PROGRESS_PATH
 from fluent_ai.conversation import run_conversation
 from fluent_ai.desktop_bridge import COMMANDS as BRIDGE_COMMANDS
+from fluent_ai.desktop_bridge import profile_for
 from fluent_ai.openai_provider import OpenAIProvider
-from fluent_ai.state import load_state, save_state
+from fluent_ai.state import conversation_memory, load_state, save_state
 
 
 MAX_JSON_BYTES = 64_000
@@ -241,7 +242,8 @@ class FluentAIHandler(BaseHTTPRequestHandler):
         if self.path == "/api/status":
             provider = OpenAIProvider()
             state = load_state(self.state_path, self.language)
-            status = f"{provider.status()} Level {state['learner']['current_level']}; weak topics: {', '.join(state.get('weak_topics', []))}."
+            profile = profile_for(state, provider)
+            status = f"{provider.status()} Level {profile['level']}; weak topics: {', '.join(profile['weak_topics'])}."
             self._send_json({"status": status})
             return
         if self.path == "/api/progress":
@@ -279,11 +281,9 @@ class FluentAIHandler(BaseHTTPRequestHandler):
         handler = BRIDGE_COMMANDS.get(command)
         if handler is None:
             return {"ok": False, "error": f"Unknown command: {command}"}
-        payload = {
-            **body,
-            "state_path": str(self.state_path),
-            "language": body.get("language") or self.language,
-        }
+        payload = {**body, "state_path": str(self.state_path)}
+        if "language" in body:
+            payload["language"] = body.get("language")
         try:
             return handler(payload)
         except Exception as exc:  # pragma: no cover - defensive web boundary.
@@ -396,7 +396,7 @@ def run_conversation_cycle(state_path: Path, language: str, turns: int, video_on
         if turn.correction:
             lines.append(f"Model phrase: {turn.correction}")
         lines.append("")
-    lines.append(f"[Memory Agent] Next speaking goal: {state['conversation_memory']['next_speaking_goal']}")
+    lines.append(f"[Memory Agent] Next speaking goal: {conversation_memory(state)['next_speaking_goal']}")
     return "\n".join(lines)
 
 

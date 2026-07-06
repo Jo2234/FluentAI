@@ -19,15 +19,22 @@ from fluent_ai.agent import (
 )
 from fluent_ai.conversation import (
     ConversationTurn,
-    bounded,
+    apply_turn_progress,
     build_follow_up,
     build_opening,
     choose_conversation_topic,
     evaluate_reply,
-    next_speaking_goal,
 )
 from fluent_ai.openai_provider import OpenAIProvider
-from fluent_ai.state import load_state, recalculate_weak_topics, save_state, utc_now
+from fluent_ai.state import (
+    active_language,
+    conversation_memory,
+    language_state,
+    load_state,
+    profile_state,
+    review_queue,
+    save_state,
+)
 
 
 DEFAULT_PROGRESS_PATH = Path("data/progress.json")
@@ -99,7 +106,7 @@ def lesson_start(payload: dict[str, Any]) -> dict[str, Any]:
     provider = OpenAIProvider()
     logs = [
         "[Lesson Orchestrator] Starting an interactive lesson.",
-        f"[Memory Agent] Loaded level {current_level(state)} with weak topics: {', '.join(state.get('weak_topics', []))}.",
+        f"[Memory Agent] Loaded level {current_level(state)} with weak topics: {', '.join(language_state(state).get('weak_topics', []))}.",
     ]
 
     if not provider.available:
@@ -241,6 +248,7 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
 
     apply_conversation_turn_progress(state, topic, turn, is_first_turn=turn_number == 1)
     save_state(_path(payload), state)
+    memory = conversation_memory(state)
 
     session["turns"] = turns
     reached_goal = len(turns) >= int(session.get("max_turns", 4))
@@ -254,7 +262,7 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
         "logs": [
             f"[Fluency Evaluator Agent] Scored turn {turn_number}: {score:.2f}.",
             f"[Speaking Tutor Agent] Next prompt adapts to {topic['complexity']} complexity.",
-            f"[Memory Agent] Saved conversation progress. Next goal: {state['conversation_memory']['next_speaking_goal']}",
+            f"[Memory Agent] Saved conversation progress. Next goal: {memory['next_speaking_goal']}",
         ],
     }
 
@@ -265,66 +273,40 @@ def apply_conversation_turn_progress(
     turn: dict[str, Any],
     is_first_turn: bool,
 ) -> None:
-    score = float(turn["score"])
-    memory = state.setdefault("conversation_memory", {})
-    if is_first_turn:
-        memory["sessions_completed"] = int(memory.get("sessions_completed", 0)) + 1
-        memory["recent_topics"] = (memory.get("recent_topics", []) + [topic["topic"]])[-8:]
-
-    memory["total_turns"] = int(memory.get("total_turns", 0)) + 1
-    memory["fluency_score"] = bounded(float(memory.get("fluency_score", 0.30)) * 0.85 + score * 0.15)
-    memory["speaking_confidence"] = bounded(
-        float(memory.get("speaking_confidence", 0.30)) + (0.025 if score >= 0.45 else -0.015)
-    )
-    memory["last_video_object"] = turn.get("video_object") if turn.get("video_on") else None
-    memory["last_session_at"] = utc_now()
-    memory["next_speaking_goal"] = next_speaking_goal(state, score, topic)
-
-    if turn.get("correction"):
-        memory["missed_phrases"] = (memory.get("missed_phrases", []) + [turn["correction"]])[-8:]
-
-    speaking_delta = 0.025 if score >= 0.45 else -0.01
-    state["skills"]["vocabulary"] = bounded(state["skills"].get("vocabulary", 0.30) + speaking_delta)
-    state["skills"]["grammar"] = bounded(state["skills"].get("grammar", 0.30) + speaking_delta / 2)
-    state["topic_mastery"][topic["topic"]] = bounded(state["topic_mastery"].get(topic["topic"], 0.30) + speaking_delta)
-    state["weak_topics"] = recalculate_weak_topics(state)
-    state["history"] = (
-        state.get("history", [])
-        + [
-            {
-                "mode": "conversation_turn",
-                "topic": topic["topic"],
-                "complexity": topic["complexity"],
-                "score": round(score, 2),
-                "video_on": bool(turn.get("video_on")),
-                "video_object": turn.get("video_object"),
-                "next_speaking_goal": memory["next_speaking_goal"],
-            }
-        ]
-    )[-25:]
+    apply_turn_progress(state, topic, turn, is_first_turn)
 
 
 def profile_for(state: dict[str, Any], provider: OpenAIProvider | None = None) -> dict[str, Any]:
-    memory = state.get("conversation_memory", {})
+    memory = conversation_memory(state)
     provider = provider or OpenAIProvider()
-    review_queue = state.get("review_queue", {}) if isinstance(state.get("review_queue"), dict) else {}
+    profile = profile_state(state)
+    data = language_state(state)
+    queue = review_queue(state)
     due_reviews = due_review_items(state)
-    next_review_topic = due_reviews[0][1] if due_reviews else next(iter(review_queue), "")
+    next_review_topic = due_reviews[0][1] if due_reviews else ""
+    if not next_review_topic:
+        for item in queue.values():
+            if isinstance(item, dict):
+                next_review_topic = str(item.get("target") or item.get("topic") or "")
+                if next_review_topic:
+                    break
     next_review_due_at = ""
-    if next_review_topic and isinstance(review_queue.get(next_review_topic), dict):
-        next_review_due_at = str(review_queue[next_review_topic].get("due_at") or "")
+    for item in queue.values():
+        if isinstance(item, dict) and (item.get("target") or item.get("topic")) == next_review_topic:
+            next_review_due_at = str(item.get("due_at") or "")
+            break
     return {
-        "name": state["learner"].get("name", "Demo Learner"),
-        "language": state["learner"].get("target_language", "Spanish"),
+        "name": state["learner"].get("display_name", "Demo Learner"),
+        "language": active_language(state),
         "level": current_level(state),
-        "xp": state["learner"].get("xp", 0),
-        "streak_days": state["learner"].get("streak_days", 1),
-        "weak_topics": state.get("weak_topics", []),
-        "learning_goals": state["learner"].get("learning_goals", []),
+        "xp": profile.get("xp", 0),
+        "streak_days": profile.get("streak_days", 1),
+        "weak_topics": data.get("weak_topics", []),
+        "learning_goals": profile.get("learning_goals", []),
         "fluency_score": memory.get("fluency_score", 0.30),
         "speaking_confidence": memory.get("speaking_confidence", 0.30),
         "next_speaking_goal": memory.get("next_speaking_goal", ""),
-        "review_count": len(review_queue),
+        "review_count": len(queue),
         "due_review_count": len(due_reviews),
         "next_review_topic": next_review_topic,
         "next_review_due_at": next_review_due_at,
@@ -366,12 +348,10 @@ def _turn_from_dict(value: dict[str, Any]) -> ConversationTurn:
 def _load(payload: dict[str, Any]) -> dict[str, Any]:
     language = _language(payload) if "language" in payload else None
     path = _path(payload)
-    state = load_state(path, language or "Spanish")
-    learner = state.setdefault("learner", {})
-    if language and learner.get("target_language") != language:
-        learner["target_language"] = language
-        memory = state.setdefault("conversation_memory", {})
-        memory["next_speaking_goal"] = f"Answer simple questions in full {language} sentences."
+    state = load_state(path, language)
+    if language and active_language(state) != language:
+        state["active_language"] = language
+        language_state(state, language)
         save_state(path, state)
     return state
 

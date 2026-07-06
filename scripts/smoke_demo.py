@@ -19,7 +19,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from fluent_ai.agent import answer_quiz, evaluate_answers, generate_lesson, generate_quiz, update_progress
 from fluent_ai.conversation import run_conversation
-from fluent_ai.state import default_state, load_state, save_state
+from fluent_ai.state import conversation_memory, default_state, load_state, profile_state, review_queue, save_state
 
 
 def fake_tutor_reply(topic, state, transcript, phase, fallback):
@@ -32,7 +32,7 @@ def main() -> None:
         state = default_state("Spanish")
         save_state(state_path, state)
 
-        before_xp = state["learner"]["xp"]
+        before_xp = profile_state(state)["xp"]
         lesson = generate_lesson(state)
         quiz = generate_quiz(state, lesson)
         answers = answer_quiz(quiz, state, "auto")
@@ -40,9 +40,9 @@ def main() -> None:
         update_progress(state, lesson, results)
         save_state(state_path, state)
 
-        if state["learner"]["xp"] <= before_xp:
+        if profile_state(state)["xp"] <= before_xp:
             raise SystemExit("lesson smoke did not increase XP")
-        if not state.get("review_queue"):
+        if not review_queue(state):
             raise SystemExit("lesson smoke did not schedule spaced review")
         if not (5 <= len(quiz) <= 8):
             raise SystemExit(f"quiz smoke expected 5-8 questions, got {len(quiz)}")
@@ -72,14 +72,15 @@ def main() -> None:
         save_state(state_path, state)
 
         final_state = load_state(state_path, "Spanish")
+        final_memory = conversation_memory(final_state)
         summary = {
             "ok": True,
             "lesson_topic": lesson["topic"],
             "quiz_questions": len(quiz),
-            "xp": final_state["learner"]["xp"],
-            "conversation_sessions": final_state["conversation_memory"]["sessions_completed"],
-            "conversation_turns": final_state["conversation_memory"]["total_turns"],
-            "last_video_object": final_state["conversation_memory"]["last_video_object"],
+            "xp": profile_state(final_state)["xp"],
+            "conversation_sessions": final_memory["sessions_completed"],
+            "conversation_turns": final_memory["total_turns"],
+            "last_video_object": final_memory["last_video_context"]["primary_object"],
             "state_path": str(state_path),
         }
         print(json.dumps(summary, indent=2))

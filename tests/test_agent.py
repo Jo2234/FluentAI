@@ -1,3 +1,4 @@
+import json
 import unittest
 from tempfile import TemporaryDirectory
 from pathlib import Path
@@ -12,8 +13,17 @@ from fluent_ai.conversation import (
     run_conversation,
     visual_reply_options,
 )
-from fluent_ai.desktop_bridge import conversation_reply, conversation_start, lesson_start, lesson_submit, profile_for, status
-from fluent_ai.state import default_state
+from fluent_ai.desktop_bridge import (
+    _load,
+    apply_conversation_turn_progress,
+    conversation_reply,
+    conversation_start,
+    lesson_start,
+    lesson_submit,
+    profile_for,
+    status,
+)
+from fluent_ai.state import conversation_memory, default_state, language_state, load_state, profile_state, review_queue, save_state
 
 
 def fake_tutor_reply(topic, state, transcript, phase, fallback):
@@ -47,10 +57,11 @@ class AgentTests(unittest.TestCase):
         results = evaluate_answers(quiz, answers)
         update_progress(state, lesson, results)
 
-        self.assertGreater(state["learner"]["xp"], 0)
-        self.assertTrue(state["history"])
-        self.assertIn(lesson["topic"], state["recent_topics"])
-        self.assertIn("current_level", state["learner"])
+        self.assertGreater(profile_state(state)["xp"], 0)
+        self.assertTrue(language_state(state)["history"])
+        self.assertIn(lesson["topic"], language_state(state)["recent_topics"])
+        self.assertIn("current_level", profile_state(state))
+        self.assertEqual(language_state(state)["history"][-3]["type"], "lesson_completed")
 
     def test_quiz_has_required_mixed_question_types(self):
         state = default_state("Spanish")
@@ -73,7 +84,7 @@ class AgentTests(unittest.TestCase):
         results = evaluate_answers(quiz, answers)
         update_progress(state, lesson, results)
 
-        scheduled = state["review_queue"][lesson["topic"]]
+        scheduled = review_queue(state)[f"review_topic_{lesson['topic'].replace(' ', '_')}"]
         self.assertEqual(scheduled["topic"], lesson["topic"])
         self.assertEqual(scheduled["focus_skill"], lesson["focus_skill"])
         self.assertEqual(scheduled["interval_days"], 1)
@@ -81,36 +92,42 @@ class AgentTests(unittest.TestCase):
 
     def test_due_spaced_review_overrides_recent_topic_rotation(self):
         state = default_state("Spanish")
-        state["recent_topics"] = ["past tense", "conjugations", "vocabulary"]
-        state["review_queue"] = {
-            "past tense": {
+        language_state(state)["recent_topics"] = ["past tense", "conjugations", "vocabulary"]
+        review_queue(state)["review_topic_past_tense"] = {
+            "id": "review_topic_past_tense",
+            "item_type": "topic",
+            "target": "past tense",
                 "topic": "past tense",
                 "focus_skill": "conjugations",
                 "due_at": "2000-01-01T00:00:00+00:00",
                 "interval_days": 1,
                 "missed_count": 2,
-            }
         }
 
         self.assertEqual(choose_topic(state), "past tense")
 
     def test_profile_separates_due_reviews_from_future_schedule(self):
         state = default_state("Spanish")
-        state["review_queue"] = {
-            "past tense": {
+        queue = review_queue(state)
+        queue["review_topic_past_tense"] = {
+            "id": "review_topic_past_tense",
+            "item_type": "topic",
+            "target": "past tense",
                 "topic": "past tense",
                 "focus_skill": "conjugations",
                 "due_at": "2000-01-01T00:00:00+00:00",
                 "interval_days": 1,
                 "missed_count": 2,
-            },
-            "vocabulary": {
+        }
+        queue["review_topic_vocabulary"] = {
+            "id": "review_topic_vocabulary",
+            "item_type": "topic",
+            "target": "vocabulary",
                 "topic": "vocabulary",
                 "focus_skill": "vocabulary",
                 "due_at": "2999-01-01T00:00:00+00:00",
                 "interval_days": 30,
                 "missed_count": 0,
-            },
         }
 
         profile = profile_for(state)
@@ -136,9 +153,11 @@ class AgentTests(unittest.TestCase):
 
         self.assertEqual(len(transcript), 3)
         self.assertTrue(transcript[0].tutor_text)
-        self.assertEqual(updated_state["conversation_memory"]["sessions_completed"], 1)
-        self.assertEqual(updated_state["conversation_memory"]["total_turns"], 3)
-        self.assertIn(topic["topic"], updated_state["conversation_memory"]["recent_topics"])
+        memory = conversation_memory(updated_state)
+        self.assertEqual(memory["sessions_completed"], 1)
+        self.assertEqual(memory["total_turns"], 3)
+        self.assertIn(topic["topic"], memory["recent_topics"])
+        self.assertEqual([event["type"] for event in language_state(updated_state)["history"][:2]], ["conversation_started", "learner_replied"])
 
     def test_video_object_steers_beginner_conversation(self):
         state = default_state("Spanish")
@@ -155,12 +174,11 @@ class AgentTests(unittest.TestCase):
 
         self.assertIn("manzana", topic["opening"])
         self.assertIn("manzana", transcript[0].tutor_text)
-        self.assertEqual(updated_state["conversation_memory"]["last_video_object"], "apple")
+        self.assertEqual(conversation_memory(updated_state)["last_video_context"]["primary_object"], "apple")
 
     def test_advanced_conversation_uses_complex_topics(self):
         state = default_state("Spanish")
-        state["learner"]["current_level"] = "C1"
-        state["learner"]["level"] = "C1"
+        profile_state(state)["current_level"] = "C1"
 
         topic = choose_conversation_topic(state, video_on=False, video_object=None)
 
@@ -206,8 +224,8 @@ class AgentTests(unittest.TestCase):
     def test_non_spanish_conversation_scaffold_uses_target_language(self):
         french_state = default_state("French")
         hindi_state = default_state("Hindi")
-        french_state["conversation_memory"]["recent_topics"] = ["weather", "likes and food"]
-        hindi_state["conversation_memory"]["recent_topics"] = ["weather", "likes and food"]
+        conversation_memory(french_state)["recent_topics"] = ["weather", "likes and food"]
+        conversation_memory(hindi_state)["recent_topics"] = ["weather", "likes and food"]
 
         french_topic = choose_conversation_topic(french_state, video_on=False, video_object=None)
         hindi_topic = choose_conversation_topic(hindi_state, video_on=False, video_object=None)
@@ -287,6 +305,56 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(len(reply["session"]["turns"]), 1)
             self.assertIn("manzana", reply["tutor_message"])
             self.assertGreater(reply["profile"]["fluency_score"], start["profile"]["fluency_score"])
+
+    def test_bridge_language_switch_preserves_per_language_state(self):
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "progress.json"
+            status({"state_path": str(path)})
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            persisted["languages"]["Spanish"]["profile"]["xp"] = 500
+            path.write_text(json.dumps(persisted), encoding="utf-8")
+
+            french = status({"state_path": str(path), "language": "french"})
+            self.assertEqual(french["profile"]["language"], "French")
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(persisted["active_language"], "French")
+            self.assertEqual(set(persisted["languages"]), {"Spanish", "French"})
+            self.assertEqual(persisted["languages"]["Spanish"]["profile"]["xp"], 500)
+
+            no_language = status({"state_path": str(path)})
+            self.assertEqual(no_language["profile"]["language"], "French")
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(persisted["active_language"], "French")
+
+            spanish = status({"state_path": str(path), "language": "spanish"})
+            self.assertEqual(spanish["profile"]["language"], "Spanish")
+            self.assertEqual(spanish["profile"]["xp"], 500)
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(persisted["active_language"], "Spanish")
+            self.assertEqual(set(persisted["languages"]), {"Spanish", "French"})
+            self.assertEqual(persisted["languages"]["Spanish"]["profile"]["xp"], 500)
+
+    def test_bridge_turn_progress_delegates_to_shared_conversation_helper(self):
+        state = default_state("Spanish")
+        topic = {"topic": "introductions", "complexity": "beginner"}
+        turn = {
+            "turn_number": 1,
+            "tutor_text": "Hola",
+            "learner_text": "No se",
+            "topic": "introductions",
+            "complexity": "beginner",
+            "video_on": False,
+            "video_object": None,
+            "score": 0.2,
+            "feedback": "Try again.",
+            "correction": "Me llamo Ana.",
+        }
+
+        apply_conversation_turn_progress(state, topic, turn, is_first_turn=True)
+
+        types = [event["type"] for event in language_state(state)["history"]]
+        self.assertEqual(types[:2], ["conversation_started", "learner_replied"])
+        self.assertTrue(language_state(state)["mistake_memory"])
 
 
 if __name__ == "__main__":

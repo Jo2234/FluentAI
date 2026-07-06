@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from fluent_ai.conversation import asks_for_english_help, build_follow_up
 from fluent_ai.openai_provider import OpenAIProvider, _realtime_turn_detection
-from fluent_ai.state import default_state
+from fluent_ai.state import conversation_memory, default_state, profile_state
 
 
 class FakeHTTPResponse:
@@ -69,8 +69,8 @@ class NaturalConversationTests(unittest.TestCase):
     def test_turn_detection_is_dynamic_for_confident_advanced_learners(self):
         beginner = default_state("Spanish")
         advanced = default_state("Spanish")
-        advanced["learner"]["current_level"] = "C1"
-        advanced["conversation_memory"]["speaking_confidence"] = 0.82
+        profile_state(advanced)["current_level"] = "C1"
+        conversation_memory(advanced)["speaking_confidence"] = 0.82
 
         self.assertGreater(
             _realtime_turn_detection(beginner)["silence_duration_ms"],

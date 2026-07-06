@@ -5,7 +5,19 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Any, Callable
 from fluent_ai.agent import current_level
-from fluent_ai.state import recalculate_weak_topics, utc_now
+from fluent_ai.state import (
+    active_language,
+    add_event,
+    conversation_memory,
+    language_state,
+    recalculate_weak_topics,
+    record_mistake,
+    set_skill_score,
+    set_topic_score,
+    skill_scores,
+    topic_scores,
+    utc_now,
+)
 
 
 TOPIC_LADDER = {
@@ -321,7 +333,7 @@ TutorReplyFn = Callable[[dict[str, Any], dict[str, Any], list[ConversationTurn],
 def choose_conversation_topic(state: dict[str, Any], video_on: bool, video_object: str | None) -> dict[str, Any]:
     level = current_level(state)
     if video_on and video_object:
-        visual = resolve_visible_object(video_object, state.get("learner", {}).get("target_language", "Spanish"))
+        visual = resolve_visible_object(video_object, active_language(state))
         if visual:
             return {
                 "topic": f"visible object: {visual['target_word']}",
@@ -333,13 +345,13 @@ def choose_conversation_topic(state: dict[str, Any], video_on: bool, video_objec
             }
 
     candidates = conversation_topics_for(state, level)
-    recent = set(state.get("conversation_memory", {}).get("recent_topics", [])[-3:])
+    recent = set(conversation_memory(state).get("recent_topics", [])[-3:])
     fresh = [candidate for candidate in candidates if candidate["topic"] not in recent]
     return random.choice(fresh or candidates)
 
 
 def conversation_topics_for(state: dict[str, Any], level: str) -> list[dict[str, Any]]:
-    language = state.get("learner", {}).get("target_language", "Spanish")
+    language = active_language(state)
     language_topics = LANGUAGE_TOPIC_OVERRIDES.get(language, {})
     return language_topics.get(level) or TOPIC_LADDER.get(level, TOPIC_LADDER["A1"])
 
@@ -459,7 +471,7 @@ def simulate_reply(topic: dict[str, Any], state: dict[str, Any], turn_number: in
 
 
 def visual_reply_options(visual: dict[str, Any], state: dict[str, Any]) -> list[str]:
-    language = state.get("learner", {}).get("target_language", "Spanish")
+    language = active_language(state)
     target_word = visual["target_word"]
     article = visual["article"]
     if language == "French":
@@ -515,7 +527,7 @@ def correction_for(topic: dict[str, Any]) -> str:
 
 def build_follow_up(topic: dict[str, Any], learner_text: str, score: float, turn_number: int, state: dict[str, Any]) -> str:
     level = current_level(state)
-    target_language = state.get("learner", {}).get("target_language", "Spanish")
+    target_language = active_language(state)
     scaffold = FOLLOW_UP_SCAFFOLDS.get(target_language, FOLLOW_UP_SCAFFOLDS["Spanish"])
     if asks_for_english_help(learner_text):
         correction = correction_for(topic)
@@ -554,41 +566,165 @@ def update_conversation_progress(
         return
 
     average_score = sum(turn.score for turn in transcript) / len(transcript)
-    memory = state.setdefault("conversation_memory", {})
-    previous_fluency = float(memory.get("fluency_score", 0.30))
-    previous_confidence = float(memory.get("speaking_confidence", 0.30))
-    memory["sessions_completed"] = int(memory.get("sessions_completed", 0)) + 1
-    memory["total_turns"] = int(memory.get("total_turns", 0)) + len(transcript)
-    memory["fluency_score"] = bounded(previous_fluency * 0.75 + average_score * 0.25)
-    memory["speaking_confidence"] = bounded(previous_confidence + (0.035 if average_score >= 0.45 else -0.02))
-    memory["recent_topics"] = (memory.get("recent_topics", []) + [topic["topic"]])[-8:]
-    memory["last_video_object"] = video_object if video_on else None
-    memory["last_session_at"] = utc_now()
-    memory["next_speaking_goal"] = next_speaking_goal(state, average_score, topic)
+    apply_turn_progress(
+        state,
+        topic,
+        {
+            "turns": [
+                {
+                    "turn_number": turn.turn_number,
+                    "tutor_text": turn.tutor_text,
+                    "learner_text": turn.learner_text,
+                    "topic": turn.topic,
+                    "complexity": turn.complexity,
+                    "video_on": video_on,
+                    "video_object": video_object if video_on else None,
+                    "score": turn.score,
+                    "feedback": turn.feedback,
+                    "correction": turn.correction,
+                }
+                for turn in transcript
+            ],
+            "score": average_score,
+            "aggregate_turns": len(transcript),
+            "video_on": video_on,
+            "video_object": video_object if video_on else None,
+            "fluency_weight": 0.25,
+            "confidence_delta": 0.035 if average_score >= 0.45 else -0.02,
+            "speaking_delta": 0.035 if average_score >= 0.45 else -0.015,
+        },
+        is_first_turn=True,
+    )
 
-    missed = [turn.correction for turn in transcript if turn.correction]
-    memory["missed_phrases"] = (memory.get("missed_phrases", []) + missed)[-8:]
 
-    speaking_delta = 0.035 if average_score >= 0.45 else -0.015
-    state["skills"]["vocabulary"] = bounded(state["skills"].get("vocabulary", 0.30) + speaking_delta)
-    state["skills"]["grammar"] = bounded(state["skills"].get("grammar", 0.30) + speaking_delta / 2)
-    state["topic_mastery"][topic["topic"]] = bounded(state["topic_mastery"].get(topic["topic"], 0.30) + speaking_delta)
-    state["weak_topics"] = recalculate_weak_topics(state)
-    state["history"] = (
-        state.get("history", [])
-        + [
+def apply_turn_progress(
+    state: dict[str, Any],
+    topic: dict[str, Any],
+    turn_dict: dict[str, Any],
+    is_first_turn: bool,
+) -> None:
+    language = active_language(state)
+    data = language_state(state, language)
+    memory = conversation_memory(state, language)
+    score = float(turn_dict["score"])
+    topic_name = str(topic.get("topic") or turn_dict.get("topic") or "conversation")
+    turn_events = turn_dict.get("turns") if isinstance(turn_dict.get("turns"), list) else [turn_dict]
+    aggregate_turns = int(turn_dict.get("aggregate_turns", len(turn_events)) or len(turn_events))
+
+    if is_first_turn:
+        memory["sessions_completed"] = int(memory.get("sessions_completed", 0)) + 1
+        memory["recent_topics"] = (memory.get("recent_topics", []) + [topic_name])[-8:]
+        add_event(
+            state,
             {
-                "mode": "conversation",
-                "topic": topic["topic"],
-                "complexity": topic["complexity"],
-                "turns": len(transcript),
-                "average_score": round(average_score, 2),
-                "video_on": video_on,
-                "video_object": video_object if video_on else None,
-                "next_speaking_goal": memory["next_speaking_goal"],
-            }
-        ]
-    )[-25:]
+                "type": "conversation_started",
+                "source": "conversation_mode",
+                "summary": f"Started conversation on {topic_name}.",
+                "payload": {
+                    "topic": topic_name,
+                    "complexity": topic.get("complexity"),
+                    "video_on": bool(turn_dict.get("video_on")),
+                    "video_object": turn_dict.get("video_object") if turn_dict.get("video_on") else None,
+                },
+            },
+            language,
+        )
+
+    memory["total_turns"] = int(memory.get("total_turns", 0)) + aggregate_turns
+    fluency_weight = float(turn_dict.get("fluency_weight", 0.15) or 0.15)
+    memory["fluency_score"] = bounded(float(memory.get("fluency_score", 0.30)) * (1 - fluency_weight) + score * fluency_weight)
+    confidence_delta = turn_dict.get("confidence_delta")
+    if confidence_delta is None:
+        confidence_delta = 0.025 if score >= 0.45 else -0.015
+    memory["speaking_confidence"] = bounded(float(memory.get("speaking_confidence", 0.30)) + float(confidence_delta))
+    context = memory.setdefault("last_video_context", {"summary": None, "primary_object": None, "confidence": None, "used_at": None})
+    if turn_dict.get("video_on"):
+        context["summary"] = turn_dict.get("video_object")
+        context["primary_object"] = turn_dict.get("video_object")
+        context["used_at"] = utc_now()
+    else:
+        context["summary"] = None
+        context["primary_object"] = None
+        context["confidence"] = None
+        context["used_at"] = None
+    memory["last_session_at"] = utc_now()
+    memory["next_speaking_goal"] = next_speaking_goal(state, score, topic)
+
+    corrections = [turn.get("correction") for turn in turn_events if isinstance(turn, dict) and turn.get("correction")]
+    if corrections:
+        memory["missed_phrases"] = (memory.get("missed_phrases", []) + corrections)[-8:]
+    for turn in turn_events:
+        if not isinstance(turn, dict) or not turn.get("correction"):
+            continue
+        record_mistake(
+            state,
+            {
+                "incorrect_form": str(turn.get("learner_text") or ""),
+                "corrected_form": str(turn.get("correction")),
+                "context": f"Conversation turn on {topic_name}.",
+                "skill": "speaking",
+                "topic": topic_name,
+                "error_category": "other",
+            },
+            language,
+        )
+
+    scores = skill_scores(state, language)
+    topics = topic_scores(state, language)
+    speaking_delta = float(turn_dict.get("speaking_delta", 0.025 if score >= 0.45 else -0.01))
+    event = None
+    for turn in turn_events:
+        if not isinstance(turn, dict):
+            continue
+        event = add_event(
+            state,
+            {
+                "type": "learner_replied",
+                "source": "conversation_mode",
+                "summary": f"Learner replied on {topic_name}.",
+                "payload": {
+                    "turn_number": turn.get("turn_number"),
+                    "topic": topic_name,
+                    "complexity": topic.get("complexity"),
+                    "score": round(float(turn.get("score", score) or score), 2),
+                    "feedback": turn.get("feedback"),
+                    "correction": turn.get("correction"),
+                    "video_on": bool(turn.get("video_on")),
+                    "video_object": turn.get("video_object") if turn.get("video_on") else None,
+                    "next_speaking_goal": memory["next_speaking_goal"],
+                },
+            },
+            language,
+        )
+    event_id = event["id"] if event else None
+    set_skill_score(
+        state,
+        "vocabulary",
+        bounded(scores.get("vocabulary", 0.30) + speaking_delta),
+        language,
+        evidence={"event_id": event_id, "mode": "conversation", "topic": topic_name, "delta": speaking_delta, "note": "Conversation turn"},
+    )
+    set_skill_score(
+        state,
+        "grammar",
+        bounded(scores.get("grammar", 0.30) + speaking_delta / 2),
+        language,
+        evidence={
+            "event_id": event_id,
+            "mode": "conversation",
+            "topic": topic_name,
+            "delta": round(speaking_delta / 2, 3),
+            "note": "Conversation turn",
+        },
+    )
+    set_topic_score(
+        state,
+        topic_name,
+        bounded(topics.get(topic_name, 0.30) + speaking_delta),
+        language,
+        evidence={"event_id": event_id, "mode": "conversation", "topic": topic_name, "delta": speaking_delta, "note": "Conversation turn"},
+    )
+    data["weak_topics"] = recalculate_weak_topics(state, language=language)
 
 
 def next_speaking_goal(state: dict[str, Any], average_score: float, topic: dict[str, Any]) -> str:

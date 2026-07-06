@@ -5,13 +5,19 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from fluent_ai.state import (
+    add_event,
     append_history_event,
+    conversation_memory,
     default_state,
+    language_state,
     load_state,
     migrate_state,
+    profile_state,
     record_mistake,
+    review_queue,
     save_state,
     set_skill_score,
+    set_topic_score,
 )
 
 
@@ -134,8 +140,10 @@ class StateV2Tests(unittest.TestCase):
         self.assertIn("last_video_context", state["languages"]["French"]["conversation_memory"])
         self.assertIn("privacy", state)
         self.assertIn("events", state)
-        self.assertEqual(state["learner"]["target_language"], "French")
-        self.assertIsInstance(state["skills"]["vocabulary"], float)
+        self.assertEqual(state["active_language"], "French")
+        self.assertNotIn("target_language", state["learner"])
+        self.assertNotIn("skills", state)
+        self.assertEqual(state["languages"]["French"]["skills"]["vocabulary"]["score"], 0.34)
 
     def test_append_history_event_caps_language_history_and_keeps_newest(self):
         state = default_state("Spanish")
@@ -183,22 +191,33 @@ class StateV2Tests(unittest.TestCase):
         self.assertEqual(state["languages"]["Spanish"]["skills"]["grammar"]["score"], 0.05)
         self.assertEqual(state["languages"]["Spanish"]["skills"]["grammar"]["trend"], "down")
 
-    def test_compat_mirror_round_trips_to_persisted_v2_without_duplicate_top_level_views(self):
+    def test_pure_v2_round_trips_without_duplicate_top_level_views(self):
         with TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "progress.json"
             state = load_state(path, "Spanish")
-            state["learner"]["xp"] = 77
-            state["learner"]["current_level"] = "B1"
-            state["skills"]["vocabulary"] = 0.88
-            state["topic_mastery"]["travel"] = 0.66
-            state["review_queue"]["travel"] = {
+            profile_state(state)["xp"] = 77
+            profile_state(state)["current_level"] = "B1"
+            set_skill_score(state, "vocabulary", 0.88)
+            set_topic_score(state, "travel", 0.66)
+            review_queue(state)["review_topic_travel"] = {
+                "id": "review_topic_travel",
+                "item_type": "topic",
+                "target": "travel",
                 "topic": "travel",
                 "focus_skill": "vocabulary",
                 "due_at": "2026-07-09T00:00:00+00:00",
                 "interval_days": 2,
             }
-            state["history"].append({"topic": "travel", "correct_count": 5, "total_questions": 6})
-            state["conversation_memory"]["last_video_object"] = "book"
+            append_history_event(
+                state,
+                {
+                    "type": "lesson_completed",
+                    "source": "test",
+                    "summary": "Travel lesson.",
+                    "payload": {"topic": "travel", "correct_count": 5, "total_questions": 6},
+                },
+            )
+            conversation_memory(state)["last_video_context"]["primary_object"] = "book"
             save_state(path, state)
 
             persisted = json.loads(path.read_text(encoding="utf-8"))
@@ -215,12 +234,22 @@ class StateV2Tests(unittest.TestCase):
                 persisted["languages"]["Spanish"]["conversation_memory"]["last_video_context"]["primary_object"],
                 "book",
             )
-            self.assertEqual(persisted["languages"]["Spanish"]["history"][-1]["payload"]["legacy"]["topic"], "travel")
+            self.assertEqual(persisted["languages"]["Spanish"]["history"][-1]["payload"]["topic"], "travel")
 
             reloaded = load_state(path, "Spanish")
-            self.assertEqual(reloaded["learner"]["xp"], 77)
-            self.assertEqual(reloaded["skills"]["vocabulary"], 0.88)
-            self.assertIn("travel", reloaded["review_queue"])
+            self.assertEqual(profile_state(reloaded)["xp"], 77)
+            self.assertEqual(language_state(reloaded)["skills"]["vocabulary"]["score"], 0.88)
+            self.assertIn("review_topic_travel", review_queue(reloaded))
+
+    def test_event_ids_remain_unique_after_top_level_cap(self):
+        state = default_state("Spanish")
+        for index in range(1005):
+            add_event(state, {"type": "progress_updated", "summary": f"event {index}", "payload": {}})
+
+        ids = [event["id"] for event in state["events"]]
+        self.assertEqual(len(state["events"]), 1000)
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(state["event_counter"], 1005)
 
 
 if __name__ == "__main__":

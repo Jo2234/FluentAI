@@ -36,6 +36,7 @@ Create a demoable agentic language learning app with Lesson Mode and Conversatio
 - Remove model-name UI copy and improve English-help responsiveness in tutor conversation. Done.
 - Add Hindi, Spanish, and French language selection across lessons, text fallback, realtime voice, and camera-context prompts. Done.
 - Make the visible agent decision log collapsible. Done.
+- Migrate Lesson and Conversation state call sites to state schema v2 helpers and remove temporary v1 compatibility mirrors. Done.
 
 ## Next
 - Add spaced repetition scheduling. Done.
