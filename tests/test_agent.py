@@ -4,7 +4,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fluent_ai.agent import choose_topic, due_review_items, evaluate_answers, generate_lesson, generate_quiz, update_progress
-from fluent_ai.conversation import asks_for_english_help, build_follow_up, build_opening, choose_conversation_topic, run_conversation
+from fluent_ai.conversation import (
+    asks_for_english_help,
+    build_follow_up,
+    build_opening,
+    choose_conversation_topic,
+    run_conversation,
+    visual_reply_options,
+)
 from fluent_ai.desktop_bridge import conversation_reply, conversation_start, lesson_start, lesson_submit, profile_for, status
 from fluent_ai.state import default_state
 
@@ -205,11 +212,34 @@ class AgentTests(unittest.TestCase):
         french_topic = choose_conversation_topic(french_state, video_on=False, video_object=None)
         hindi_topic = choose_conversation_topic(hindi_state, video_on=False, video_object=None)
         french_help = build_follow_up(french_topic, "I don't understand", 0.2, 1, french_state)
+        french_next = build_follow_up(french_topic, "Je m'appelle Johan.", 0.7, 1, french_state)
+        hindi_next = build_follow_up(hindi_topic, "मेरा नाम जोहान है।", 0.7, 1, hindi_state)
 
         self.assertIn("Bonjour", build_opening(french_topic, french_state))
         self.assertIn("नमस्ते", build_opening(hindi_topic, hindi_state))
         self.assertIn("Je m'appelle", french_help)
+        self.assertIn("phrase complète", french_next)
+        self.assertIn("पूरा वाक्य", hindi_next)
         self.assertNotIn("Hace sol", french_help)
+        self.assertNotIn("Muy bien", french_next)
+
+    def test_non_spanish_visual_conversation_followups_and_auto_replies_are_localized(self):
+        french_state = default_state("French")
+        hindi_state = default_state("Hindi")
+        french_topic = choose_conversation_topic(french_state, video_on=True, video_object="apple")
+        hindi_topic = choose_conversation_topic(hindi_state, video_on=True, video_object="apple")
+
+        french_follow_up = build_follow_up(french_topic, "C'est une pomme.", 0.7, 1, french_state)
+        hindi_follow_up = build_follow_up(hindi_topic, "यह एक सेब है।", 0.7, 1, hindi_state)
+        french_replies = visual_reply_options(french_topic["visual"], french_state)
+        hindi_replies = visual_reply_options(hindi_topic["visual"], hindi_state)
+
+        self.assertIn("pomme", french_follow_up)
+        self.assertIn("सेब", hindi_follow_up)
+        self.assertFalse(any("manzana" in reply or "Si," in reply for reply in french_replies))
+        self.assertFalse(any("manzana" in reply or "Si," in reply for reply in hindi_replies))
+        self.assertTrue(any("pomme" in reply for reply in french_replies))
+        self.assertTrue(any("सेब" in reply for reply in hindi_replies))
 
     def test_desktop_bridge_lesson_waits_for_real_answers(self):
         with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", FakeOpenAIProvider):

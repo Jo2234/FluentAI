@@ -233,6 +233,70 @@ VISIBLE_OBJECT_TRANSLATIONS = {
 }
 
 
+FOLLOW_UP_SCAFFOLDS = {
+    "Spanish": {
+        "low_score": "Bien, vamos paso a paso. Repite o adapta: {correction}",
+        "visual_first": "Muy bien. Ahora dime una frase mas: La {target_word} es...",
+        "visual_next": "Perfecto. Ahora usa esa palabra en una frase sobre ti.",
+        "beginner": [
+            "Muy bien. Ahora responde con una frase completa.",
+            "Genial. ¿Puedes decir una cosa mas?",
+            "Bien. Usa una palabra nueva de hoy.",
+        ],
+        "intermediate": [
+            "Interesante. Dame una razon concreta.",
+            "Ahora compara esa idea con otra opcion.",
+            "Buen punto. ¿Que ejemplo real puedes dar?",
+        ],
+        "advanced": [
+            "Desarrolla el matiz: ¿cual seria la objecion mas fuerte?",
+            "Ahora responde como si estuvieras en un debate formal.",
+            "Concreta una politica o consecuencia.",
+        ],
+    },
+    "French": {
+        "low_score": "Très bien, allons pas à pas. Répète ou adapte : {correction}",
+        "visual_first": "Très bien. Maintenant, dis une phrase de plus : La {target_word} est...",
+        "visual_next": "Parfait. Maintenant, utilise ce mot dans une phrase sur toi.",
+        "beginner": [
+            "Très bien. Maintenant, réponds avec une phrase complète.",
+            "Super. Est-ce que tu peux dire une chose de plus ?",
+            "Bien. Utilise un mot nouveau d'aujourd'hui.",
+        ],
+        "intermediate": [
+            "Intéressant. Donne-moi une raison concrète.",
+            "Maintenant, compare cette idée avec une autre option.",
+            "Bon point. Quel exemple réel peux-tu donner ?",
+        ],
+        "advanced": [
+            "Développe la nuance : quelle serait l'objection la plus forte ?",
+            "Maintenant, réponds comme dans un débat formel.",
+            "Donne une politique ou une conséquence concrète.",
+        ],
+    },
+    "Hindi": {
+        "low_score": "अच्छा, धीरे-धीरे चलते हैं। दोहराइए या बदलिए: {correction}",
+        "visual_first": "बहुत अच्छा। अब एक और वाक्य कहिए: {target_word} ... है।",
+        "visual_next": "बिलकुल सही। अब इस शब्द को अपने बारे में एक वाक्य में इस्तेमाल कीजिए।",
+        "beginner": [
+            "बहुत अच्छा। अब पूरा वाक्य बोलिए।",
+            "शानदार। क्या आप एक और बात कह सकते हैं?",
+            "अच्छा। आज का एक नया शब्द इस्तेमाल कीजिए।",
+        ],
+        "intermediate": [
+            "दिलचस्प। एक ठोस कारण दीजिए।",
+            "अब इस विचार की तुलना किसी दूसरे विकल्प से कीजिए।",
+            "अच्छी बात। कोई वास्तविक उदाहरण दीजिए।",
+        ],
+        "advanced": [
+            "थोड़ा और गहराई से बताइए: सबसे मजबूत आपत्ति क्या होगी?",
+            "अब ऐसे जवाब दीजिए जैसे आप औपचारिक बहस में हों।",
+            "कोई ठोस नीति या परिणाम बताइए।",
+        ],
+    },
+}
+
+
 class TutorGenerationError(RuntimeError):
     """Raised when the required OpenAI tutor response is unavailable."""
 
@@ -374,13 +438,7 @@ def simulate_reply(topic: dict[str, Any], state: dict[str, Any], turn_number: in
     level = current_level(state)
     visual = topic.get("visual")
     if visual and level in {"A1", "A2"}:
-        return random.choice(
-            [
-                f"Si, me gusta la {visual['target_word']}.",
-                visual["model"],
-                f"Es {visual['article']} {visual['target_word']}.",
-            ]
-        )
+        return random.choice(visual_reply_options(visual, state))
 
     if level == "A1":
         replies = ["Me llamo Ana.", "Hace sol hoy.", "Si, me gustan las manzanas.", "No se todavia."]
@@ -398,6 +456,29 @@ def simulate_reply(topic: dict[str, Any], state: dict[str, Any], turn_number: in
             "Equilibraria la economia y el ambiente con incentivos claros y reglas graduales.",
         ]
     return replies[(turn_number - 1) % len(replies)]
+
+
+def visual_reply_options(visual: dict[str, Any], state: dict[str, Any]) -> list[str]:
+    language = state.get("learner", {}).get("target_language", "Spanish")
+    target_word = visual["target_word"]
+    article = visual["article"]
+    if language == "French":
+        return [
+            f"Oui, j'aime la {target_word}.",
+            visual["model"],
+            f"C'est {article} {target_word}.",
+        ]
+    if language == "Hindi":
+        return [
+            f"हाँ, मुझे {target_word} पसंद है।",
+            visual["model"],
+            f"यह {article} {target_word} है।",
+        ]
+    return [
+        f"Si, me gusta la {target_word}.",
+        visual["model"],
+        f"Es {article} {target_word}.",
+    ]
 
 
 def evaluate_reply(topic: dict[str, Any], learner_text: str, state: dict[str, Any]) -> tuple[float, str, str | None]:
@@ -434,9 +515,10 @@ def correction_for(topic: dict[str, Any]) -> str:
 
 def build_follow_up(topic: dict[str, Any], learner_text: str, score: float, turn_number: int, state: dict[str, Any]) -> str:
     level = current_level(state)
+    target_language = state.get("learner", {}).get("target_language", "Spanish")
+    scaffold = FOLLOW_UP_SCAFFOLDS.get(target_language, FOLLOW_UP_SCAFFOLDS["Spanish"])
     if asks_for_english_help(learner_text):
         correction = correction_for(topic)
-        target_language = state.get("learner", {}).get("target_language", "Spanish")
         return (
             f"In English: it means you can answer with a simple phrase like '{correction}'. "
             f"In {target_language}, try: {correction}"
@@ -444,32 +526,20 @@ def build_follow_up(topic: dict[str, Any], learner_text: str, score: float, turn
 
     if score < 0.35:
         correction = correction_for(topic)
-        return f"Bien, vamos paso a paso. Repite o adapta: {correction}"
+        return scaffold["low_score"].format(correction=correction)
 
     if topic.get("visual"):
         visual = topic["visual"]
         if turn_number == 1:
-            return f"Muy bien. Ahora dime una frase mas: La {visual['target_word']} es..."
-        return "Perfecto. Ahora usa esa palabra en una frase sobre ti."
+            return scaffold["visual_first"].format(target_word=visual["target_word"])
+        return scaffold["visual_next"]
 
     if level in {"A1", "A2"}:
-        follow_ups = [
-            "Muy bien. Ahora responde con una frase completa.",
-            "Genial. ¿Puedes decir una cosa mas?",
-            "Bien. Usa una palabra nueva de hoy.",
-        ]
+        follow_ups = scaffold["beginner"]
     elif level in {"B1", "B2"}:
-        follow_ups = [
-            "Interesante. Dame una razon concreta.",
-            "Ahora compara esa idea con otra opcion.",
-            "Buen punto. ¿Que ejemplo real puedes dar?",
-        ]
+        follow_ups = scaffold["intermediate"]
     else:
-        follow_ups = [
-            "Desarrolla el matiz: ¿cual seria la objecion mas fuerte?",
-            "Ahora responde como si estuvieras en un debate formal.",
-            "Concreta una politica o consecuencia.",
-        ]
+        follow_ups = scaffold["advanced"]
     return follow_ups[(turn_number - 1) % len(follow_ups)]
 
 
