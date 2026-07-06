@@ -48,3 +48,4 @@ Create a demoable agentic language learning app with Lesson Mode and Conversatio
 - Packaging steps 2/3: add API key manager, bridge validation, safe-storage/session key handling, and corrupt progress recovery.
 - Packaging step 6 reliability pass: realtime refresh, renderer timeouts, model-failure copy, empty-tutor recovery, lesson/call checkpoints, and camera voice-only fallback. Done.
 - Fix acceptance-run defects: packaged bridge Realtime SSL certificate setup and provider-graded Conversation mistake memory. Done.
+- Final Phase 2/6 polish: phrase listening, pronunciation/culture lesson cards, and post-call pronunciation practice note. Done.

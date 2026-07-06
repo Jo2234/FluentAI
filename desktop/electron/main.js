@@ -482,6 +482,10 @@ ipcMain.handle("lesson:submit", async (_event, payload) => {
   return runBridge("lesson_submit", payload);
 });
 
+ipcMain.handle("phrase:audio", async (_event, payload) => {
+  return runBridge("phrase_audio", payload || {});
+});
+
 ipcMain.handle("realtime:client_secret", async (_event, payload) => {
   return runBridge("realtime_client_secret", payload || {});
 });

@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld("fluentAI", {
   summarizeCallCheckpoint: (payload) => ipcRenderer.invoke("call:checkpoint_summarize", payload),
   startLesson: (payload) => ipcRenderer.invoke("lesson:start", payload),
   submitLesson: (payload) => ipcRenderer.invoke("lesson:submit", payload),
+  phraseAudio: (payload) => ipcRenderer.invoke("phrase:audio", payload),
   realtimeClientSecret: (payload) => ipcRenderer.invoke("realtime:client_secret", payload),
   analyzeCameraFrame: (payload) => ipcRenderer.invoke("vision:analyze_frame", payload),
   requestMediaAccess: (payload) => ipcRenderer.invoke("media:request_access", payload),

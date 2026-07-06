@@ -160,7 +160,6 @@ def _topic_to_lesson(topic: dict[str, Any]) -> dict[str, Any]:
     if any(item.get("romanization") for item in vocabulary_rich + examples_rich):
         lesson["romanization_available"] = True
 
-    # TODO: Include pronunciation_hints and cultural_note in OpenAI lesson enhancement once provider prompts are editable.
     return lesson
 
 

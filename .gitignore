@@ -9,6 +9,8 @@ node_modules/
 dist/
 dist-py/
 build/
+cache/
+data/cache/
 *.egg-info/
 dist-electron/
 *.spec.bak

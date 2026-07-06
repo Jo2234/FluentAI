@@ -1,5 +1,6 @@
 import json
 import unittest
+from base64 import b64decode
 from datetime import datetime, timezone
 from tempfile import TemporaryDirectory
 from pathlib import Path
@@ -35,6 +36,7 @@ from fluent_ai.desktop_bridge import (
     conversation_end,
     conversation_reply,
     conversation_start,
+    phrase_audio,
     lesson_start,
     lesson_submit,
     profile_for,
@@ -148,6 +150,16 @@ class CorrectConversationGradeProvider(FakeOpenAIProvider):
         }
 
 
+class PhraseAudioProvider(FakeOpenAIProvider):
+    calls = 0
+    phrases = []
+
+    def synthesize_speech(self, phrase, language, voice):
+        type(self).calls += 1
+        type(self).phrases.append((phrase, language, voice))
+        return f"mp3:{language}:{voice}:{phrase}".encode("utf-8")
+
+
 class MalformedQuizProvider(OpenAIProvider):
     @property
     def available(self):
@@ -191,6 +203,25 @@ class PromptCaptureProvider(OpenAIProvider):
     def _text_response(self, prompt):
         type(self).captured_prompt = prompt
         return "Hola, practicamos."
+
+
+class LessonEnhancementProvider(OpenAIProvider):
+    captured_prompt = ""
+
+    @property
+    def available(self):
+        return True
+
+    def _text_response(self, prompt):
+        type(self).captured_prompt = prompt
+        return json.dumps(
+            {
+                "vocabulary": [["hola", "hello"], ["adios", "goodbye"], ["gracias", "thanks"], ["si", "yes"], ["no", "no"]],
+                "grammar_explanation": "Use short phrases clearly.",
+                "examples": [["Hola.", "Hello."], ["Gracias.", "Thanks."], ["Adios.", "Goodbye."]],
+                "micro_task": "Repeat one phrase.",
+            }
+        )
 
 
 class AgentTests(unittest.TestCase):
@@ -1331,6 +1362,7 @@ class AgentTests(unittest.TestCase):
         self.assertIn("Hace sol hoy", summary["did_well"])
         self.assertIsNone(summary["correction_to_remember"])
         self.assertEqual(summary["phrase_to_review"], "Hace sol.")
+        self.assertEqual(summary["pronunciation_note"], "Listen and repeat: Hace sol.")
         self.assertEqual(summary["confidence_change"], "improved")
         self.assertTrue(summary["ended_at"])
 
@@ -1342,6 +1374,65 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(summaries[-1], persisted)
         self.assertEqual(summaries[0]["session_id"], "session_1")
         self.assertEqual(language_state(state)["history"][-1]["payload"]["post_call_summary"], persisted)
+
+    def test_post_call_summary_uses_provider_pronunciation_feedback(self):
+        state = default_state("Spanish")
+        topic = {"topic": "introductions", "support": "Model answer: Me llamo Ana."}
+        turn = {
+            "turn_number": 1,
+            "tutor_text": "Hola.",
+            "learner_text": "Me llamo Johan.",
+            "topic": "introductions",
+            "complexity": "beginner",
+            "score": 0.71,
+            "feedback": "Pronunciation note: keep the double l smooth.",
+            "correction": None,
+        }
+
+        summary = build_post_call_summary(state, topic, [turn])
+
+        self.assertEqual(summary["pronunciation_note"], "Pronunciation note: keep the double l smooth.")
+
+    def test_phrase_audio_bridge_uses_tts_cache_and_enforces_cap(self):
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", PhraseAudioProvider):
+            PhraseAudioProvider.calls = 0
+            PhraseAudioProvider.phrases = []
+            state_path = str(Path(tmpdir) / "progress.json")
+
+            first = phrase_audio({"state_path": state_path, "language": "Spanish", "phrase": "Hola"})
+            second = phrase_audio({"state_path": state_path, "language": "Spanish", "phrase": "Hola"})
+
+            self.assertTrue(first["ok"])
+            self.assertFalse(first["cache_hit"])
+            self.assertTrue(second["cache_hit"])
+            self.assertEqual(b64decode(first["audio_base64"]), b"mp3:Spanish:alloy:Hola")
+            self.assertEqual(PhraseAudioProvider.calls, 1)
+            self.assertEqual(PhraseAudioProvider.phrases[0], ("Hola", "Spanish", "alloy"))
+
+            for index in range(55):
+                result = phrase_audio({"state_path": state_path, "language": "Spanish", "phrase": f"Phrase {index}"})
+                self.assertTrue(result["ok"])
+
+            cache_files = list((Path(tmpdir) / "cache" / "tts").glob("*.mp3"))
+            self.assertLessEqual(len(cache_files), 50)
+
+    def test_enhanced_lesson_prompt_preserves_pronunciation_and_culture(self):
+        state = default_state("Spanish")
+        lesson = {
+            "topic": "cafe orders",
+            "focus_skill": "vocabulary",
+            "minutes": 10,
+            "pronunciation_hints": ["In gusto, keep the u sound hard."],
+            "cultural_note": "Say por favor when ordering.",
+        }
+
+        enhanced = LessonEnhancementProvider().enhance_lesson(state, lesson)
+
+        self.assertIn("pronunciation hints to preserve as context", LessonEnhancementProvider.captured_prompt)
+        self.assertIn("cultural note to preserve as context", LessonEnhancementProvider.captured_prompt)
+        self.assertEqual(enhanced["pronunciation_hints"], lesson["pronunciation_hints"])
+        self.assertEqual(enhanced["cultural_note"], lesson["cultural_note"])
+        self.assertEqual(enhanced["source"], "openai")
 
     def test_conversation_end_scores_and_persists_raw_voice_turns(self):
         with TemporaryDirectory() as tmpdir:

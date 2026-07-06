@@ -1149,6 +1149,7 @@
     .vocab-list li, .result-list li, .example-list li {
       display: flex;
       justify-content: space-between;
+      align-items: flex-start;
       gap: 16px;
       border: 1px solid #edf1f4;
       border-radius: 8px;
@@ -1160,6 +1161,54 @@
     .example-list span {
       color: var(--muted);
       text-align: right;
+    }
+
+    .phrase-card-main {
+      min-width: 0;
+      display: grid;
+      gap: 3px;
+    }
+
+    .listen-btn {
+      flex: 0 0 auto;
+      min-height: 32px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(139,211,255,0.30);
+      background: linear-gradient(135deg, rgba(139,211,255,0.16), rgba(255,255,255,0.92));
+      color: var(--ink);
+      box-shadow: 0 2px 0 #d5e1e6;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .listen-btn:disabled {
+      opacity: 0.62;
+      cursor: wait;
+    }
+
+    .lesson-hint-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .lesson-hint-card {
+      border: 1px solid rgba(139,211,255,0.24);
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(139,211,255,0.12), rgba(255,255,255,0.94));
+      padding: 12px;
+      min-width: 0;
+    }
+
+    .lesson-hint-card strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .lesson-hint-card p {
+      color: var(--muted);
+      font-size: 13px;
     }
 
     .question {
@@ -2018,11 +2067,52 @@
     .question.answered .question-status { color: #bceaff; border-color: rgba(139,211,255,0.34); }
     .question.correct { border-color: rgba(69,212,131,0.42); background: rgba(69,212,131,0.075); }
     .question.needs-review { border-color: rgba(255,204,102,0.45); background: rgba(255,204,102,0.075); }
+    .quiz-column h3,
+    .question .question-prompt {
+      color: #f7f8f8;
+    }
+    .question .question-kicker {
+      color: #b9bdff;
+    }
+    .choice {
+      color: #eef2ff;
+      background: rgba(15, 16, 22, 0.78);
+      border-color: rgba(255,255,255,0.10);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 24px rgba(0,0,0,0.18);
+      transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+    }
+    .choice:hover {
+      border-color: rgba(139,211,255,0.32);
+      background: rgba(22, 25, 38, 0.88);
+    }
     .choice:has(input:checked) {
-      border-color: rgba(139,211,255,0.48);
-      background: rgba(139,211,255,0.12);
+      border-color: rgba(124,124,255,0.56);
+      background: rgba(124,124,255,0.17);
       color: #f7f8f8;
       box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+    }
+    .free-answer::placeholder {
+      color: #aeb6c8;
+      opacity: 1;
+    }
+    .feedback {
+      color: #eef2ff;
+      background: rgba(124,124,255,0.11);
+      border-color: rgba(124,124,255,0.24);
+    }
+    .feedback.review {
+      color: #fff4d6;
+      background: rgba(255,204,102,0.11);
+    }
+    .lesson-column .listen-btn {
+      color: #f7f8f8;
+      border-color: rgba(139,211,255,0.26);
+      background: rgba(139,211,255,0.12);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 10px 24px rgba(0,0,0,0.18);
+    }
+    .lesson-column .listen-btn:hover {
+      border-color: rgba(139,211,255,0.44);
+      background: rgba(139,211,255,0.18);
     }
     .call-stage {
       grid-template-areas:
@@ -2411,6 +2501,7 @@
         summarizeCallCheckpoint: (payload) => bridge("call_checkpoint_summarize", payload),
         startLesson: (payload) => bridge("lesson_start", payload),
         submitLesson: (payload) => bridge("lesson_submit", payload),
+        phraseAudio: (payload) => bridge("phrase_audio", payload),
         realtimeClientSecret: (payload) => bridge("realtime_client_secret", payload),
         analyzeCameraFrame: (payload) => bridge("vision_analyze_frame", payload),
         requestMediaAccess: async () => ({ ok: true }),
@@ -2448,6 +2539,7 @@
       realtimeRefreshTimer: null,
       realtimeRefreshInFlight: false,
       remoteAudio: null,
+      phraseAudioElement: null,
       callActive: false,
       muted: false,
       visualContext: null,
@@ -4511,6 +4603,7 @@
         lessonHero(lesson, quiz.length),
         vocabBlock(lesson.vocabulary || []),
         phraseLabBlock(lesson),
+        lessonHintCards(lesson),
         block("Grammar Focus", [lesson.grammar_explanation || ""], false),
         examplesBlock(lesson.examples || []),
         block("Coach Challenge", [lesson.micro_task || ""], true)
@@ -4576,6 +4669,33 @@
       return node;
     }
 
+    function lessonHintCards(lesson) {
+      const hints = Array.isArray(lesson.pronunciation_hints) ? lesson.pronunciation_hints.filter(Boolean) : [];
+      const culture = String(lesson.cultural_note || "").trim();
+      if (!hints.length && !culture) {
+        return document.createDocumentFragment();
+      }
+      const node = document.createElement("div");
+      node.className = "section-block lesson-hints";
+      node.append(text("h3", "Listening notes"));
+      const grid = document.createElement("div");
+      grid.className = "lesson-hint-grid";
+      if (hints.length) {
+        const card = document.createElement("div");
+        card.className = "lesson-hint-card";
+        card.append(text("strong", "Pronunciation"), text("p", hints.join(" ")));
+        grid.append(card);
+      }
+      if (culture) {
+        const card = document.createElement("div");
+        card.className = "lesson-hint-card";
+        card.append(text("strong", "Culture"), text("p", culture));
+        grid.append(card);
+      }
+      node.append(grid);
+      return node;
+    }
+
     function phraseLabBlock(lesson) {
       const node = document.createElement("div");
       node.className = "section-block tint phrase-lab";
@@ -4606,7 +4726,10 @@
       list.className = "vocab-list";
       items.forEach(([word, meaning]) => {
         const li = document.createElement("li");
-        li.append(text("strong", word), text("span", meaning));
+        const main = document.createElement("div");
+        main.className = "phrase-card-main";
+        main.append(text("strong", word), text("span", meaning));
+        li.append(main, listenButton(word));
         list.append(li);
       });
       node.append(list);
@@ -4621,11 +4744,48 @@
       list.className = "example-list";
       items.forEach(([source, meaning]) => {
         const li = document.createElement("li");
-        li.append(text("strong", source), text("span", meaning));
+        const main = document.createElement("div");
+        main.className = "phrase-card-main";
+        main.append(text("strong", source), text("span", meaning));
+        li.append(main, listenButton(source));
         list.append(li);
       });
       node.append(list);
       return node;
+    }
+
+    function listenButton(phrase) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "listen-btn";
+      button.textContent = "Listen";
+      button.addEventListener("click", () => playPhraseAudio(phrase, button));
+      return button;
+    }
+
+    async function playPhraseAudio(phrase, button) {
+      const cleaned = String(phrase || "").trim();
+      if (!cleaned) return;
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = "Loading";
+      try {
+        const result = await window.fluentAI.phraseAudio(bridgePayload({
+          phrase: cleaned,
+          language: currentLanguage()
+        }));
+        if (!result || !result.ok || !result.audio_base64) {
+          throw new Error((result && result.error) || "Could not generate phrase audio.");
+        }
+        state.phraseAudioElement = new Audio(`data:${result.mime_type || "audio/mpeg"};base64,${result.audio_base64}`);
+        await state.phraseAudioElement.play();
+        appendLogs(result.logs || []);
+      } catch (error) {
+        showError((error && error.message) || "Could not play this phrase.");
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
     }
 
     function questionNode(question, index, draftAnswer = "") {
@@ -4946,6 +5106,7 @@
         summaryLine("Did well", summary.did_well),
         summaryLine("Correction", summary.correction_to_remember || "None"),
         summaryLine("Phrase to review", summary.phrase_to_review || "Keep the model phrase from this call."),
+        summaryLine("Pronunciation", summary.pronunciation_note || "Listen to a model phrase, then repeat it out loud."),
         summaryLine("Next goal", summary.next_speaking_goal || summary.next_conversation_should_practice || "Keep practicing."),
         summaryLine("Confidence", `${confidenceArrow(confidence)} ${confidence}`)
       );

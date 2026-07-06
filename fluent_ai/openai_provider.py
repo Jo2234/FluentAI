@@ -213,6 +213,8 @@ class OpenAIProvider:
             return lesson
 
         profile = profile_state(state)
+        pronunciation_hints = lesson.get("pronunciation_hints") or []
+        cultural_note = lesson.get("cultural_note") or ""
         prompt = f"""
 You are the Lesson Generator Agent for FluentAI.
 Return JSON only. Do not use Markdown.
@@ -228,6 +230,8 @@ Keep this lesson topic and focus:
 - focus skill: {lesson['focus_skill']}
 - duration minutes: {lesson['minutes']}
 - selection reason: {lesson.get('reason', 'No selection reason provided.')}
+- pronunciation hints to preserve as context: {json.dumps(pronunciation_hints, ensure_ascii=True)}
+- cultural note to preserve as context: {json.dumps(cultural_note, ensure_ascii=True)}
 
 Return exactly these keys:
 {{
@@ -256,8 +260,48 @@ Requirements:
             enhanced["examples"] = data["examples"]
         if isinstance(data.get("micro_task"), str):
             enhanced["micro_task"] = data["micro_task"]
+        for field in ("pronunciation_hints", "cultural_note"):
+            if lesson.get(field):
+                enhanced[field] = lesson[field]
         enhanced["source"] = "openai"
         return enhanced
+
+    def synthesize_speech(self, phrase: str, language: str, voice: str) -> bytes | None:
+        if not self.available:
+            return None
+        phrase = " ".join(str(phrase or "").strip().split())
+        language = " ".join(str(language or "Spanish").strip().split()) or "Spanish"
+        voice = " ".join(str(voice or "alloy").strip().split()) or "alloy"
+        if not phrase:
+            return None
+
+        client = self._load_client()
+        if client is None:
+            return None
+        try:
+            response = client.audio.speech.create(
+                model=os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
+                voice=voice,
+                input=f"{language} phrase: {phrase}",
+                instructions=f"Speak only the {language} phrase naturally for language listening practice.",
+                response_format="mp3",
+            )
+            return response.read()
+        except TypeError:
+            try:
+                response = client.audio.speech.create(
+                    model=os.getenv("OPENAI_TTS_MODEL", "tts-1"),
+                    voice=voice,
+                    input=f"{language} phrase: {phrase}",
+                    response_format="mp3",
+                )
+                return response.read()
+            except Exception as exc:
+                self.last_error = _safe_error(exc)
+                return None
+        except Exception as exc:
+            self.last_error = _safe_error(exc)
+            return None
 
     def evaluate_quiz_answers(
         self,

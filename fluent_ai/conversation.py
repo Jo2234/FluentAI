@@ -813,6 +813,7 @@ def build_post_call_summary(state: dict[str, Any], topic: dict[str, Any], turns:
         next_practice = f"Review the model phrase '{correction}' in the next conversation."
     else:
         next_practice = str(memory.get("next_speaking_goal") or f"Keep practicing {topic_name}.")
+    pronunciation_note = _pronunciation_note(topic, scored_turns)
 
     return {
         "session_id": str(topic.get("session_id") or f"conversation_{ended_at.replace(':', '').replace('-', '')}"),
@@ -825,8 +826,18 @@ def build_post_call_summary(state: dict[str, Any], topic: dict[str, Any], turns:
         "next_speaking_goal": str(memory.get("next_speaking_goal") or ""),
         "confidence_change": confidence_change,
         "next_conversation_should_practice": next_practice,
+        "pronunciation_note": pronunciation_note,
         "ended_at": ended_at,
     }
+
+
+def _pronunciation_note(topic: dict[str, Any], turns: list[Any]) -> str:
+    for turn in reversed(turns):
+        feedback = str(_turn_value(turn, "feedback") or "").strip()
+        if "pronunciation" in feedback.lower() and feedback:
+            return feedback[:220]
+    phrase = correction_for(topic)
+    return f"Listen and repeat: {phrase}" if phrase else "Listen to a short model phrase, then repeat it out loud."
 
 
 def persist_post_call_summary(state: dict[str, Any], topic: dict[str, Any], turns: list[Any]) -> dict[str, Any] | None:

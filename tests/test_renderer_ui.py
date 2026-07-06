@@ -26,6 +26,24 @@ class RendererUITests(unittest.TestCase):
         self.assertIn("Phrase Lab", self.html)
         self.assertIn("position: sticky", self.html)
 
+    def test_lesson_listen_buttons_and_hint_cards_render(self):
+        for marker in [
+            "phraseAudio: (payload) => bridge(\"phrase_audio\", payload)",
+            "phraseAudioElement",
+            "lessonHintCards(lesson)",
+            "Pronunciation",
+            "Culture",
+            "Listening notes",
+            "listenButton(word)",
+            "listenButton(source)",
+            "function playPhraseAudio",
+            "data:${result.mime_type || \"audio/mpeg\"};base64,${result.audio_base64}",
+            "Could not generate phrase audio.",
+            ".listen-btn",
+            ".lesson-hint-card",
+        ]:
+            self.assertIn(marker, self.html)
+
     def test_lesson_reason_and_error_category_feedback_render(self):
         self.assertIn("lesson.reason", self.html)
         self.assertIn("Why this lesson:", self.html)
@@ -36,6 +54,19 @@ class RendererUITests(unittest.TestCase):
         self.assertIn('result.correct ? " advisory" : ""', self.html)
         self.assertIn("Corrected form:", self.html)
         self.assertIn("conjugation slip", self.html)
+
+    def test_lesson_quiz_uses_light_text_on_aurora_cards(self):
+        for marker in [
+            ".quiz-column h3,\n    .question .question-prompt",
+            "color: #eef2ff;",
+            ".choice:hover",
+            "background: rgba(22, 25, 38, 0.88);",
+            ".free-answer::placeholder",
+            "color: #aeb6c8;",
+            ".lesson-column .listen-btn",
+            "background: rgba(139,211,255,0.12);",
+        ]:
+            self.assertIn(marker, self.html)
 
     def test_voice_controls_do_not_overlap_video_context_card(self):
         self.assertIn("grid-area: controls", self.html)
@@ -48,6 +79,8 @@ class RendererUITests(unittest.TestCase):
         self.assertIn("Post-call summary", self.html)
         self.assertIn("correction_to_remember", self.html)
         self.assertIn("phrase_to_review", self.html)
+        self.assertIn("pronunciation_note", self.html)
+        self.assertIn("Listen to a model phrase, then repeat it out loud.", self.html)
         self.assertIn("confidenceArrow", self.html)
         self.assertIn("realtimeTurns", self.html)
         self.assertIn("endConversation: (payload) => bridge(\"conversation_end\", payload)", self.html)
@@ -207,6 +240,7 @@ class RendererUITests(unittest.TestCase):
             "callCheckpoint: (payload) => ipcRenderer.invoke(\"call:checkpoint\", payload)",
             "discardCallCheckpoint: (payload) => ipcRenderer.invoke(\"call:checkpoint_discard\", payload)",
             "summarizeCallCheckpoint: (payload) => ipcRenderer.invoke(\"call:checkpoint_summarize\", payload)",
+            "phraseAudio: (payload) => ipcRenderer.invoke(\"phrase:audio\", payload)",
         ]:
             self.assertIn(marker, preload)
         for marker in [
@@ -229,6 +263,8 @@ class RendererUITests(unittest.TestCase):
             'runBridge("lesson_checkpoint"',
             'ipcMain.handle("call:checkpoint"',
             'runBridge("call_checkpoint"',
+            'ipcMain.handle("phrase:audio"',
+            'runBridge("phrase_audio"',
         ]:
             self.assertIn(marker, main)
 

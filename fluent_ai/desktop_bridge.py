@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import copy
+import hashlib
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
@@ -57,6 +60,7 @@ from fluent_ai.state import (
 DEFAULT_PROGRESS_PATH = Path("data/progress.json")
 MODEL_FAILURE_MESSAGE = "The tutor model timed out or failed. Your progress is safe — try again."
 CHECKPOINT_MAX_AGE = timedelta(hours=24)
+TTS_CACHE_LIMIT = 50
 SUPPORTED_LANGUAGES = {
     "hindi": "Hindi",
     "spanish": "Spanish",
@@ -428,6 +432,60 @@ def vision_analyze_frame(payload: dict[str, Any]) -> dict[str, Any]:
         f"[Vision Context Agent] Saw: {result.get('summary', 'unclear scene')}.",
     ]
     return result
+
+
+def phrase_audio(payload: dict[str, Any]) -> dict[str, Any]:
+    state = _load(payload)
+    provider = OpenAIProvider()
+    language = _language(payload) if payload.get("language") else active_language(state)
+    phrase = " ".join(str(payload.get("phrase") or "").strip().split())
+    voice = str(state.get("preferences", {}).get("voice") or "alloy").strip() or "alloy"
+    if not phrase:
+        return {
+            "ok": False,
+            "error": "Choose a lesson phrase to listen to.",
+            "profile": profile_for(state, provider),
+            "logs": ["[Phrase Audio Agent] No phrase was provided."],
+        }
+
+    cache_dir = _tts_cache_dir(_path(payload))
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = _tts_cache_path(cache_dir, language, phrase, voice)
+    if cache_path.exists():
+        audio = cache_path.read_bytes()
+        os.utime(cache_path, None)
+        _enforce_tts_cache_limit(cache_dir)
+        return {
+            "ok": True,
+            "audio_base64": base64.b64encode(audio).decode("ascii"),
+            "mime_type": "audio/mpeg",
+            "voice": voice,
+            "cache_hit": True,
+            "byte_count": len(audio),
+            "profile": profile_for(state, provider),
+            "logs": [f"[Phrase Audio Agent] Replayed cached phrase audio for {language}."],
+        }
+
+    audio = provider.synthesize_speech(phrase, language, voice)
+    if not audio:
+        return {
+            "ok": False,
+            "error": provider.last_error or "Could not generate phrase audio.",
+            "profile": profile_for(state, provider),
+            "logs": ["[Phrase Audio Agent] OpenAI TTS generation failed."],
+        }
+    cache_path.write_bytes(audio)
+    _enforce_tts_cache_limit(cache_dir)
+    return {
+        "ok": True,
+        "audio_base64": base64.b64encode(audio).decode("ascii"),
+        "mime_type": "audio/mpeg",
+        "voice": voice,
+        "cache_hit": False,
+        "byte_count": len(audio),
+        "profile": profile_for(state, provider),
+        "logs": [f"[Phrase Audio Agent] Generated phrase audio for {language} with {voice}."],
+    }
 
 
 def lesson_start(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1762,6 +1820,33 @@ def _checkpoint_path(path: Path, filename: str) -> Path:
     return _sessions_dir(path) / filename
 
 
+def _tts_cache_dir(path: Path) -> Path:
+    return path.parent / "cache" / "tts"
+
+
+def _tts_cache_path(cache_dir: Path, language: str, phrase: str, voice: str) -> Path:
+    key = json.dumps(
+        {"language": language, "phrase": phrase, "voice": voice},
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return cache_dir / f"{digest}.mp3"
+
+
+def _enforce_tts_cache_limit(cache_dir: Path, limit: int = TTS_CACHE_LIMIT) -> None:
+    files = [path for path in cache_dir.glob("*.mp3") if path.is_file()]
+    if len(files) <= limit:
+        return
+    files.sort(key=lambda path: path.stat().st_mtime)
+    for path in files[: max(0, len(files) - limit)]:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def _write_checkpoint(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=True), encoding="utf-8")
@@ -1866,6 +1951,7 @@ COMMANDS = {
     "validate_key": validate_key,
     "realtime_client_secret": realtime_client_secret,
     "vision_analyze_frame": vision_analyze_frame,
+    "phrase_audio": phrase_audio,
     "lesson_start": lesson_start,
     "lesson_submit": lesson_submit,
     "conversation_start": conversation_start,
