@@ -1,0 +1,357 @@
+{
+  "language": "French",
+  "schema_version": 1,
+  "levels": {
+    "A1": {
+      "topic_order": ["introductions", "cafe_orders", "daily_routines", "past_tense", "conjugations", "core_vocabulary", "likes_food", "numbers_time", "family", "weather"],
+      "default_topic": "introductions",
+      "conversation": [
+        {"topic": "introductions", "complexity": "beginner", "opening": "Bonjour, je commence. Comment tu t'appelles ?", "support": "Model answer: Je m'appelle Ana.", "keywords": ["je", "m appelle", "suis"]},
+        {"topic": "weather", "complexity": "beginner", "opening": "Bonjour. Quel temps fait-il aujourd'hui ?", "support": "Model answer: Il fait beau.", "keywords": ["il fait", "beau", "pluie", "froid", "chaud"]},
+        {"topic": "likes and food", "complexity": "beginner", "opening": "Bonjour. J'aime les pommes. Est-ce que tu aimes les pommes ?", "support": "Model answer: Oui, j'aime les pommes.", "keywords": ["aime", "pommes", "oui", "non"]}
+      ],
+      "topics": {
+        "introductions": {
+          "title": "Greetings and introductions",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "bonjour", "english": "hello", "pronunciation_hint": "bohn-ZHOOR"},
+            {"target": "je m'appelle", "english": "my name is"},
+            {"target": "je suis de", "english": "I am from"},
+            {"target": "enchanté", "english": "delighted"},
+            {"target": "tu fais quoi ?", "english": "what do you do?"}
+          ],
+          "grammar": "Use je suis for identity or origin, and je m'appelle for your name.",
+          "examples": [
+            {"target": "Bonjour, je m'appelle Ana.", "english": "Hello, my name is Ana."},
+            {"target": "Je suis de Singapour.", "english": "I am from Singapore."},
+            {"target": "Enchanté de te rencontrer.", "english": "Nice to meet you."}
+          ],
+          "answers": {"mc": "hello", "fill_prompt": "___, je m'appelle Ana.", "fill": "Bonjour", "open": "Je m'appelle Ana.", "translation": "Je suis de Singapour."},
+          "pronunciation_hints": ["Final consonants are often silent in bonjour and enchanté."],
+          "cultural_note": "Bonjour is expected when entering shops or starting a polite interaction.",
+          "conversation": [{"topic": "introductions", "complexity": "beginner", "opening": "Bonjour, je commence. Comment tu t'appelles ?", "support": "Model answer: Je m'appelle Ana.", "keywords": ["je", "m appelle", "suis"]}]
+        },
+        "cafe_orders": {
+          "title": "Café orders",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "je voudrais", "english": "I would like"},
+            {"target": "un café", "english": "a coffee"},
+            {"target": "un thé", "english": "a tea"},
+            {"target": "l'addition", "english": "the bill"},
+            {"target": "s'il vous plaît", "english": "please"}
+          ],
+          "grammar": "Use je voudrais for a polite request; add s'il vous plaît for formal politeness.",
+          "examples": [
+            {"target": "Je voudrais un café, s'il vous plaît.", "english": "I would like a coffee, please."},
+            {"target": "L'addition, s'il vous plaît.", "english": "The bill, please."},
+            {"target": "Je prends un thé.", "english": "I will have a tea."}
+          ],
+          "answers": {"mc": "I would like", "fill_prompt": "___ un café, s'il vous plaît.", "fill": "Je voudrais", "open": "Je voudrais un café, s'il vous plaît.", "translation": "Un thé, s'il vous plaît."},
+          "pronunciation_hints": ["In voudrais, the final s is silent."],
+          "conversation": [{"topic": "cafe_orders", "complexity": "beginner", "opening": "Nous sommes au café. Qu'est-ce que tu voudrais ?", "support": "Try: Je voudrais un café.", "keywords": ["voudrais", "cafe", "the", "addition"]}]
+        },
+        "daily_routines": {
+          "title": "Daily routines",
+          "focus_skill": "grammar",
+          "vocabulary": [
+            {"target": "je me lève", "english": "I get up"},
+            {"target": "je travaille", "english": "I work"},
+            {"target": "j'étudie", "english": "I study"},
+            {"target": "tous les jours", "english": "every day"},
+            {"target": "le matin", "english": "in the morning"}
+          ],
+          "grammar": "Use present-tense verbs with time phrases: j'étudie le soir.",
+          "examples": [
+            {"target": "Je me lève à sept heures.", "english": "I get up at seven."},
+            {"target": "Je travaille tous les jours.", "english": "I work every day."},
+            {"target": "J'étudie le soir.", "english": "I study in the evening."}
+          ],
+          "answers": {"mc": "in the morning", "fill_prompt": "J'étudie ___ soir.", "fill": "le", "open": "Je travaille tous les jours.", "translation": "Je me lève à sept heures."},
+          "pronunciation_hints": ["In lève, è is open, like 'eh'."],
+          "conversation": [{"topic": "daily routines", "complexity": "early conversation", "opening": "Raconte-moi : qu'est-ce que tu fais le matin ?", "support": "Try: Je me lève, je déjeune et j'étudie.", "keywords": ["leve", "dejeune", "travaille", "etudie", "matin"]}]
+        },
+        "past_tense": {
+          "title": "Past tense basics",
+          "focus_skill": "conjugations",
+          "vocabulary": [
+            {"target": "hier", "english": "yesterday"},
+            {"target": "je suis allé", "english": "I went"},
+            {"target": "j'ai mangé", "english": "I ate"},
+            {"target": "j'ai parlé", "english": "I spoke"},
+            {"target": "j'ai vu", "english": "I saw"}
+          ],
+          "grammar": "Use passé composé for completed past actions: auxiliary plus past participle.",
+          "examples": [
+            {"target": "Hier, je suis allé au marché.", "english": "Yesterday I went to the market."},
+            {"target": "J'ai mangé avec ma famille.", "english": "I ate with my family."},
+            {"target": "J'ai parlé avec mon ami.", "english": "I spoke with my friend."}
+          ],
+          "answers": {"mc": "yesterday", "fill_prompt": "Hier, je suis ___ au marché.", "fill": "allé", "open": "Hier, je suis allé au marché.", "translation": "J'ai parlé avec mon ami."},
+          "pronunciation_hints": ["In allé, stress is light and final é sounds like ay."],
+          "conversation": [{"topic": "past weekend", "complexity": "early conversation", "opening": "Parlons de ton week-end. Qu'est-ce que tu as fait hier ?", "support": "Try: Hier, je suis allé au marché.", "keywords": ["hier", "suis alle", "mange", "parle", "vu"]}]
+        },
+        "conjugations": {
+          "title": "Regular -er conjugations",
+          "focus_skill": "conjugations",
+          "vocabulary": [
+            {"target": "je parle", "english": "I speak"},
+            {"target": "tu parles", "english": "you speak"},
+            {"target": "elle parle", "english": "she speaks"},
+            {"target": "nous parlons", "english": "we speak"},
+            {"target": "ils parlent", "english": "they speak"}
+          ],
+          "grammar": "Most written -er endings sound the same in je, tu, il/elle, and ils/elles forms.",
+          "examples": [
+            {"target": "Je parle français.", "english": "I speak French."},
+            {"target": "Elle parle anglais.", "english": "She speaks English."},
+            {"target": "Nous parlons tous les jours.", "english": "We speak every day."}
+          ],
+          "answers": {"mc": "I speak", "fill_prompt": "Je ___ français.", "fill": "parle", "open": "Je parle français.", "translation": "Elle parle anglais."},
+          "pronunciation_hints": ["Parle, parles, and parlent sound nearly identical."],
+          "conversation": [{"topic": "conjugations", "complexity": "beginner", "opening": "Je parle français. Et toi, quelle langue parles-tu ?", "support": "Use je parle...", "keywords": ["parle", "parles", "francais"]}]
+        },
+        "core_vocabulary": {
+          "title": "Core vocabulary",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "la maison", "english": "the house"},
+            {"target": "le travail", "english": "work"},
+            {"target": "la nourriture", "english": "food"},
+            {"target": "le temps", "english": "time/weather"},
+            {"target": "un ami", "english": "a friend"}
+          ],
+          "grammar": "Learn nouns with articles because gender affects later agreement.",
+          "examples": [
+            {"target": "Ma maison est petite.", "english": "My house is small."},
+            {"target": "J'ai du travail aujourd'hui.", "english": "I have work today."},
+            {"target": "Mon ami aime la bonne nourriture.", "english": "My friend likes good food."}
+          ],
+          "answers": {"mc": "a friend", "fill_prompt": "Ma ___ est petite.", "fill": "maison", "open": "Mon ami aime la bonne nourriture.", "translation": "J'ai du travail aujourd'hui."},
+          "pronunciation_hints": ["Maison has a nasal vowel in the second syllable."],
+          "conversation": [{"topic": "core vocabulary", "complexity": "beginner", "opening": "Choisis un mot utile d'aujourd'hui et fais une phrase.", "support": "Try: Ma maison est petite.", "keywords": ["maison", "travail", "ami"]}]
+        },
+        "likes_food": {
+          "title": "Likes and food",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "j'aime", "english": "I like"},
+            {"target": "je n'aime pas", "english": "I do not like"},
+            {"target": "la pomme", "english": "the apple"},
+            {"target": "le riz", "english": "the rice"},
+            {"target": "c'est bon", "english": "it is good/tasty"}
+          ],
+          "grammar": "Use j'aime plus a noun with its article: j'aime le riz.",
+          "examples": [
+            {"target": "J'aime le café.", "english": "I like coffee."},
+            {"target": "J'aime les pommes.", "english": "I like apples."},
+            {"target": "Je n'aime pas le thé.", "english": "I do not like tea."}
+          ],
+          "answers": {"mc": "I like", "fill_prompt": "___ le café.", "fill": "J'aime", "open": "J'aime les pommes.", "translation": "Je n'aime pas le thé."},
+          "pronunciation_hints": ["J'aime links smoothly as zhem."],
+          "conversation": [{"topic": "likes and food", "complexity": "beginner", "opening": "Bonjour. J'aime les pommes. Est-ce que tu aimes les pommes ?", "support": "Model answer: Oui, j'aime les pommes.", "keywords": ["aime", "pommes", "oui", "non"]}]
+        },
+        "numbers_time": {
+          "title": "Numbers and time",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "un", "english": "one"},
+            {"target": "deux", "english": "two"},
+            {"target": "trois", "english": "three"},
+            {"target": "quelle heure est-il ?", "english": "what time is it?"},
+            {"target": "à sept heures", "english": "at seven o'clock"}
+          ],
+          "grammar": "Use il est plus hour for telling time: il est sept heures.",
+          "examples": [
+            {"target": "Il est sept heures.", "english": "It is seven o'clock."},
+            {"target": "Le cours est à deux heures.", "english": "The class is at two."},
+            {"target": "J'ai trois livres.", "english": "I have three books."}
+          ],
+          "answers": {"mc": "what time is it?", "fill_prompt": "Il est sept ___.", "fill": "heures", "open": "Il est sept heures.", "translation": "J'ai trois livres."},
+          "pronunciation_hints": ["Deux often sounds like duh before a consonant."],
+          "conversation": [{"topic": "numbers and time", "complexity": "beginner", "opening": "Quelle heure est-il maintenant ?", "support": "Try: Il est sept heures.", "keywords": ["heure", "heures", "un", "deux"]}]
+        },
+        "family": {
+          "title": "Family",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "ma mère", "english": "my mother"},
+            {"target": "mon père", "english": "my father"},
+            {"target": "mon frère", "english": "my brother"},
+            {"target": "ma sœur", "english": "my sister"},
+            {"target": "ma famille", "english": "my family"}
+          ],
+          "grammar": "Use mon with masculine nouns and ma with feminine nouns.",
+          "examples": [
+            {"target": "Ma mère habite à Paris.", "english": "My mother lives in Paris."},
+            {"target": "J'ai une sœur.", "english": "I have a sister."},
+            {"target": "Ma famille est petite.", "english": "My family is small."}
+          ],
+          "answers": {"mc": "my family", "fill_prompt": "Ma ___ est petite.", "fill": "famille", "open": "J'ai une sœur.", "translation": "Ma mère habite à Paris."},
+          "pronunciation_hints": ["Sœur has one rounded vowel; do not pronounce a final r strongly."],
+          "conversation": [{"topic": "family", "complexity": "beginner", "opening": "Parlons de ta famille. Tu as des frères ou des sœurs ?", "support": "Try: J'ai une sœur.", "keywords": ["famille", "frere", "soeur", "mere"]}]
+        },
+        "weather": {
+          "title": "Weather",
+          "focus_skill": "listening",
+          "vocabulary": [
+            {"target": "il fait beau", "english": "the weather is nice"},
+            {"target": "il fait froid", "english": "it is cold"},
+            {"target": "il fait chaud", "english": "it is hot"},
+            {"target": "il pleut", "english": "it is raining"},
+            {"target": "c'est nuageux", "english": "it is cloudy"}
+          ],
+          "grammar": "Use il fait with temperature and general weather; use il pleut for rain.",
+          "examples": [
+            {"target": "Aujourd'hui, il fait beau.", "english": "Today the weather is nice."},
+            {"target": "Le matin, il fait froid.", "english": "In the morning it is cold."},
+            {"target": "C'est nuageux, mais il ne pleut pas.", "english": "It is cloudy, but it is not raining."}
+          ],
+          "answers": {"mc": "the weather is nice", "fill_prompt": "Aujourd'hui, il ___ beau.", "fill": "fait", "open": "Aujourd'hui, il fait beau.", "translation": "C'est nuageux."},
+          "pronunciation_hints": ["In il fait, the final t is silent."],
+          "conversation": [{"topic": "weather", "complexity": "beginner", "opening": "Bonjour. Quel temps fait-il aujourd'hui ?", "support": "Model answer: Il fait beau.", "keywords": ["il fait", "beau", "pluie", "froid", "chaud"]}]
+        }
+      }
+    },
+    "A2": {
+      "topic_order": ["shopping", "directions_travel", "health_basics", "past_weekend", "work_basics"],
+      "default_topic": "shopping",
+      "conversation": [
+        {"topic": "daily routines", "complexity": "early conversation", "opening": "Raconte-moi : qu'est-ce que tu fais le matin ?", "support": "Try: Je me lève, je déjeune et j'étudie.", "keywords": ["leve", "dejeune", "travaille", "etudie", "matin"]},
+        {"topic": "past weekend", "complexity": "early conversation", "opening": "Parlons de ton week-end. Qu'est-ce que tu as fait hier ?", "support": "Try: Hier, je suis allé au marché.", "keywords": ["hier", "suis alle", "mange", "parle", "vu"]}
+      ],
+      "topics": {
+        "shopping": {
+          "title": "Shopping",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "combien ça coûte ?", "english": "how much does it cost?"},
+            {"target": "la taille", "english": "the size"},
+            {"target": "le prix", "english": "the price"},
+            {"target": "trop cher", "english": "too expensive"},
+            {"target": "je le prends", "english": "I will take it"}
+          ],
+          "grammar": "Use ce/cette before a noun you can point to: cette chemise, ce billet.",
+          "examples": [
+            {"target": "Combien coûte cette chemise ?", "english": "How much does this shirt cost?"},
+            {"target": "C'est trop cher pour moi.", "english": "It is too expensive for me."},
+            {"target": "Je le prends, merci.", "english": "I will take it, thank you."}
+          ],
+          "answers": {"mc": "how much does it cost?", "fill_prompt": "Combien ___ cette chemise ?", "fill": "coûte", "open": "Je le prends, merci.", "translation": "C'est trop cher pour moi."},
+          "pronunciation_hints": ["In combien, the en is nasal."],
+          "conversation": [{"topic": "shopping", "complexity": "early conversation", "opening": "Nous sommes dans un magasin. Qu'est-ce que tu veux acheter ?", "support": "Ask: Combien ça coûte ?", "keywords": ["combien", "coute", "prix", "cher"]}]
+        },
+        "directions_travel": {
+          "title": "Directions and travel",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "le billet", "english": "the ticket"},
+            {"target": "la gare", "english": "the station"},
+            {"target": "je vais voyager", "english": "I am going to travel"},
+            {"target": "l'hôtel", "english": "the hotel"},
+            {"target": "la valise", "english": "the suitcase"}
+          ],
+          "grammar": "Use je vais plus infinitive for near-future plans.",
+          "examples": [
+            {"target": "Je vais voyager demain.", "english": "I am going to travel tomorrow."},
+            {"target": "J'ai besoin d'un billet pour Lyon.", "english": "I need a ticket to Lyon."},
+            {"target": "Mon hôtel est près de la gare.", "english": "My hotel is near the station."}
+          ],
+          "answers": {"mc": "the ticket", "fill_prompt": "Je vais ___ demain.", "fill": "voyager", "open": "Je vais voyager demain.", "translation": "J'ai besoin d'un billet pour Lyon."},
+          "pronunciation_hints": ["Gare has an open a; the final e is silent."],
+          "conversation": [{"topic": "directions_travel", "complexity": "early conversation", "opening": "Tu voyages demain. Où vas-tu et comment ?", "support": "Use je vais plus infinitive.", "keywords": ["vais", "voyager", "billet", "gare"]}]
+        },
+        "health_basics": {
+          "title": "Health basics",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "j'ai mal", "english": "it hurts/I have pain"},
+            {"target": "la tête", "english": "the head"},
+            {"target": "j'ai de la fièvre", "english": "I have a fever"},
+            {"target": "j'ai besoin d'aide", "english": "I need help"},
+            {"target": "la pharmacie", "english": "the pharmacy"}
+          ],
+          "grammar": "Use j'ai mal à plus body part: j'ai mal à la tête.",
+          "examples": [
+            {"target": "J'ai mal à la tête.", "english": "My head hurts."},
+            {"target": "J'ai de la fièvre depuis hier.", "english": "I have had a fever since yesterday."},
+            {"target": "J'ai besoin d'aller à la pharmacie.", "english": "I need to go to the pharmacy."}
+          ],
+          "answers": {"mc": "it hurts/I have pain", "fill_prompt": "J'ai mal à la ___.", "fill": "tête", "open": "J'ai mal à la tête.", "translation": "J'ai besoin d'aide."},
+          "pronunciation_hints": ["Fièvre has two syllables: fyEVR."],
+          "conversation": [{"topic": "health basics", "complexity": "early conversation", "opening": "Tu ne te sens pas bien. Qu'est-ce qui ne va pas ?", "support": "Try: J'ai mal à la tête.", "keywords": ["mal", "tete", "fievre", "aide"]}]
+        },
+        "past_weekend": {
+          "title": "Past weekend",
+          "focus_skill": "conjugations",
+          "vocabulary": [
+            {"target": "le week-end", "english": "the weekend"},
+            {"target": "je suis sorti", "english": "I went out"},
+            {"target": "je me suis reposé", "english": "I rested"},
+            {"target": "j'ai rendu visite", "english": "I visited"},
+            {"target": "je me suis bien amusé", "english": "I had a good time"}
+          ],
+          "grammar": "Use passé composé to report finished weekend actions.",
+          "examples": [
+            {"target": "Samedi, j'ai rendu visite à ma famille.", "english": "On Saturday I visited my family."},
+            {"target": "Dimanche, je me suis reposé à la maison.", "english": "On Sunday I rested at home."},
+            {"target": "Je me suis bien amusé avec mes amis.", "english": "I had a good time with my friends."}
+          ],
+          "answers": {"mc": "the weekend", "fill_prompt": "Dimanche, je me suis ___ à la maison.", "fill": "reposé", "open": "Samedi, j'ai rendu visite à ma famille.", "translation": "Je me suis bien amusé avec mes amis."},
+          "pronunciation_hints": ["In reposé, final é sounds like ay."],
+          "conversation": [{"topic": "past weekend", "complexity": "early conversation", "opening": "Qu'est-ce que tu as fait le week-end dernier ?", "support": "Use a passé composé verb.", "keywords": ["weekend", "repose", "visite", "amis"]}]
+        },
+        "work_basics": {
+          "title": "Work basics",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "je travaille dans", "english": "I work in"},
+            {"target": "le bureau", "english": "the office"},
+            {"target": "la réunion", "english": "the meeting"},
+            {"target": "mon responsable", "english": "my manager"},
+            {"target": "le projet", "english": "the project"}
+          ],
+          "grammar": "Use je travaille dans for a field or place, and je travaille comme for a role.",
+          "examples": [
+            {"target": "Je travaille dans la technologie.", "english": "I work in technology."},
+            {"target": "J'ai une réunion à neuf heures.", "english": "I have a meeting at nine."},
+            {"target": "Mon projet est important.", "english": "My project is important."}
+          ],
+          "answers": {"mc": "I work in", "fill_prompt": "___ la technologie.", "fill": "Je travaille dans", "open": "J'ai une réunion à neuf heures.", "translation": "Mon projet est important."},
+          "pronunciation_hints": ["Réunion has three clear syllables: ré-u-nion."],
+          "conversation": [{"topic": "work basics", "complexity": "early conversation", "opening": "Parlons du travail. Dans quel domaine travailles-tu ?", "support": "Try: Je travaille dans la technologie.", "keywords": ["travaille", "bureau", "reunion", "projet"]}]
+        }
+      }
+    },
+    "B1": {
+      "topic_order": ["opinions", "storytelling", "future_plans"],
+      "default_topic": "opinions",
+      "topics": {},
+      "conversation": [
+        {"topic": "opinions", "complexity": "intermediate", "opening": "Donne-moi ton avis : tu préfères apprendre avec des vidéos, de la musique ou des conversations ? Pourquoi ?", "support": "Use je pense que plus parce que.", "keywords": ["pense", "prefere", "parce", "avis"]},
+        {"topic": "storytelling", "complexity": "intermediate", "opening": "Raconte une petite histoire sur un moment où tu as appris quelque chose.", "support": "Use au début, ensuite, and finalement.", "keywords": ["debut", "ensuite", "finalement", "appris"]},
+        {"topic": "future_plans", "complexity": "intermediate", "opening": "Quels sont tes objectifs pour l'année prochaine ?", "support": "Use je vais, j'aimerais, or je voudrais.", "keywords": ["objectif", "annee", "vais", "voudrais"]}
+      ]
+    }
+  },
+  "generic": {
+    "title": "Generic French practice",
+    "focus_skill": "vocabulary",
+    "vocabulary": [
+      {"target": "bonjour", "english": "hello"},
+      {"target": "je m'appelle", "english": "my name is"},
+      {"target": "j'aime", "english": "I like"},
+      {"target": "l'eau", "english": "water"},
+      {"target": "aujourd'hui", "english": "today"}
+    ],
+    "grammar": "Practice short French phrases with simple present-tense frames.",
+    "examples": [
+      {"target": "Bonjour, je m'appelle Johan.", "english": "Hello, my name is Johan."},
+      {"target": "J'aime l'eau.", "english": "I like water."},
+      {"target": "Aujourd'hui, je pratique.", "english": "Today I practice."}
+    ],
+    "answers": {"mc": "hello", "fill_prompt": "___, je m'appelle Johan.", "fill": "Bonjour", "open": "J'aime l'eau.", "translation": "Aujourd'hui, je pratique."},
+    "conversation": []
+  }
+}

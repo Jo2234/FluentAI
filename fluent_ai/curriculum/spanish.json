@@ -1,0 +1,513 @@
+{
+  "language": "Spanish",
+  "schema_version": 1,
+  "levels": {
+    "A1": {
+      "topic_order": ["introductions", "cafe orders", "daily routines", "past tense", "conjugations", "vocabulary", "likes_food", "numbers_time", "family", "weather"],
+      "default_topic": "introductions",
+      "conversation": [
+        {"topic": "introductions", "complexity": "beginner", "opening": "Hola, yo empiezo. ¿Como te llamas?", "support": "Model answer: Me llamo Ana.", "keywords": ["me", "llamo", "soy"]},
+        {"topic": "weather", "complexity": "beginner", "opening": "Hola. ¿Que tiempo hace hoy?", "support": "Model answer: Hace sol.", "keywords": ["hace", "sol", "llueve", "frio", "calor"]},
+        {"topic": "likes and food", "complexity": "beginner", "opening": "Hola. A mi me gustan las manzanas. ¿Te gustan las manzanas?", "support": "Model answer: Si, me gustan las manzanas.", "keywords": ["me", "gusta", "gustan", "manzana", "si", "no"]}
+      ],
+      "topics": {
+        "introductions": {
+          "title": "Greetings and introductions",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "me llamo", "english": "my name is"},
+            {"target": "soy de", "english": "I am from"},
+            {"target": "encantado", "english": "delighted"},
+            {"target": "mucho gusto", "english": "nice to meet you"},
+            {"target": "a que te dedicas", "english": "what do you do"}
+          ],
+          "grammar": "Use 'ser' for identity and origin: 'Soy Ana' and 'Soy de Singapur.'",
+          "examples": [
+            {"target": "Me llamo Ana.", "english": "My name is Ana."},
+            {"target": "Soy de Singapur.", "english": "I am from Singapore."},
+            {"target": "Mucho gusto.", "english": "Nice to meet you."}
+          ],
+          "answers": {"mc": "Nice to meet you.", "fill_prompt": "___ de Singapur.", "fill": "Soy", "open": "Me llamo Ana.", "translation": "Soy de Singapur."},
+          "conversation": [{"topic": "introductions", "complexity": "beginner", "opening": "Hola, yo empiezo. ¿Como te llamas?", "support": "Model answer: Me llamo Ana.", "keywords": ["me", "llamo", "soy"]}]
+        },
+        "cafe orders": {
+          "title": "Cafe orders",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "quisiera", "english": "I would like"},
+            {"target": "un cafe", "english": "a coffee"},
+            {"target": "un te", "english": "a tea"},
+            {"target": "la cuenta", "english": "the bill"},
+            {"target": "por favor", "english": "please"}
+          ],
+          "grammar": "Use 'Quisiera...' for a polite request. Put 'por favor' at the end to soften the order.",
+          "examples": [
+            {"target": "Quisiera un cafe, por favor.", "english": "I would like a coffee, please."},
+            {"target": "La cuenta, por favor.", "english": "The bill, please."},
+            {"target": "Me gustaria un te.", "english": "I would like a tea."}
+          ],
+          "answers": {"mc": "the bill", "fill_prompt": "___ un cafe, por favor.", "fill": "Quisiera", "open": "Quisiera un cafe, por favor.", "translation": "Un te, por favor."},
+          "conversation": [{"topic": "cafe orders", "complexity": "beginner", "opening": "Quiero pedir algo. ¿Qué quieres tomar?", "support": "Try: Quisiera un café, por favor.", "keywords": ["quisiera", "cafe", "te", "cuenta"]}]
+        },
+        "daily routines": {
+          "title": "Daily routines",
+          "focus_skill": "grammar",
+          "vocabulary": [
+            {"target": "me levanto", "english": "I get up"},
+            {"target": "trabajo", "english": "I work"},
+            {"target": "estudio", "english": "I study"},
+            {"target": "todos los dias", "english": "every day"},
+            {"target": "por la manana", "english": "in the morning"}
+          ],
+          "grammar": "For daily routines, use present-tense verbs with time phrases: 'Estudio por la noche.'",
+          "examples": [
+            {"target": "Me levanto a las siete.", "english": "I get up at seven."},
+            {"target": "Trabajo todos los dias.", "english": "I work every day."},
+            {"target": "Estudio por la noche.", "english": "I study at night."}
+          ],
+          "answers": {"mc": "in the morning", "fill_prompt": "___ por la noche.", "fill": "Estudio", "open": "Trabajo todos los dias.", "translation": "Me levanto a las siete."},
+          "conversation": [{"topic": "daily routines", "complexity": "early conversation", "opening": "Cuéntame: ¿que haces normalmente por la mañana?", "support": "Try: Me levanto, desayuno y estudio.", "keywords": ["levanto", "desayuno", "trabajo", "estudio", "manana"]}]
+        },
+        "past tense": {
+          "title": "Past tense",
+          "focus_skill": "conjugations",
+          "vocabulary": [
+            {"target": "ayer", "english": "yesterday"},
+            {"target": "fui", "english": "I went"},
+            {"target": "comi", "english": "I ate"},
+            {"target": "hable", "english": "I spoke"},
+            {"target": "vi", "english": "I saw"}
+          ],
+          "grammar": "For completed past actions, use the preterite: 'hable', 'comi', 'fui', and 'vi.'",
+          "examples": [
+            {"target": "Ayer fui al mercado.", "english": "Yesterday I went to the market."},
+            {"target": "Comi con mi familia.", "english": "I ate with my family."},
+            {"target": "Hable con mi amigo.", "english": "I spoke with my friend."}
+          ],
+          "answers": {"mc": "yesterday", "fill_prompt": "Ayer ___ al mercado.", "fill": "fui", "open": "Ayer fui al mercado.", "translation": "Hable con mi amigo."},
+          "conversation": [{"topic": "past weekend", "complexity": "early conversation", "opening": "Yo quiero saber de tu fin de semana. ¿Que hiciste ayer?", "support": "Try: Ayer fui al mercado.", "keywords": ["ayer", "fui", "comi", "hable", "vi"]}]
+        },
+        "conjugations": {
+          "title": "Regular -ar conjugations",
+          "focus_skill": "conjugations",
+          "vocabulary": [
+            {"target": "yo hablo", "english": "I speak"},
+            {"target": "tu hablas", "english": "you speak"},
+            {"target": "ella habla", "english": "she speaks"},
+            {"target": "nosotros hablamos", "english": "we speak"},
+            {"target": "ellos hablan", "english": "they speak"}
+          ],
+          "grammar": "Regular -ar verbs change endings by subject: hablo, hablas, habla, hablamos, hablan.",
+          "examples": [
+            {"target": "Yo hablo espanol.", "english": "I speak Spanish."},
+            {"target": "Ella habla ingles.", "english": "She speaks English."},
+            {"target": "Nosotros hablamos cada dia.", "english": "We speak every day."}
+          ],
+          "answers": {"mc": "I speak", "fill_prompt": "Yo ___ espanol.", "fill": "hablo", "open": "Yo hablo espanol.", "translation": "Ella habla ingles."},
+          "conversation": [{"topic": "conjugations", "complexity": "beginner", "opening": "Practiquemos verbos: yo hablo español. ¿Qué hablas tú?", "support": "Use: Yo hablo...", "keywords": ["hablo", "hablas", "habla"]}]
+        },
+        "vocabulary": {
+          "title": "Core vocabulary",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "casa", "english": "house"},
+            {"target": "trabajo", "english": "work"},
+            {"target": "comida", "english": "food"},
+            {"target": "tiempo", "english": "time"},
+            {"target": "amigo", "english": "friend"}
+          ],
+          "grammar": "Pair new nouns with short sentences so vocabulary is learned in context.",
+          "examples": [
+            {"target": "Mi casa es pequena.", "english": "My house is small."},
+            {"target": "Tengo trabajo hoy.", "english": "I have work today."},
+            {"target": "Mi amigo come comida rica.", "english": "My friend eats tasty food."}
+          ],
+          "answers": {"mc": "friend", "fill_prompt": "Mi ___ es pequena.", "fill": "casa", "open": "Mi amigo come comida rica.", "translation": "Tengo trabajo hoy."},
+          "conversation": [{"topic": "likes and food", "complexity": "beginner", "opening": "Hola. A mi me gustan las manzanas. ¿Te gustan las manzanas?", "support": "Model answer: Si, me gustan las manzanas.", "keywords": ["me", "gusta", "gustan", "manzana", "si", "no"]}]
+        },
+        "likes_food": {
+          "title": "Likes and food",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "me gusta", "english": "I like"},
+            {"target": "me gustan", "english": "I like plural things"},
+            {"target": "la manzana", "english": "the apple"},
+            {"target": "el arroz", "english": "the rice"},
+            {"target": "no me gusta", "english": "I do not like"}
+          ],
+          "grammar": "Use me gusta before one thing or an infinitive, and me gustan before plural nouns.",
+          "examples": [
+            {"target": "Me gusta el café.", "english": "I like coffee."},
+            {"target": "Me gustan las manzanas.", "english": "I like apples."},
+            {"target": "No me gusta el té.", "english": "I do not like tea."}
+          ],
+          "answers": {"mc": "I like", "fill_prompt": "___ el café.", "fill": "Me gusta", "open": "Me gustan las manzanas.", "translation": "No me gusta el té."},
+          "pronunciation_hints": ["In gusta, keep the u sound hard: GOOS-ta."],
+          "cultural_note": "In many cafés, a simple por favor and gracias goes a long way.",
+          "conversation": [{"topic": "likes and food", "complexity": "beginner", "opening": "A mí me gusta el café. ¿Qué comida te gusta?", "support": "Try: Me gusta el arroz.", "keywords": ["gusta", "gustan", "comida", "cafe"]}]
+        },
+        "numbers_time": {
+          "title": "Numbers and time",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "uno", "english": "one"},
+            {"target": "dos", "english": "two"},
+            {"target": "tres", "english": "three"},
+            {"target": "¿Qué hora es?", "english": "What time is it?"},
+            {"target": "a las siete", "english": "at seven"}
+          ],
+          "grammar": "Use es la una for one o'clock and son las for other hours.",
+          "examples": [
+            {"target": "Son las siete.", "english": "It is seven o'clock."},
+            {"target": "La clase es a las dos.", "english": "The class is at two."},
+            {"target": "Tengo tres libros.", "english": "I have three books."}
+          ],
+          "answers": {"mc": "What time is it?", "fill_prompt": "La clase es ___ dos.", "fill": "a las", "open": "Son las siete.", "translation": "Tengo tres libros."},
+          "pronunciation_hints": ["In hora, the h is silent."],
+          "conversation": [{"topic": "numbers and time", "complexity": "beginner", "opening": "Practiquemos la hora. ¿Qué hora es ahora?", "support": "Try: Son las siete.", "keywords": ["hora", "son", "las", "uno", "dos"]}]
+        },
+        "family": {
+          "title": "Family",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "mi madre", "english": "my mother"},
+            {"target": "mi padre", "english": "my father"},
+            {"target": "mi hermano", "english": "my brother"},
+            {"target": "mi hermana", "english": "my sister"},
+            {"target": "mi familia", "english": "my family"}
+          ],
+          "grammar": "Use mi before a singular family member and mis before plural family members.",
+          "examples": [
+            {"target": "Mi madre vive en Madrid.", "english": "My mother lives in Madrid."},
+            {"target": "Tengo una hermana.", "english": "I have a sister."},
+            {"target": "Mi familia es pequeña.", "english": "My family is small."}
+          ],
+          "answers": {"mc": "my family", "fill_prompt": "___ familia es pequeña.", "fill": "Mi", "open": "Tengo una hermana.", "translation": "Mi madre vive en Madrid."},
+          "pronunciation_hints": ["The ñ in pequeña sounds like ny in canyon."],
+          "conversation": [{"topic": "family", "complexity": "beginner", "opening": "Hablemos de familia. ¿Tienes hermanos?", "support": "Try: Tengo una hermana.", "keywords": ["familia", "tengo", "hermano", "madre"]}]
+        },
+        "weather": {
+          "title": "Weather",
+          "focus_skill": "listening",
+          "vocabulary": [
+            {"target": "hace sol", "english": "it is sunny"},
+            {"target": "hace frío", "english": "it is cold"},
+            {"target": "hace calor", "english": "it is hot"},
+            {"target": "llueve", "english": "it is raining"},
+            {"target": "está nublado", "english": "it is cloudy"}
+          ],
+          "grammar": "Use hace with sol, frío, and calor; use llueve as a complete verb for rain.",
+          "examples": [
+            {"target": "Hoy hace sol.", "english": "Today it is sunny."},
+            {"target": "En la mañana hace frío.", "english": "In the morning it is cold."},
+            {"target": "Está nublado, pero no llueve.", "english": "It is cloudy, but it is not raining."}
+          ],
+          "answers": {"mc": "it is sunny", "fill_prompt": "Hoy ___ sol.", "fill": "hace", "open": "Hoy hace sol.", "translation": "Está nublado."},
+          "pronunciation_hints": ["The ll in llueve often sounds like y."],
+          "conversation": [{"topic": "weather", "complexity": "beginner", "opening": "Hola. ¿Que tiempo hace hoy?", "support": "Model answer: Hace sol.", "keywords": ["hace", "sol", "llueve", "frio", "calor"]}]
+        }
+      }
+    },
+    "A2": {
+      "topic_order": ["past tense", "shopping", "travel plans", "health symptoms", "object pronouns", "past_weekend", "work_basics", "core_vocabulary"],
+      "default_topic": "past tense",
+      "conversation": [
+        {"topic": "daily routines", "complexity": "early conversation", "opening": "Cuéntame: ¿que haces normalmente por la mañana?", "support": "Try: Me levanto, desayuno y estudio.", "keywords": ["levanto", "desayuno", "trabajo", "estudio", "manana"]},
+        {"topic": "past weekend", "complexity": "early conversation", "opening": "Yo quiero saber de tu fin de semana. ¿Que hiciste ayer?", "support": "Try: Ayer fui al mercado.", "keywords": ["ayer", "fui", "comi", "hable", "vi"]}
+      ],
+      "topics": {
+        "shopping": {
+          "title": "Shopping",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "¿Cuánto cuesta?", "english": "How much does it cost?"},
+            {"target": "la talla", "english": "the size"},
+            {"target": "el precio", "english": "the price"},
+            {"target": "demasiado caro", "english": "too expensive"},
+            {"target": "me lo llevo", "english": "I will take it"}
+          ],
+          "grammar": "Use cuesta for one item and cuestan for plural items.",
+          "examples": [
+            {"target": "¿Cuánto cuesta esta camisa?", "english": "How much does this shirt cost?"},
+            {"target": "Es demasiado caro para mí.", "english": "It is too expensive for me."},
+            {"target": "Me lo llevo, gracias.", "english": "I will take it, thank you."}
+          ],
+          "answers": {"mc": "How much does it cost?", "fill_prompt": "¿Cuánto ___ esta camisa?", "fill": "cuesta", "open": "Me lo llevo, gracias.", "translation": "Es demasiado caro para mí."},
+          "pronunciation_hints": ["Cuánto has stress on the first syllable: CUÁN-to."],
+          "conversation": [{"topic": "shopping", "complexity": "early conversation", "opening": "Estamos en una tienda. ¿Qué quieres comprar?", "support": "Ask the price with ¿Cuánto cuesta?", "keywords": ["cuanto", "cuesta", "precio", "caro"]}]
+        },
+        "travel plans": {
+          "title": "Travel plans",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "el billete", "english": "the ticket"},
+            {"target": "la estación", "english": "the station"},
+            {"target": "voy a viajar", "english": "I am going to travel"},
+            {"target": "el hotel", "english": "the hotel"},
+            {"target": "la maleta", "english": "the suitcase"}
+          ],
+          "grammar": "Use ir a plus infinitive for near-future plans: voy a viajar.",
+          "examples": [
+            {"target": "Voy a viajar mañana.", "english": "I am going to travel tomorrow."},
+            {"target": "Necesito un billete a Madrid.", "english": "I need a ticket to Madrid."},
+            {"target": "Mi hotel está cerca de la estación.", "english": "My hotel is near the station."}
+          ],
+          "answers": {"mc": "the ticket", "fill_prompt": "Voy a ___ mañana.", "fill": "viajar", "open": "Voy a viajar mañana.", "translation": "Necesito un billete a Madrid."},
+          "pronunciation_hints": ["In estación, stress the final syllable: es-ta-CIÓN."],
+          "conversation": [{"topic": "travel plans", "complexity": "early conversation", "opening": "Cuéntame tu plan de viaje. ¿Adónde vas?", "support": "Use voy a plus a place or verb.", "keywords": ["voy", "viajar", "billete", "hotel"]}]
+        },
+        "health symptoms": {
+          "title": "Health basics",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "me duele", "english": "it hurts"},
+            {"target": "la cabeza", "english": "the head"},
+            {"target": "tengo fiebre", "english": "I have a fever"},
+            {"target": "necesito ayuda", "english": "I need help"},
+            {"target": "la farmacia", "english": "the pharmacy"}
+          ],
+          "grammar": "Use me duele with one body part and me duelen with plural body parts.",
+          "examples": [
+            {"target": "Me duele la cabeza.", "english": "My head hurts."},
+            {"target": "Tengo fiebre desde ayer.", "english": "I have had a fever since yesterday."},
+            {"target": "Necesito ir a la farmacia.", "english": "I need to go to the pharmacy."}
+          ],
+          "answers": {"mc": "it hurts", "fill_prompt": "___ duele la cabeza.", "fill": "Me", "open": "Me duele la cabeza.", "translation": "Necesito ayuda."},
+          "pronunciation_hints": ["Duele is two syllables: DUE-le."],
+          "conversation": [{"topic": "health basics", "complexity": "early conversation", "opening": "No te sientes bien. ¿Qué te duele?", "support": "Try: Me duele la cabeza.", "keywords": ["duele", "cabeza", "fiebre", "ayuda"]}]
+        },
+        "object pronouns": {
+          "title": "Object pronouns",
+          "focus_skill": "grammar",
+          "vocabulary": [
+            {"target": "lo", "english": "it/him"},
+            {"target": "la", "english": "it/her"},
+            {"target": "los", "english": "them masculine"},
+            {"target": "las", "english": "them feminine"},
+            {"target": "lo necesito", "english": "I need it"}
+          ],
+          "grammar": "Place direct object pronouns before a conjugated verb: lo necesito.",
+          "examples": [
+            {"target": "Lo necesito hoy.", "english": "I need it today."},
+            {"target": "La compro mañana.", "english": "I will buy it tomorrow."},
+            {"target": "Los veo en la mesa.", "english": "I see them on the table."}
+          ],
+          "answers": {"mc": "it/him", "fill_prompt": "___ necesito hoy.", "fill": "Lo", "open": "Lo necesito hoy.", "translation": "La compro mañana."},
+          "pronunciation_hints": ["Keep lo short and unstressed before the verb."],
+          "conversation": [{"topic": "object pronouns", "complexity": "early conversation", "opening": "Si tienes el billete, ¿lo necesitas ahora?", "support": "Answer with lo or la before the verb.", "keywords": ["lo", "la", "necesito", "compro"]}]
+        },
+        "past_weekend": {
+          "title": "Past weekend",
+          "focus_skill": "conjugations",
+          "vocabulary": [
+            {"target": "el fin de semana", "english": "the weekend"},
+            {"target": "salí", "english": "I went out"},
+            {"target": "descansé", "english": "I rested"},
+            {"target": "visité", "english": "I visited"},
+            {"target": "lo pasé bien", "english": "I had a good time"}
+          ],
+          "grammar": "Use the preterite for finished weekend actions: salí, visité, descansé.",
+          "examples": [
+            {"target": "El sábado visité a mi familia.", "english": "On Saturday I visited my family."},
+            {"target": "El domingo descansé en casa.", "english": "On Sunday I rested at home."},
+            {"target": "Lo pasé bien con mis amigos.", "english": "I had a good time with my friends."}
+          ],
+          "answers": {"mc": "the weekend", "fill_prompt": "El domingo ___ en casa.", "fill": "descansé", "open": "El sábado visité a mi familia.", "translation": "Lo pasé bien con mis amigos."},
+          "pronunciation_hints": ["The accent in descansé marks final stress."],
+          "conversation": [{"topic": "past weekend", "complexity": "early conversation", "opening": "¿Qué hiciste el fin de semana pasado?", "support": "Use one preterite verb like visité or descansé.", "keywords": ["fin", "semana", "visite", "descanse"]}]
+        },
+        "work_basics": {
+          "title": "Work basics",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "trabajo en", "english": "I work in"},
+            {"target": "la oficina", "english": "the office"},
+            {"target": "la reunión", "english": "the meeting"},
+            {"target": "mi jefe", "english": "my boss"},
+            {"target": "el proyecto", "english": "the project"}
+          ],
+          "grammar": "Use trabajo en for field or place, and trabajo como for role.",
+          "examples": [
+            {"target": "Trabajo en tecnología.", "english": "I work in technology."},
+            {"target": "Tengo una reunión a las nueve.", "english": "I have a meeting at nine."},
+            {"target": "Mi proyecto es importante.", "english": "My project is important."}
+          ],
+          "answers": {"mc": "I work in", "fill_prompt": "___ tecnología.", "fill": "Trabajo en", "open": "Tengo una reunión a las nueve.", "translation": "Mi proyecto es importante."},
+          "pronunciation_hints": ["Reunión has stress at the end: re-u-NIÓN."],
+          "conversation": [{"topic": "work basics", "complexity": "early conversation", "opening": "Hablemos del trabajo. ¿En qué trabajas?", "support": "Try: Trabajo en tecnología.", "keywords": ["trabajo", "oficina", "reunion", "proyecto"]}]
+        },
+        "core_vocabulary": {
+          "title": "Core A2 vocabulary",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "todavía", "english": "still/yet"},
+            {"target": "siempre", "english": "always"},
+            {"target": "a veces", "english": "sometimes"},
+            {"target": "casi", "english": "almost"},
+            {"target": "bastante", "english": "quite/enough"}
+          ],
+          "grammar": "Place frequency words near the verb: siempre estudio, a veces trabajo tarde.",
+          "examples": [
+            {"target": "Todavía estudio español.", "english": "I still study Spanish."},
+            {"target": "A veces trabajo tarde.", "english": "Sometimes I work late."},
+            {"target": "Casi siempre desayuno en casa.", "english": "I almost always eat breakfast at home."}
+          ],
+          "answers": {"mc": "still/yet", "fill_prompt": "___ estudio español.", "fill": "Todavía", "open": "A veces trabajo tarde.", "translation": "Casi siempre desayuno en casa."},
+          "pronunciation_hints": ["Todavía has stress on dí."],
+          "conversation": [{"topic": "core vocabulary", "complexity": "early conversation", "opening": "Usa una palabra de frecuencia. ¿Siempre estudias por la mañana?", "support": "Try: A veces estudio por la noche.", "keywords": ["siempre", "veces", "todavia", "casi"]}]
+        }
+      }
+    },
+    "B1": {
+      "topic_order": ["opinions", "workplace situations", "news summaries", "storytelling", "future plans"],
+      "default_topic": "opinions",
+      "conversation": [
+        {"topic": "opinions", "complexity": "intermediate", "opening": "Empecemos con una opinion. ¿Prefieres aprender con musica, videos o conversaciones? ¿Por que?", "support": "Give a reason with porque.", "keywords": ["prefiero", "porque", "creo", "conversaciones", "videos"]},
+        {"topic": "work and goals", "complexity": "intermediate", "opening": "Hablemos de metas. ¿Como te ayuda el español en tu trabajo o en tu vida?", "support": "Try to connect your answer to a goal.", "keywords": ["ayuda", "trabajo", "vida", "meta", "quiero"]}
+      ],
+      "topics": {
+        "opinions": {
+          "title": "Giving opinions with reasons",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "creo que", "english": "I think that"},
+            {"target": "desde mi punto de vista", "english": "from my point of view"},
+            {"target": "por un lado", "english": "on one hand"},
+            {"target": "sin embargo", "english": "however"},
+            {"target": "vale la pena", "english": "it is worth it"}
+          ],
+          "grammar": "Use creo que plus an indicative verb for a clear opinion, then add porque plus one concrete reason.",
+          "examples": [
+            {"target": "Creo que las conversaciones ayudan mucho porque son reales.", "english": "I think conversations help a lot because they are real."},
+            {"target": "Desde mi punto de vista, vale la pena practicar todos los días.", "english": "From my point of view, it is worth practicing every day."},
+            {"target": "Por un lado es difícil; sin embargo, aprendo más rápido.", "english": "On one hand it is difficult; however, I learn faster."}
+          ],
+          "answers": {"mc": "I think that", "fill_prompt": "___ las conversaciones ayudan mucho.", "fill": "Creo que", "open": "Creo que practicar todos los días ayuda mucho.", "translation": "Desde mi punto de vista, vale la pena practicar."},
+          "pronunciation_hints": ["Keep que short: keh, not kway.", "In rápido, stress the first syllable."],
+          "cultural_note": "Softening an opinion with creo que often sounds more conversational than a blunt statement.",
+          "conversation": [{"topic": "opinions", "complexity": "intermediate", "opening": "Empecemos con una opinion. ¿Prefieres aprender con musica, videos o conversaciones? ¿Por que?", "support": "Give a reason with porque.", "keywords": ["prefiero", "porque", "creo", "conversaciones", "videos"]}]
+        },
+        "workplace situations": {
+          "title": "Workplace situations",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "la fecha límite", "english": "the deadline"},
+            {"target": "el equipo", "english": "the team"},
+            {"target": "resolver un problema", "english": "to solve a problem"},
+            {"target": "necesitamos priorizar", "english": "we need to prioritize"},
+            {"target": "la propuesta", "english": "the proposal"}
+          ],
+          "grammar": "Use necesitamos plus infinitive to make collaborative workplace suggestions.",
+          "examples": [
+            {"target": "Necesitamos priorizar la fecha límite.", "english": "We need to prioritize the deadline."},
+            {"target": "El equipo puede resolver el problema.", "english": "The team can solve the problem."},
+            {"target": "Voy a revisar la propuesta.", "english": "I am going to review the proposal."}
+          ],
+          "answers": {"mc": "the deadline", "fill_prompt": "Necesitamos ___ la fecha límite.", "fill": "priorizar", "open": "Voy a revisar la propuesta.", "translation": "El equipo puede resolver el problema."},
+          "pronunciation_hints": ["Límite has stress on lí."],
+          "conversation": [{"topic": "work and goals", "complexity": "intermediate", "opening": "Hablemos de metas. ¿Como te ayuda el español en tu trabajo o en tu vida?", "support": "Try to connect your answer to a goal.", "keywords": ["ayuda", "trabajo", "vida", "meta", "quiero"]}]
+        },
+        "news summaries": {
+          "title": "News summaries",
+          "focus_skill": "reading",
+          "vocabulary": [
+            {"target": "según el artículo", "english": "according to the article"},
+            {"target": "la fuente", "english": "the source"},
+            {"target": "el titular", "english": "the headline"},
+            {"target": "aumentó", "english": "increased"},
+            {"target": "disminuyó", "english": "decreased"}
+          ],
+          "grammar": "Summarize with según plus source, then one past-tense reporting verb.",
+          "examples": [
+            {"target": "Según el artículo, el precio aumentó.", "english": "According to the article, the price increased."},
+            {"target": "El titular resume el problema principal.", "english": "The headline summarizes the main problem."},
+            {"target": "La fuente dijo que la demanda disminuyó.", "english": "The source said demand decreased."}
+          ],
+          "answers": {"mc": "according to the article", "fill_prompt": "___, el precio aumentó.", "fill": "Según el artículo", "open": "El titular resume el problema principal.", "translation": "La fuente dijo que la demanda disminuyó."},
+          "pronunciation_hints": ["Según has stress on the final syllable."],
+          "conversation": [{"topic": "news summaries", "complexity": "intermediate", "opening": "Resume una noticia reciente en dos frases. ¿Cuál fue el punto principal?", "support": "Use según el artículo or el titular.", "keywords": ["segun", "articulo", "titular", "fuente"]}]
+        },
+        "storytelling": {
+          "title": "Storytelling",
+          "focus_skill": "grammar",
+          "vocabulary": [
+            {"target": "al principio", "english": "at the beginning"},
+            {"target": "después", "english": "afterwards"},
+            {"target": "de repente", "english": "suddenly"},
+            {"target": "al final", "english": "in the end"},
+            {"target": "me di cuenta de que", "english": "I realized that"}
+          ],
+          "grammar": "Use sequence markers to connect events in a short past-tense story.",
+          "examples": [
+            {"target": "Al principio estaba nervioso.", "english": "At the beginning I was nervous."},
+            {"target": "De repente, me di cuenta de que podía hablar.", "english": "Suddenly, I realized I could speak."},
+            {"target": "Al final, la conversación salió bien.", "english": "In the end, the conversation went well."}
+          ],
+          "answers": {"mc": "at the beginning", "fill_prompt": "___ estaba nervioso.", "fill": "Al principio", "open": "Al final, la conversación salió bien.", "translation": "De repente, me di cuenta de que podía hablar."},
+          "pronunciation_hints": ["Después has stress on the final syllable."],
+          "conversation": [{"topic": "storytelling", "complexity": "intermediate", "opening": "Cuéntame una historia corta de un momento difícil que terminó bien.", "support": "Use al principio, después, and al final.", "keywords": ["principio", "despues", "final", "repente"]}]
+        },
+        "future plans": {
+          "title": "Future plans",
+          "focus_skill": "grammar",
+          "vocabulary": [
+            {"target": "tendré", "english": "I will have"},
+            {"target": "haré", "english": "I will do/make"},
+            {"target": "me gustaría", "english": "I would like"},
+            {"target": "espero que", "english": "I hope that"},
+            {"target": "el próximo año", "english": "next year"}
+          ],
+          "grammar": "Use future forms for firm plans and me gustaría for softer goals.",
+          "examples": [
+            {"target": "El próximo año tendré más tiempo para viajar.", "english": "Next year I will have more time to travel."},
+            {"target": "Me gustaría hablar español con más confianza.", "english": "I would like to speak Spanish with more confidence."},
+            {"target": "Haré un plan de práctica semanal.", "english": "I will make a weekly practice plan."}
+          ],
+          "answers": {"mc": "I will have", "fill_prompt": "El próximo año ___ más tiempo.", "fill": "tendré", "open": "Me gustaría hablar español con más confianza.", "translation": "Haré un plan de práctica semanal."},
+          "pronunciation_hints": ["Tendré and haré both stress the final syllable."],
+          "conversation": [{"topic": "future plans", "complexity": "intermediate", "opening": "Hablemos del futuro. ¿Qué harás el próximo año para mejorar tu español?", "support": "Use haré, tendré, or me gustaría.", "keywords": ["hare", "tendre", "gustaria", "proximo"]}]
+        }
+      }
+    },
+    "B2": {
+      "topic_order": ["debate", "professional goals", "culture", "problem solving", "hypotheticals"],
+      "default_topic": "debate",
+      "topics": {},
+      "conversation": [
+        {"topic": "environment", "complexity": "upper-intermediate", "opening": "Quiero debatir contigo: ¿cual es el problema ambiental mas importante en tu ciudad?", "support": "Use opinion plus evidence.", "keywords": ["ambiental", "ciudad", "problema", "contaminacion", "energia"]},
+        {"topic": "culture", "complexity": "upper-intermediate", "opening": "Hablemos de cultura. ¿Que costumbre de tu pais seria dificil explicar a un extranjero?", "support": "Use examples and comparison.", "keywords": ["cultura", "costumbre", "pais", "comparado", "extranjero"]}
+      ]
+    },
+    "C1": {
+      "topic_order": ["nuance", "persuasion", "academic discussion", "idioms", "register"],
+      "default_topic": "nuance",
+      "topics": {},
+      "conversation": [{"topic": "politics and civic life", "complexity": "advanced", "opening": "Analicemos una idea: ¿deberian los gobiernos regular mas la inteligencia artificial?", "support": "Balance two sides of the argument.", "keywords": ["gobierno", "regular", "inteligencia", "artificial", "riesgo", "beneficio"]}]
+    },
+    "C2": {
+      "topic_order": ["subtle humor", "literary analysis", "specialized vocabulary", "rhetoric", "native-speed synthesis"],
+      "default_topic": "subtle humor",
+      "topics": {},
+      "conversation": [{"topic": "environmental policy", "complexity": "near-native", "opening": "Defiende una postura matizada: ¿como equilibrarias crecimiento economico y proteccion ambiental?", "support": "Use nuance, concession, and a concrete policy example.", "keywords": ["economico", "ambiental", "matiz", "politica", "equilibrio"]}]
+    }
+  },
+  "generic": {
+    "title": "Generic Spanish practice",
+    "focus_skill": "vocabulary",
+    "vocabulary": [
+      {"target": "frase útil", "english": "useful phrase"},
+      {"target": "práctica", "english": "practice"},
+      {"target": "respuesta", "english": "answer"},
+      {"target": "objetivo", "english": "goal"},
+      {"target": "progreso", "english": "progress"}
+    ],
+    "grammar": "Practice Spanish with one useful phrase and one short response.",
+    "examples": [
+      {"target": "Esta es una frase útil.", "english": "This is a useful phrase."},
+      {"target": "Mi objetivo es practicar.", "english": "My goal is to practice."},
+      {"target": "Veo mi progreso.", "english": "I see my progress."}
+    ],
+    "answers": {"mc": "useful phrase", "fill_prompt": "___ es una frase útil.", "fill": "Esta", "open": "Esta es una frase útil.", "translation": "Mi objetivo es practicar."},
+    "conversation": []
+  }
+}

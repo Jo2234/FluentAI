@@ -11,6 +11,8 @@ datas = []
 binaries = []
 hiddenimports = []
 
+datas.append((str(ROOT / "fluent_ai" / "curriculum"), "fluent_ai/curriculum"))
+
 
 def add_collect_all(package):
     package_datas, package_binaries, package_hiddenimports = collect_all(package, include_py_files=False)

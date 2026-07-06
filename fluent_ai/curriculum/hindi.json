@@ -1,0 +1,357 @@
+{
+  "language": "Hindi",
+  "schema_version": 1,
+  "levels": {
+    "A1": {
+      "topic_order": ["introductions", "cafe_orders", "daily_routines", "past_tense", "conjugations", "core_vocabulary", "likes_food", "numbers_time", "family", "weather"],
+      "default_topic": "introductions",
+      "conversation": [
+        {"topic": "introductions", "complexity": "beginner", "opening": "नमस्ते, मैं शुरू करता हूँ। आपका नाम क्या है?", "support": "Model answer: मेरा नाम आना है।", "keywords": ["मेरा", "नाम", "है"]},
+        {"topic": "weather", "complexity": "beginner", "opening": "नमस्ते। आज मौसम कैसा है?", "support": "Model answer: आज धूप है।", "keywords": ["आज", "धूप", "बारिश", "ठंड", "गर्मी"]},
+        {"topic": "likes and food", "complexity": "beginner", "opening": "नमस्ते। मुझे सेब पसंद हैं। क्या आपको सेब पसंद हैं?", "support": "Model answer: हाँ, मुझे सेब पसंद हैं।", "keywords": ["पसंद", "सेब", "हाँ", "नहीं"]}
+      ],
+      "topics": {
+        "introductions": {
+          "title": "Greetings and introductions",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "नमस्ते", "english": "hello", "romanization": "namaste", "pronunciation_hint": "nuh-muh-STAY"},
+            {"target": "मेरा नाम", "english": "my name", "romanization": "mera naam"},
+            {"target": "आपका नाम क्या है?", "english": "What is your name?", "romanization": "aapka naam kya hai?"},
+            {"target": "मैं ... से हूँ", "english": "I am from ...", "romanization": "main ... se hoon"},
+            {"target": "मुझे खुशी हुई", "english": "Nice to meet you", "romanization": "mujhe khushi hui"}
+          ],
+          "grammar": "Use मेरा नाम ... है for 'my name is ...'. Use आपका for polite 'your'.",
+          "examples": [
+            {"target": "नमस्ते, मेरा नाम आना है।", "english": "Hello, my name is Ana.", "romanization": "namaste, mera naam Ana hai."},
+            {"target": "आपका नाम क्या है?", "english": "What is your name?", "romanization": "aapka naam kya hai?"},
+            {"target": "मैं सिंगापुर से हूँ।", "english": "I am from Singapore.", "romanization": "main Singapore se hoon."}
+          ],
+          "answers": {"mc": "hello", "fill_prompt": "___, मेरा नाम आना है।", "fill": "नमस्ते", "open": "मेरा नाम आना है।", "translation": "मैं सिंगापुर से हूँ।"},
+          "pronunciation_hints": ["हूँ is nasalized: hoon.", "Keep long आ in नाम longer than short अ."],
+          "cultural_note": "नमस्ते is polite and widely understood; with strangers, prefer आप over तुम.",
+          "conversation": [{"topic": "introductions", "complexity": "beginner", "opening": "नमस्ते, मैं शुरू करता हूँ। आपका नाम क्या है?", "support": "Model answer: मेरा नाम आना है।", "keywords": ["मेरा", "नाम", "है"]}]
+        },
+        "cafe_orders": {
+          "title": "Café orders",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "मुझे चाहिए", "english": "I would like/I need", "romanization": "mujhe chahiye"},
+            {"target": "एक कॉफी", "english": "a coffee", "romanization": "ek coffee"},
+            {"target": "एक चाय", "english": "a tea", "romanization": "ek chai"},
+            {"target": "बिल", "english": "the bill", "romanization": "bill"},
+            {"target": "कृपया", "english": "please", "romanization": "kripaya"}
+          ],
+          "grammar": "Use मुझे ... चाहिए for polite wants or needs.",
+          "examples": [
+            {"target": "मुझे एक कॉफी चाहिए, कृपया।", "english": "I would like a coffee, please.", "romanization": "mujhe ek coffee chahiye, kripaya."},
+            {"target": "बिल दीजिए, कृपया।", "english": "Please give the bill.", "romanization": "bill dijiye, kripaya."},
+            {"target": "मुझे एक चाय चाहिए।", "english": "I would like a tea.", "romanization": "mujhe ek chai chahiye."}
+          ],
+          "answers": {"mc": "I would like/I need", "fill_prompt": "मुझे एक कॉफी ___।", "fill": "चाहिए", "open": "मुझे एक कॉफी चाहिए।", "translation": "मुझे एक चाय चाहिए।"},
+          "pronunciation_hints": ["चाहिए is often pronounced chaa-hi-ye."],
+          "conversation": [{"topic": "cafe_orders", "complexity": "beginner", "opening": "हम कैफ़े में हैं। आपको क्या चाहिए?", "support": "Try: मुझे एक चाय चाहिए।", "keywords": ["चाहिए", "कॉफी", "चाय", "बिल"]}]
+        },
+        "daily_routines": {
+          "title": "Daily routines",
+          "focus_skill": "grammar",
+          "vocabulary": [
+            {"target": "मैं उठता हूँ", "english": "I get up", "romanization": "main uthta hoon"},
+            {"target": "मैं काम करता हूँ", "english": "I work", "romanization": "main kaam karta hoon"},
+            {"target": "मैं पढ़ता हूँ", "english": "I study/read", "romanization": "main padhta hoon"},
+            {"target": "हर दिन", "english": "every day", "romanization": "har din"},
+            {"target": "सुबह", "english": "morning", "romanization": "subah"}
+          ],
+          "grammar": "Use मैं plus verb plus हूँ for simple present habits.",
+          "examples": [
+            {"target": "मैं सात बजे उठता हूँ।", "english": "I get up at seven.", "romanization": "main saat baje uthta hoon."},
+            {"target": "मैं हर दिन काम करता हूँ।", "english": "I work every day.", "romanization": "main har din kaam karta hoon."},
+            {"target": "मैं रात को पढ़ता हूँ।", "english": "I study at night.", "romanization": "main raat ko padhta hoon."}
+          ],
+          "answers": {"mc": "morning", "fill_prompt": "मैं रात को ___ हूँ।", "fill": "पढ़ता", "open": "मैं हर दिन काम करता हूँ।", "translation": "मैं सात बजे उठता हूँ।"},
+          "pronunciation_hints": ["ढ़ in पढ़ता is retroflex; curl the tongue slightly."],
+          "conversation": [{"topic": "daily routines", "complexity": "early conversation", "opening": "बताइए: आप सुबह आम तौर पर क्या करते हैं?", "support": "Try: मैं उठता हूँ, नाश्ता करता हूँ और पढ़ता हूँ।", "keywords": ["उठता", "नाश्ता", "काम", "पढ़ता", "सुबह"]}]
+        },
+        "past_tense": {
+          "title": "Past tense basics",
+          "focus_skill": "conjugations",
+          "vocabulary": [
+            {"target": "कल", "english": "yesterday/tomorrow", "romanization": "kal"},
+            {"target": "मैं गया", "english": "I went", "romanization": "main gaya"},
+            {"target": "मैंने खाया", "english": "I ate", "romanization": "maine khaya"},
+            {"target": "मैंने बात की", "english": "I spoke", "romanization": "maine baat ki"},
+            {"target": "मैंने देखा", "english": "I saw", "romanization": "maine dekha"}
+          ],
+          "grammar": "For many completed actions, use मैंने plus verb form: मैंने खाया.",
+          "examples": [
+            {"target": "कल मैं बाज़ार गया।", "english": "Yesterday I went to the market.", "romanization": "kal main bazaar gaya."},
+            {"target": "मैंने परिवार के साथ खाया।", "english": "I ate with my family.", "romanization": "maine parivar ke saath khaya."},
+            {"target": "मैंने अपने दोस्त से बात की।", "english": "I spoke with my friend.", "romanization": "maine apne dost se baat ki."}
+          ],
+          "answers": {"mc": "yesterday/tomorrow", "fill_prompt": "कल मैं बाज़ार ___।", "fill": "गया", "open": "कल मैं बाज़ार गया।", "translation": "मैंने अपने दोस्त से बात की।"},
+          "pronunciation_hints": ["बाज़ार has a long aa sound in both syllables."],
+          "conversation": [{"topic": "past weekend", "complexity": "early conversation", "opening": "आपके सप्ताहांत के बारे में बात करें। आपने कल क्या किया?", "support": "Try: कल मैं बाज़ार गया।", "keywords": ["कल", "गया", "खाया", "बात", "देखा"]}]
+        },
+        "conjugations": {
+          "title": "Present-tense verb patterns",
+          "focus_skill": "conjugations",
+          "vocabulary": [
+            {"target": "नमस्ते", "english": "hello", "romanization": "namaste"},
+            {"target": "मैं बोलता हूँ", "english": "I speak", "romanization": "main bolta hoon"},
+            {"target": "आप बोलते हैं", "english": "you speak", "romanization": "aap bolte hain"},
+            {"target": "वह बोलती है", "english": "she speaks", "romanization": "vah bolti hai"},
+            {"target": "हम बोलते हैं", "english": "we speak", "romanization": "ham bolte hain"}
+          ],
+          "grammar": "Hindi present forms often change with gender and number: बोलता, बोलती, बोलते.",
+          "examples": [
+            {"target": "मैं हिंदी बोलता हूँ।", "english": "I speak Hindi.", "romanization": "main Hindi bolta hoon."},
+            {"target": "वह अंग्रेज़ी बोलती है।", "english": "She speaks English.", "romanization": "vah angrezi bolti hai."},
+            {"target": "हम हर दिन बोलते हैं।", "english": "We speak every day.", "romanization": "ham har din bolte hain."}
+          ],
+          "answers": {"mc": "I speak", "fill_prompt": "मैं हिंदी ___ हूँ।", "fill": "बोलता", "open": "मैं हिंदी बोलता हूँ।", "translation": "वह अंग्रेज़ी बोलती है।"},
+          "pronunciation_hints": ["Retroflex ट in बोलता is made with the tongue curled back."],
+          "conversation": [{"topic": "conjugations", "complexity": "beginner", "opening": "मैं हिंदी बोलता हूँ। आप कौन-सी भाषा बोलते हैं?", "support": "Use: मैं ... बोलता/बोलती हूँ।", "keywords": ["बोलता", "बोलती", "हिंदी"]}]
+        },
+        "core_vocabulary": {
+          "title": "Core vocabulary",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "घर", "english": "house/home", "romanization": "ghar"},
+            {"target": "काम", "english": "work", "romanization": "kaam"},
+            {"target": "खाना", "english": "food/to eat", "romanization": "khana"},
+            {"target": "समय", "english": "time", "romanization": "samay"},
+            {"target": "दोस्त", "english": "friend", "romanization": "dost"}
+          ],
+          "grammar": "Learn nouns inside short sentences so postpositions and verbs are visible.",
+          "examples": [
+            {"target": "मेरा घर छोटा है।", "english": "My house is small.", "romanization": "mera ghar chhota hai."},
+            {"target": "आज मेरा काम है।", "english": "I have work today.", "romanization": "aaj mera kaam hai."},
+            {"target": "मेरा दोस्त अच्छा खाना खाता है।", "english": "My friend eats good food.", "romanization": "mera dost achchha khana khata hai."}
+          ],
+          "answers": {"mc": "friend", "fill_prompt": "मेरा ___ छोटा है।", "fill": "घर", "open": "मेरा दोस्त अच्छा खाना खाता है।", "translation": "आज मेरा काम है।"},
+          "pronunciation_hints": ["घ in घर is aspirated; release a small breath."],
+          "conversation": [{"topic": "core vocabulary", "complexity": "beginner", "opening": "आज का एक उपयोगी शब्द चुनिए और वाक्य बनाइए।", "support": "Try: मेरा घर छोटा है।", "keywords": ["घर", "काम", "दोस्त"]}]
+        },
+        "likes_food": {
+          "title": "Likes and food",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "मुझे पसंद है", "english": "I like", "romanization": "mujhe pasand hai"},
+            {"target": "मुझे पसंद नहीं है", "english": "I do not like", "romanization": "mujhe pasand nahin hai"},
+            {"target": "सेब", "english": "apple", "romanization": "seb"},
+            {"target": "चावल", "english": "rice", "romanization": "chawal"},
+            {"target": "स्वादिष्ट", "english": "tasty", "romanization": "swadisht"}
+          ],
+          "grammar": "Use मुझे plus noun plus पसंद है to say you like something.",
+          "examples": [
+            {"target": "मुझे कॉफी पसंद है।", "english": "I like coffee.", "romanization": "mujhe coffee pasand hai."},
+            {"target": "मुझे सेब पसंद हैं।", "english": "I like apples.", "romanization": "mujhe seb pasand hain."},
+            {"target": "मुझे चाय पसंद नहीं है।", "english": "I do not like tea.", "romanization": "mujhe chai pasand nahin hai."}
+          ],
+          "answers": {"mc": "I like", "fill_prompt": "मुझे कॉफी ___ है।", "fill": "पसंद", "open": "मुझे सेब पसंद हैं।", "translation": "मुझे चाय पसंद नहीं है।"},
+          "pronunciation_hints": ["पसंद has a nasal n sound before d."],
+          "conversation": [{"topic": "likes and food", "complexity": "beginner", "opening": "नमस्ते। मुझे सेब पसंद हैं। क्या आपको सेब पसंद हैं?", "support": "Model answer: हाँ, मुझे सेब पसंद हैं।", "keywords": ["पसंद", "सेब", "हाँ", "नहीं"]}]
+        },
+        "numbers_time": {
+          "title": "Numbers and time",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "एक", "english": "one", "romanization": "ek"},
+            {"target": "दो", "english": "two", "romanization": "do"},
+            {"target": "तीन", "english": "three", "romanization": "teen"},
+            {"target": "कितने बजे हैं?", "english": "what time is it?", "romanization": "kitne baje hain?"},
+            {"target": "सात बजे", "english": "at seven o'clock", "romanization": "saat baje"}
+          ],
+          "grammar": "Use number plus बजे for clock time: सात बजे.",
+          "examples": [
+            {"target": "सात बजे हैं।", "english": "It is seven o'clock.", "romanization": "saat baje hain."},
+            {"target": "कक्षा दो बजे है।", "english": "The class is at two.", "romanization": "kaksha do baje hai."},
+            {"target": "मेरे पास तीन किताबें हैं।", "english": "I have three books.", "romanization": "mere paas teen kitaben hain."}
+          ],
+          "answers": {"mc": "what time is it?", "fill_prompt": "कक्षा दो ___ है।", "fill": "बजे", "open": "सात बजे हैं।", "translation": "मेरे पास तीन किताबें हैं।"},
+          "pronunciation_hints": ["तीन has a long ee vowel."],
+          "conversation": [{"topic": "numbers and time", "complexity": "beginner", "opening": "अभी कितने बजे हैं?", "support": "Try: सात बजे हैं।", "keywords": ["बजे", "एक", "दो", "तीन"]}]
+        },
+        "family": {
+          "title": "Family",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "मेरी माँ", "english": "my mother", "romanization": "meri maa"},
+            {"target": "मेरे पिता", "english": "my father", "romanization": "mere pita"},
+            {"target": "मेरा भाई", "english": "my brother", "romanization": "mera bhai"},
+            {"target": "मेरी बहन", "english": "my sister", "romanization": "meri bahan"},
+            {"target": "मेरा परिवार", "english": "my family", "romanization": "mera parivar"}
+          ],
+          "grammar": "Possessives change with the noun: मेरा, मेरी, मेरे.",
+          "examples": [
+            {"target": "मेरी माँ दिल्ली में रहती हैं।", "english": "My mother lives in Delhi.", "romanization": "meri maa Dilli mein rahti hain."},
+            {"target": "मेरी एक बहन है।", "english": "I have one sister.", "romanization": "meri ek bahan hai."},
+            {"target": "मेरा परिवार छोटा है।", "english": "My family is small.", "romanization": "mera parivar chhota hai."}
+          ],
+          "answers": {"mc": "my family", "fill_prompt": "मेरा ___ छोटा है।", "fill": "परिवार", "open": "मेरी एक बहन है।", "translation": "मेरी माँ दिल्ली में रहती हैं।"},
+          "pronunciation_hints": ["माँ is nasalized and has a long aa vowel."],
+          "conversation": [{"topic": "family", "complexity": "beginner", "opening": "आपके परिवार में कौन-कौन है?", "support": "Try: मेरी एक बहन है।", "keywords": ["परिवार", "माँ", "भाई", "बहन"]}]
+        },
+        "weather": {
+          "title": "Weather",
+          "focus_skill": "listening",
+          "vocabulary": [
+            {"target": "धूप है", "english": "it is sunny", "romanization": "dhoop hai"},
+            {"target": "ठंड है", "english": "it is cold", "romanization": "thand hai"},
+            {"target": "गर्मी है", "english": "it is hot", "romanization": "garmi hai"},
+            {"target": "बारिश हो रही है", "english": "it is raining", "romanization": "barish ho rahi hai"},
+            {"target": "बादल हैं", "english": "it is cloudy", "romanization": "badal hain"}
+          ],
+          "grammar": "Use है or हैं with weather nouns; use हो रही है for rain happening now.",
+          "examples": [
+            {"target": "आज धूप है।", "english": "Today it is sunny.", "romanization": "aaj dhoop hai."},
+            {"target": "सुबह ठंड है।", "english": "It is cold in the morning.", "romanization": "subah thand hai."},
+            {"target": "बादल हैं, लेकिन बारिश नहीं हो रही है।", "english": "It is cloudy, but it is not raining.", "romanization": "badal hain, lekin barish nahin ho rahi hai."}
+          ],
+          "answers": {"mc": "it is sunny", "fill_prompt": "आज ___ है।", "fill": "धूप", "open": "आज धूप है।", "translation": "बादल हैं।"},
+          "pronunciation_hints": ["ध in धूप is aspirated; release a breath."],
+          "conversation": [{"topic": "weather", "complexity": "beginner", "opening": "नमस्ते। आज मौसम कैसा है?", "support": "Model answer: आज धूप है।", "keywords": ["आज", "धूप", "बारिश", "ठंड", "गर्मी"]}]
+        }
+      }
+    },
+    "A2": {
+      "topic_order": ["shopping", "directions_travel", "health_basics", "past_weekend", "work_basics"],
+      "default_topic": "shopping",
+      "conversation": [
+        {"topic": "daily routines", "complexity": "early conversation", "opening": "बताइए: आप सुबह आम तौर पर क्या करते हैं?", "support": "Try: मैं उठता हूँ, नाश्ता करता हूँ और पढ़ता हूँ।", "keywords": ["उठता", "नाश्ता", "काम", "पढ़ता", "सुबह"]},
+        {"topic": "past weekend", "complexity": "early conversation", "opening": "आपके सप्ताहांत के बारे में बात करें। आपने कल क्या किया?", "support": "Try: कल मैं बाज़ार गया।", "keywords": ["कल", "गया", "खाया", "बात", "देखा"]}
+      ],
+      "topics": {
+        "shopping": {
+          "title": "Shopping",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "यह कितने का है?", "english": "How much is this?", "romanization": "yah kitne ka hai?"},
+            {"target": "आकार", "english": "size", "romanization": "aakar"},
+            {"target": "कीमत", "english": "price", "romanization": "keemat"},
+            {"target": "बहुत महँगा", "english": "too expensive", "romanization": "bahut mahanga"},
+            {"target": "मैं इसे लूँगा", "english": "I will take it", "romanization": "main ise loonga"}
+          ],
+          "grammar": "Use यह for 'this' and इसे for 'this/it' as an object.",
+          "examples": [
+            {"target": "यह कमीज़ कितने की है?", "english": "How much is this shirt?", "romanization": "yah kameez kitne ki hai?"},
+            {"target": "यह मेरे लिए बहुत महँगा है।", "english": "It is too expensive for me.", "romanization": "yah mere liye bahut mahanga hai."},
+            {"target": "मैं इसे लूँगा, धन्यवाद।", "english": "I will take it, thank you.", "romanization": "main ise loonga, dhanyavaad."}
+          ],
+          "answers": {"mc": "How much is this?", "fill_prompt": "यह कमीज़ कितने ___ है?", "fill": "की", "open": "मैं इसे लूँगा, धन्यवाद।", "translation": "यह मेरे लिए बहुत महँगा है।"},
+          "pronunciation_hints": ["महँगा has a nasalized vowel before ga."],
+          "conversation": [{"topic": "shopping", "complexity": "early conversation", "opening": "आप दुकान में हैं। आप क्या खरीदना चाहते हैं?", "support": "Ask: यह कितने का है?", "keywords": ["कितने", "कीमत", "महँगा", "लूँगा"]}]
+        },
+        "directions_travel": {
+          "title": "Directions and travel",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "टिकट", "english": "ticket", "romanization": "ticket"},
+            {"target": "स्टेशन", "english": "station", "romanization": "station"},
+            {"target": "मैं यात्रा करूँगा", "english": "I will travel", "romanization": "main yatra karoonga"},
+            {"target": "होटल", "english": "hotel", "romanization": "hotel"},
+            {"target": "सूटकेस", "english": "suitcase", "romanization": "suitcase"}
+          ],
+          "grammar": "Use जाना है for need to go, and करूँगा/करूँगी for future action.",
+          "examples": [
+            {"target": "मैं कल यात्रा करूँगा।", "english": "I will travel tomorrow.", "romanization": "main kal yatra karoonga."},
+            {"target": "मुझे दिल्ली का टिकट चाहिए।", "english": "I need a ticket to Delhi.", "romanization": "mujhe Dilli ka ticket chahiye."},
+            {"target": "मेरा होटल स्टेशन के पास है।", "english": "My hotel is near the station.", "romanization": "mera hotel station ke paas hai."}
+          ],
+          "answers": {"mc": "ticket", "fill_prompt": "मुझे दिल्ली का ___ चाहिए।", "fill": "टिकट", "open": "मैं कल यात्रा करूँगा।", "translation": "मेरा होटल स्टेशन के पास है।"},
+          "pronunciation_hints": ["यात्रा has a clear long aa at the end."],
+          "conversation": [{"topic": "directions_travel", "complexity": "early conversation", "opening": "आप कल यात्रा कर रहे हैं। आप कहाँ जा रहे हैं?", "support": "Use: मैं ... जा रहा/रही हूँ।", "keywords": ["यात्रा", "टिकट", "स्टेशन", "होटल"]}]
+        },
+        "health_basics": {
+          "title": "Health basics",
+          "focus_skill": "speaking",
+          "vocabulary": [
+            {"target": "मुझे दर्द है", "english": "I have pain", "romanization": "mujhe dard hai"},
+            {"target": "सिर", "english": "head", "romanization": "sir"},
+            {"target": "मुझे बुखार है", "english": "I have a fever", "romanization": "mujhe bukhar hai"},
+            {"target": "मुझे मदद चाहिए", "english": "I need help", "romanization": "mujhe madad chahiye"},
+            {"target": "दवा की दुकान", "english": "pharmacy", "romanization": "dava ki dukaan"}
+          ],
+          "grammar": "Use मुझे plus symptom plus है to describe how you feel.",
+          "examples": [
+            {"target": "मुझे सिर में दर्द है।", "english": "My head hurts.", "romanization": "mujhe sir mein dard hai."},
+            {"target": "मुझे कल से बुखार है।", "english": "I have had a fever since yesterday.", "romanization": "mujhe kal se bukhar hai."},
+            {"target": "मुझे दवा की दुकान जाना है।", "english": "I need to go to the pharmacy.", "romanization": "mujhe dava ki dukaan jana hai."}
+          ],
+          "answers": {"mc": "I have pain", "fill_prompt": "मुझे सिर में ___ है।", "fill": "दर्द", "open": "मुझे सिर में दर्द है।", "translation": "मुझे मदद चाहिए।"},
+          "pronunciation_hints": ["दर्द ends with a light d sound; avoid adding a vowel after it."],
+          "conversation": [{"topic": "health basics", "complexity": "early conversation", "opening": "आप ठीक महसूस नहीं कर रहे हैं। क्या समस्या है?", "support": "Try: मुझे सिर में दर्द है।", "keywords": ["दर्द", "सिर", "बुखार", "मदद"]}]
+        },
+        "past_weekend": {
+          "title": "Past weekend",
+          "focus_skill": "conjugations",
+          "vocabulary": [
+            {"target": "सप्ताहांत", "english": "weekend", "romanization": "saptahant"},
+            {"target": "मैं बाहर गया", "english": "I went out", "romanization": "main bahar gaya"},
+            {"target": "मैंने आराम किया", "english": "I rested", "romanization": "maine aaram kiya"},
+            {"target": "मैं मिलने गया", "english": "I went to visit", "romanization": "main milne gaya"},
+            {"target": "मुझे अच्छा लगा", "english": "I enjoyed it", "romanization": "mujhe achchha laga"}
+          ],
+          "grammar": "Use गया/गई and किया/की to describe completed weekend actions.",
+          "examples": [
+            {"target": "शनिवार को मैं परिवार से मिलने गया।", "english": "On Saturday I went to visit family.", "romanization": "shanivar ko main parivar se milne gaya."},
+            {"target": "रविवार को मैंने घर पर आराम किया।", "english": "On Sunday I rested at home.", "romanization": "ravivar ko maine ghar par aaram kiya."},
+            {"target": "मुझे दोस्तों के साथ अच्छा लगा।", "english": "I enjoyed being with friends.", "romanization": "mujhe doston ke saath achchha laga."}
+          ],
+          "answers": {"mc": "weekend", "fill_prompt": "रविवार को मैंने घर पर ___ किया।", "fill": "आराम", "open": "शनिवार को मैं परिवार से मिलने गया।", "translation": "मुझे दोस्तों के साथ अच्छा लगा।"},
+          "pronunciation_hints": ["आराम begins with a long aa sound."],
+          "conversation": [{"topic": "past weekend", "complexity": "early conversation", "opening": "आपने पिछले सप्ताहांत क्या किया?", "support": "Use गया/गई or किया/की.", "keywords": ["सप्ताहांत", "आराम", "मिलने", "दोस्तों"]}]
+        },
+        "work_basics": {
+          "title": "Work basics",
+          "focus_skill": "vocabulary",
+          "vocabulary": [
+            {"target": "मैं ... में काम करता हूँ", "english": "I work in ...", "romanization": "main ... mein kaam karta hoon"},
+            {"target": "दफ़्तर", "english": "office", "romanization": "daftar"},
+            {"target": "बैठक", "english": "meeting", "romanization": "baithak"},
+            {"target": "मेरे मैनेजर", "english": "my manager", "romanization": "mere manager"},
+            {"target": "प्रोजेक्ट", "english": "project", "romanization": "project"}
+          ],
+          "grammar": "Use में for the field or place where work happens.",
+          "examples": [
+            {"target": "मैं टेक्नोलॉजी में काम करता हूँ।", "english": "I work in technology.", "romanization": "main technology mein kaam karta hoon."},
+            {"target": "मेरी बैठक नौ बजे है।", "english": "My meeting is at nine.", "romanization": "meri baithak nau baje hai."},
+            {"target": "मेरा प्रोजेक्ट महत्वपूर्ण है।", "english": "My project is important.", "romanization": "mera project mahatvapurn hai."}
+          ],
+          "answers": {"mc": "I work in ...", "fill_prompt": "मैं टेक्नोलॉजी में ___ करता हूँ।", "fill": "काम", "open": "मेरी बैठक नौ बजे है।", "translation": "मेरा प्रोजेक्ट महत्वपूर्ण है।"},
+          "pronunciation_hints": ["दफ़्तर has a light f sound from फ़."],
+          "conversation": [{"topic": "work basics", "complexity": "early conversation", "opening": "काम के बारे में बात करें। आप किस क्षेत्र में काम करते हैं?", "support": "Try: मैं टेक्नोलॉजी में काम करता हूँ।", "keywords": ["काम", "दफ़्तर", "बैठक", "प्रोजेक्ट"]}]
+        }
+      }
+    },
+    "B1": {
+      "topic_order": ["opinions", "storytelling", "future_plans"],
+      "default_topic": "opinions",
+      "topics": {},
+      "conversation": [
+        {"topic": "opinions", "complexity": "intermediate", "opening": "अपनी राय दीजिए: वीडियो, संगीत या बातचीत से सीखना बेहतर है? क्यों?", "support": "Use मुझे लगता है plus क्योंकि.", "keywords": ["लगता", "राय", "क्योंकि", "बेहतर"]},
+        {"topic": "storytelling", "complexity": "intermediate", "opening": "एक छोटी कहानी सुनाइए जब आपने कुछ नया सीखा।", "support": "Use शुरू में, फिर, and अंत में.", "keywords": ["शुरू", "फिर", "अंत", "सीखा"]},
+        {"topic": "future_plans", "complexity": "intermediate", "opening": "अगले साल के लिए आपके लक्ष्य क्या हैं?", "support": "Use मैं चाहूँगा/चाहूँगी or मैं करूँगा/करूँगी.", "keywords": ["लक्ष्य", "अगले", "साल", "करूँगा"]}
+      ]
+    }
+  },
+  "generic": {
+    "title": "Generic Hindi practice",
+    "focus_skill": "vocabulary",
+    "vocabulary": [
+      {"target": "नमस्ते", "english": "hello", "romanization": "namaste"},
+      {"target": "मेरा नाम", "english": "my name", "romanization": "mera naam"},
+      {"target": "मुझे पसंद है", "english": "I like", "romanization": "mujhe pasand hai"},
+      {"target": "पानी", "english": "water", "romanization": "paani"},
+      {"target": "आज", "english": "today", "romanization": "aaj"}
+    ],
+    "grammar": "Practice short Hindi phrases with simple subject plus phrase patterns.",
+    "examples": [
+      {"target": "नमस्ते, मेरा नाम जोहान है।", "english": "Hello, my name is Johan.", "romanization": "namaste, mera naam Johan hai."},
+      {"target": "मुझे पानी पसंद है।", "english": "I like water.", "romanization": "mujhe paani pasand hai."},
+      {"target": "आज मैं अभ्यास करता हूँ।", "english": "Today I practice.", "romanization": "aaj main abhyas karta hoon."}
+    ],
+    "answers": {"mc": "hello", "fill_prompt": "___, मेरा नाम जोहान है।", "fill": "नमस्ते", "open": "मुझे पानी पसंद है।", "translation": "आज मैं अभ्यास करता हूँ।"},
+    "conversation": []
+  }
+}

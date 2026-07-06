@@ -5,6 +5,8 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
+
+from fluent_ai import curriculum
 from fluent_ai.agent import current_level
 from fluent_ai.state import (
     active_language,
@@ -21,181 +23,10 @@ from fluent_ai.state import (
 )
 
 
-TOPIC_LADDER = {
-    "A1": [
-        {
-            "topic": "introductions",
-            "complexity": "beginner",
-            "opening": "Hola, yo empiezo. ¿Como te llamas?",
-            "support": "Model answer: Me llamo Ana.",
-            "keywords": ["me", "llamo", "soy"],
-        },
-        {
-            "topic": "weather",
-            "complexity": "beginner",
-            "opening": "Hola. ¿Que tiempo hace hoy?",
-            "support": "Model answer: Hace sol.",
-            "keywords": ["hace", "sol", "llueve", "frio", "calor"],
-        },
-        {
-            "topic": "likes and food",
-            "complexity": "beginner",
-            "opening": "Hola. A mi me gustan las manzanas. ¿Te gustan las manzanas?",
-            "support": "Model answer: Si, me gustan las manzanas.",
-            "keywords": ["me", "gusta", "gustan", "manzana", "si", "no"],
-        },
-    ],
-    "A2": [
-        {
-            "topic": "daily routines",
-            "complexity": "early conversation",
-            "opening": "Cuéntame: ¿que haces normalmente por la mañana?",
-            "support": "Try: Me levanto, desayuno y estudio.",
-            "keywords": ["levanto", "desayuno", "trabajo", "estudio", "manana"],
-        },
-        {
-            "topic": "past weekend",
-            "complexity": "early conversation",
-            "opening": "Yo quiero saber de tu fin de semana. ¿Que hiciste ayer?",
-            "support": "Try: Ayer fui al mercado.",
-            "keywords": ["ayer", "fui", "comi", "hable", "vi"],
-        },
-    ],
-    "B1": [
-        {
-            "topic": "opinions",
-            "complexity": "intermediate",
-            "opening": "Empecemos con una opinion. ¿Prefieres aprender con musica, videos o conversaciones? ¿Por que?",
-            "support": "Give a reason with porque.",
-            "keywords": ["prefiero", "porque", "creo", "conversaciones", "videos"],
-        },
-        {
-            "topic": "work and goals",
-            "complexity": "intermediate",
-            "opening": "Hablemos de metas. ¿Como te ayuda el español en tu trabajo o en tu vida?",
-            "support": "Try to connect your answer to a goal.",
-            "keywords": ["ayuda", "trabajo", "vida", "meta", "quiero"],
-        },
-    ],
-    "B2": [
-        {
-            "topic": "environment",
-            "complexity": "upper-intermediate",
-            "opening": "Quiero debatir contigo: ¿cual es el problema ambiental mas importante en tu ciudad?",
-            "support": "Use opinion plus evidence.",
-            "keywords": ["ambiental", "ciudad", "problema", "contaminacion", "energia"],
-        },
-        {
-            "topic": "culture",
-            "complexity": "upper-intermediate",
-            "opening": "Hablemos de cultura. ¿Que costumbre de tu pais seria dificil explicar a un extranjero?",
-            "support": "Use examples and comparison.",
-            "keywords": ["cultura", "costumbre", "pais", "comparado", "extranjero"],
-        },
-    ],
-    "C1": [
-        {
-            "topic": "politics and civic life",
-            "complexity": "advanced",
-            "opening": "Analicemos una idea: ¿deberian los gobiernos regular mas la inteligencia artificial?",
-            "support": "Balance two sides of the argument.",
-            "keywords": ["gobierno", "regular", "inteligencia", "artificial", "riesgo", "beneficio"],
-        }
-    ],
-    "C2": [
-        {
-            "topic": "environmental policy",
-            "complexity": "near-native",
-            "opening": "Defiende una postura matizada: ¿como equilibrarias crecimiento economico y proteccion ambiental?",
-            "support": "Use nuance, concession, and a concrete policy example.",
-            "keywords": ["economico", "ambiental", "matiz", "politica", "equilibrio"],
-        }
-    ],
-}
-
+TOPIC_LADDER = curriculum.conversation_ladder("Spanish")
 LANGUAGE_TOPIC_OVERRIDES = {
-    "French": {
-        "A1": [
-            {
-                "topic": "introductions",
-                "complexity": "beginner",
-                "opening": "Bonjour, je commence. Comment tu t'appelles ?",
-                "support": "Model answer: Je m'appelle Ana.",
-                "keywords": ["je", "m appelle", "suis"],
-            },
-            {
-                "topic": "weather",
-                "complexity": "beginner",
-                "opening": "Bonjour. Quel temps fait-il aujourd'hui ?",
-                "support": "Model answer: Il fait beau.",
-                "keywords": ["il fait", "beau", "pluie", "froid", "chaud"],
-            },
-            {
-                "topic": "likes and food",
-                "complexity": "beginner",
-                "opening": "Bonjour. J'aime les pommes. Est-ce que tu aimes les pommes ?",
-                "support": "Model answer: Oui, j'aime les pommes.",
-                "keywords": ["aime", "pommes", "oui", "non"],
-            },
-        ],
-        "A2": [
-            {
-                "topic": "daily routines",
-                "complexity": "early conversation",
-                "opening": "Raconte-moi : qu'est-ce que tu fais le matin ?",
-                "support": "Try: Je me lève, je déjeune et j'étudie.",
-                "keywords": ["leve", "dejeune", "travaille", "etudie", "matin"],
-            },
-            {
-                "topic": "past weekend",
-                "complexity": "early conversation",
-                "opening": "Parlons de ton week-end. Qu'est-ce que tu as fait hier ?",
-                "support": "Try: Hier, je suis allé au marché.",
-                "keywords": ["hier", "suis alle", "mange", "parle", "vu"],
-            },
-        ],
-    },
-    "Hindi": {
-        "A1": [
-            {
-                "topic": "introductions",
-                "complexity": "beginner",
-                "opening": "नमस्ते, मैं शुरू करता हूँ। आपका नाम क्या है?",
-                "support": "Model answer: मेरा नाम आना है।",
-                "keywords": ["मेरा", "नाम", "है"],
-            },
-            {
-                "topic": "weather",
-                "complexity": "beginner",
-                "opening": "नमस्ते। आज मौसम कैसा है?",
-                "support": "Model answer: आज धूप है।",
-                "keywords": ["आज", "धूप", "बारिश", "ठंड", "गर्मी"],
-            },
-            {
-                "topic": "likes and food",
-                "complexity": "beginner",
-                "opening": "नमस्ते। मुझे सेब पसंद हैं। क्या आपको सेब पसंद हैं?",
-                "support": "Model answer: हाँ, मुझे सेब पसंद हैं।",
-                "keywords": ["पसंद", "सेब", "हाँ", "नहीं"],
-            },
-        ],
-        "A2": [
-            {
-                "topic": "daily routines",
-                "complexity": "early conversation",
-                "opening": "बताइए: आप सुबह आम तौर पर क्या करते हैं?",
-                "support": "Try: मैं उठता हूँ, नाश्ता करता हूँ और पढ़ता हूँ।",
-                "keywords": ["उठता", "नाश्ता", "काम", "पढ़ता", "सुबह"],
-            },
-            {
-                "topic": "past weekend",
-                "complexity": "early conversation",
-                "opening": "आपके सप्ताहांत के बारे में बात करें। आपने कल क्या किया?",
-                "support": "Try: कल मैं बाज़ार गया।",
-                "keywords": ["कल", "गया", "खाया", "बात", "देखा"],
-            },
-        ],
-    },
+    "French": curriculum.conversation_ladder("French"),
+    "Hindi": curriculum.conversation_ladder("Hindi"),
 }
 
 VISIBLE_OBJECTS = {
@@ -362,8 +193,8 @@ def choose_conversation_topic(state: dict[str, Any], video_on: bool, video_objec
 
 def conversation_topics_for(state: dict[str, Any], level: str) -> list[dict[str, Any]]:
     language = active_language(state)
-    language_topics = LANGUAGE_TOPIC_OVERRIDES.get(language, {})
-    return language_topics.get(level) or TOPIC_LADDER.get(level, TOPIC_LADDER["A1"])
+    ladder = curriculum.conversation_ladder(language)
+    return ladder.get(level) or TOPIC_LADDER.get(level, TOPIC_LADDER["A1"])
 
 
 def _topic_for_conversation_goal(state: dict[str, Any], goal: dict[str, Any], level: str) -> dict[str, Any] | None:
@@ -390,9 +221,10 @@ def _topic_for_conversation_goal(state: dict[str, Any], goal: dict[str, Any], le
 
 def _all_conversation_topics_for_language(state: dict[str, Any]) -> list[dict[str, Any]]:
     language = active_language(state)
+    ladder = curriculum.conversation_ladder(language)
     topics: list[dict[str, Any]] = []
     for level in LEVEL_ORDER:
-        topics.extend(LANGUAGE_TOPIC_OVERRIDES.get(language, {}).get(level) or TOPIC_LADDER.get(level, []))
+        topics.extend(ladder.get(level) or TOPIC_LADDER.get(level, []))
     return topics
 
 

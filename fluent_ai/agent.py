@@ -3,10 +3,12 @@ from __future__ import annotations
 import copy
 import random
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from fluent_ai import curriculum
 from fluent_ai.state import (
     LEVELS,
     active_language,
@@ -25,155 +27,8 @@ from fluent_ai.state import (
 )
 
 
-TOPICS_BY_LEVEL = {
-    "A1": ["introductions", "cafe orders", "daily routines", "past tense", "conjugations", "vocabulary"],
-    "A2": ["past tense", "shopping", "travel plans", "health symptoms", "object pronouns"],
-    "B1": ["opinions", "workplace situations", "news summaries", "storytelling", "future plans"],
-    "B2": ["debate", "professional goals", "culture", "problem solving", "hypotheticals"],
-    "C1": ["nuance", "persuasion", "academic discussion", "idioms", "register"],
-    "C2": ["subtle humor", "literary analysis", "specialized vocabulary", "rhetoric", "native-speed synthesis"],
-}
-
-LESSON_BANK = {
-    "introductions": {
-        "focus_skill": "vocabulary",
-        "vocabulary": [
-            ("me llamo", "my name is"),
-            ("soy de", "I am from"),
-            ("encantado", "delighted"),
-            ("mucho gusto", "nice to meet you"),
-            ("a que te dedicas", "what do you do"),
-        ],
-        "grammar": "Use 'ser' for identity and origin: 'Soy Ana' and 'Soy de Singapur.'",
-        "examples": [
-            ("Me llamo Ana.", "My name is Ana."),
-            ("Soy de Singapur.", "I am from Singapore."),
-            ("Mucho gusto.", "Nice to meet you."),
-        ],
-        "answers": {
-            "mc": "Nice to meet you.",
-            "fill_prompt": "___ de Singapur.",
-            "fill": "Soy",
-            "open": "Me llamo Ana.",
-            "translation": "Soy de Singapur.",
-        },
-    },
-    "cafe orders": {
-        "focus_skill": "vocabulary",
-        "vocabulary": [
-            ("quisiera", "I would like"),
-            ("un cafe", "a coffee"),
-            ("un te", "a tea"),
-            ("la cuenta", "the bill"),
-            ("por favor", "please"),
-        ],
-        "grammar": "Use 'Quisiera...' for a polite request. Put 'por favor' at the end to soften the order.",
-        "examples": [
-            ("Quisiera un cafe, por favor.", "I would like a coffee, please."),
-            ("La cuenta, por favor.", "The bill, please."),
-            ("Me gustaria un te.", "I would like a tea."),
-        ],
-        "answers": {
-            "mc": "the bill",
-            "fill_prompt": "___ un cafe, por favor.",
-            "fill": "Quisiera",
-            "open": "Quisiera un cafe, por favor.",
-            "translation": "Un te, por favor.",
-        },
-    },
-    "daily routines": {
-        "focus_skill": "grammar",
-        "vocabulary": [
-            ("me levanto", "I get up"),
-            ("trabajo", "I work"),
-            ("estudio", "I study"),
-            ("todos los dias", "every day"),
-            ("por la manana", "in the morning"),
-        ],
-        "grammar": "For daily routines, use present-tense verbs with time phrases: 'Estudio por la noche.'",
-        "examples": [
-            ("Me levanto a las siete.", "I get up at seven."),
-            ("Trabajo todos los dias.", "I work every day."),
-            ("Estudio por la noche.", "I study at night."),
-        ],
-        "answers": {
-            "mc": "in the morning",
-            "fill_prompt": "___ por la noche.",
-            "fill": "Estudio",
-            "open": "Trabajo todos los dias.",
-            "translation": "Me levanto a las siete.",
-        },
-    },
-    "past tense": {
-        "focus_skill": "conjugations",
-        "vocabulary": [
-            ("ayer", "yesterday"),
-            ("fui", "I went"),
-            ("comi", "I ate"),
-            ("hable", "I spoke"),
-            ("vi", "I saw"),
-        ],
-        "grammar": "For completed past actions, use the preterite: 'hable', 'comi', 'fui', and 'vi.'",
-        "examples": [
-            ("Ayer fui al mercado.", "Yesterday I went to the market."),
-            ("Comi con mi familia.", "I ate with my family."),
-            ("Hable con mi amigo.", "I spoke with my friend."),
-        ],
-        "answers": {
-            "mc": "yesterday",
-            "fill_prompt": "Ayer ___ al mercado.",
-            "fill": "fui",
-            "open": "Ayer fui al mercado.",
-            "translation": "Hable con mi amigo.",
-        },
-    },
-    "conjugations": {
-        "focus_skill": "conjugations",
-        "vocabulary": [
-            ("yo hablo", "I speak"),
-            ("tu hablas", "you speak"),
-            ("ella habla", "she speaks"),
-            ("nosotros hablamos", "we speak"),
-            ("ellos hablan", "they speak"),
-        ],
-        "grammar": "Regular -ar verbs change endings by subject: hablo, hablas, habla, hablamos, hablan.",
-        "examples": [
-            ("Yo hablo espanol.", "I speak Spanish."),
-            ("Ella habla ingles.", "She speaks English."),
-            ("Nosotros hablamos cada dia.", "We speak every day."),
-        ],
-        "answers": {
-            "mc": "I speak",
-            "fill_prompt": "Yo ___ espanol.",
-            "fill": "hablo",
-            "open": "Yo hablo espanol.",
-            "translation": "Ella habla ingles.",
-        },
-    },
-    "vocabulary": {
-        "focus_skill": "vocabulary",
-        "vocabulary": [
-            ("casa", "house"),
-            ("trabajo", "work"),
-            ("comida", "food"),
-            ("tiempo", "time"),
-            ("amigo", "friend"),
-        ],
-        "grammar": "Pair new nouns with short sentences so vocabulary is learned in context.",
-        "examples": [
-            ("Mi casa es pequena.", "My house is small."),
-            ("Tengo trabajo hoy.", "I have work today."),
-            ("Mi amigo come comida rica.", "My friend eats tasty food."),
-        ],
-        "answers": {
-            "mc": "friend",
-            "fill_prompt": "Mi ___ es pequena.",
-            "fill": "casa",
-            "open": "Mi amigo come comida rica.",
-            "translation": "Tengo trabajo hoy.",
-        },
-    },
-}
+TOPICS_BY_LEVEL = curriculum.topics_by_level("Spanish")
+LESSON_BANK = curriculum.lesson_bank("Spanish")
 
 
 ALLOWED_ERROR_CATEGORIES = {
@@ -278,7 +133,8 @@ def due_review_items(state: dict[str, Any], now: datetime | None = None) -> list
         if item.get("item_type") and item.get("item_type") != "topic":
             continue
         topic = str(item.get("target") or item.get("topic") or key)
-        if topic not in LESSON_BANK:
+        bank = _lesson_bank_for_language(active_language(state))
+        if topic not in bank and topic not in LESSON_BANK:
             continue
         due_at = _parse_due_at(item.get("due_at"))
         if due_at and due_at <= now:
@@ -377,13 +233,16 @@ def choose_topic_with_reason(state: dict[str, Any]) -> TopicSelection:
         return due_mistake
 
     level = current_level(state)
-    level_topics = TOPICS_BY_LEVEL.get(level, TOPICS_BY_LEVEL["A1"])
+    language = active_language(state)
+    topics_for_language = curriculum.topics_by_level(language)
+    level_topics = topics_for_language.get(level, topics_for_language.get("A1", TOPICS_BY_LEVEL["A1"]))
+    bank = _lesson_bank_for_language(language)
     data = language_state(state)
     weak_topics = data.get("weak_topics", [])
     recent = set(data.get("recent_topics", [])[-3:])
 
     for topic in weak_topics:
-        if topic in LESSON_BANK and topic not in recent:
+        if topic in bank and topic not in recent:
             return TopicSelection(topic=topic, source="weak_topic", details={"topic": topic})
 
     fresh_topics = [topic for topic in level_topics if topic not in recent]
@@ -417,12 +276,12 @@ def generate_lesson(state: dict[str, Any]) -> dict[str, Any]:
     level = current_level(state)
     selection = choose_topic_with_reason(state)
     topic = selection.topic
-    bank = LESSON_BANK.get(topic, _generic_lesson_bank(language, topic)) if language == "Spanish" else _generic_lesson_bank(language, topic)
+    bank = curriculum.topic_lesson(language, level, topic) or _generic_lesson_bank(language, topic)
     focus_skill = bank["focus_skill"]
     difficulty = performance_band(state)
     reason = lesson_reason_for(state, selection)
 
-    return {
+    lesson = {
         "language": language,
         "level": level,
         "topic": topic,
@@ -437,6 +296,10 @@ def generate_lesson(state: dict[str, Any]) -> dict[str, Any]:
         "examples": bank["examples"],
         "micro_task": f"Use one {language} sentence about {topic} before the next cycle.",
     }
+    for field in ("vocabulary_rich", "examples_rich", "pronunciation_hints", "cultural_note", "romanization_available"):
+        if field in bank:
+            lesson[field] = copy.deepcopy(bank[field])
+    return lesson
 
 
 def generate_quiz(state: dict[str, Any], lesson: dict[str, Any]) -> list[dict[str, Any]]:
@@ -453,7 +316,7 @@ def generate_quiz(state: dict[str, Any], lesson: dict[str, Any]) -> list[dict[st
     if lesson.get("source") == "openai" or lesson.get("language") != "Spanish":
         return _lesson_driven_quiz(lesson, question_count)
 
-    bank = LESSON_BANK.get(topic, _generic_lesson_bank(lesson["language"], topic))
+    bank = curriculum.topic_lesson(str(lesson.get("language") or "Spanish"), str(lesson.get("level") or "A1"), topic) or _generic_lesson_bank(lesson["language"], topic)
     answers = bank["answers"]
     vocab = bank["vocabulary"]
     first_word, first_meaning = vocab[0]
@@ -623,6 +486,10 @@ def _pair_items(value: Any, fallback: list[tuple[str, str]]) -> list[tuple[str, 
                 if first and second:
                     pairs.append((first, second))
     return pairs or fallback
+
+
+def _lesson_bank_for_language(language: str) -> dict[str, dict[str, Any]]:
+    return curriculum.lesson_bank(language)
 
 
 def _generic_lesson_bank(language: str, topic: str) -> dict[str, Any]:
@@ -902,7 +769,23 @@ def normalize(value: str) -> str:
 
 
 def _normalize_word(value: str) -> str:
-    return value.lower().strip(".,!?;:'\"")
+    stripped = value.lower().strip(".,!?;:'\"¿¡।")
+    return _strip_latin_accents(stripped)
+
+
+def _strip_latin_accents(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    output: list[str] = []
+    last_base_was_latin = False
+    for char in normalized:
+        if unicodedata.combining(char):
+            if last_base_was_latin:
+                continue
+            output.append(char)
+            continue
+        output.append(char)
+        last_base_was_latin = "LATIN" in unicodedata.name(char, "")
+    return unicodedata.normalize("NFC", "".join(output))
 
 
 def update_progress(state: dict[str, Any], lesson: dict[str, Any], results: list[QuizResult]) -> dict[str, Any]:
