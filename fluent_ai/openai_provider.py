@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 import urllib.error
 import urllib.request
 from typing import Any
+
+import certifi
 
 from fluent_ai.agent import current_level
 from fluent_ai.config import load_env_file, openai_model
@@ -106,7 +109,7 @@ class OpenAIProvider:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=20) as response:
+            with urllib.request.urlopen(request, timeout=20, context=_certifi_ssl_context()) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
@@ -172,7 +175,7 @@ class OpenAIProvider:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=12) as response:
+            with urllib.request.urlopen(request, timeout=12, context=_certifi_ssl_context()) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
@@ -302,6 +305,52 @@ Items:
             return None
         return [_validate_quiz_grade(item) for item in data]
 
+    def evaluate_conversation_reply(
+        self,
+        state: dict[str, Any],
+        topic: dict[str, Any],
+        learner_text: str,
+    ) -> dict[str, Any] | None:
+        if not self.available:
+            return None
+
+        prompt = f"""
+You are FluentAI's Conversation Evaluator Agent.
+Return strict JSON only. Do not use Markdown.
+
+Judge one learner reply for grammar and meaning at the learner's level.
+Be lenient about missing accents, capitalization, punctuation, and casual wording.
+Only flag real errors. If the reply is correct or naturally understandable for this level, set correction, incorrect_form, corrected_form, error_category to null.
+
+Allowed error_category values:
+{", ".join(sorted(ALLOWED_QUIZ_ERROR_CATEGORIES))}
+
+Return exactly this JSON object:
+{{
+  "score": number from 0 to 1,
+  "understandable": true or false,
+  "correction": null or "one short learner-facing corrected sentence",
+  "incorrect_form": null or "the exact incorrect learner phrase",
+  "corrected_form": null or "the corrected target-language form",
+  "error_category": null or one allowed value,
+  "feedback": "one specific learner-facing sentence",
+  "blocked_meaning": true or false
+}}
+
+Learner context:
+- target language: {active_language(state)}
+- level: {current_level(state)}
+- current topic: {topic.get('topic')}
+- complexity: {topic.get('complexity')}
+- support/model phrase: {topic.get('support', '')}
+- expected keywords: {json.dumps(topic.get('keywords', []), ensure_ascii=True)}
+
+Learner reply:
+{learner_text}
+"""
+        data = _extract_json(self._text_response(prompt))
+        return _validate_conversation_grade(data)
+
     def conversation_tutor_reply(
         self,
         topic: dict[str, Any],
@@ -396,6 +445,10 @@ Phase: {phase}
         if output_text:
             return output_text
         return str(response)
+
+
+def _certifi_ssl_context() -> ssl.SSLContext:
+    return ssl.create_default_context(cafile=certifi.where())
 
 
 def _realtime_instructions(
@@ -528,6 +581,81 @@ def _validate_quiz_grade(data: Any) -> dict[str, Any] | None:
         "severity": severity,
         "confidence": round(confidence, 3),
     }
+
+
+def _validate_conversation_grade(data: Any) -> dict[str, Any] | None:
+    if not isinstance(data, dict):
+        return None
+    required = {
+        "score",
+        "understandable",
+        "correction",
+        "incorrect_form",
+        "corrected_form",
+        "error_category",
+        "feedback",
+        "blocked_meaning",
+    }
+    if set(data) != required:
+        return None
+
+    score = data.get("score")
+    understandable = data.get("understandable")
+    feedback = data.get("feedback")
+    blocked_meaning = data.get("blocked_meaning")
+    if isinstance(score, bool) or not isinstance(score, (int, float)):
+        return None
+    if not 0 <= float(score) <= 1:
+        return None
+    if not isinstance(understandable, bool) or not isinstance(feedback, str) or not feedback.strip() or not isinstance(blocked_meaning, bool):
+        return None
+
+    category = data.get("error_category")
+    if category is not None:
+        if not isinstance(category, str):
+            return None
+        category = category.strip().lower()
+        if category not in ALLOWED_QUIZ_ERROR_CATEGORIES:
+            return None
+
+    correction = _optional_clean_string(data.get("correction"), 260)
+    incorrect = _optional_clean_string(data.get("incorrect_form"), 120)
+    corrected = _optional_clean_string(data.get("corrected_form"), 120)
+    if data.get("correction") is not None and correction is None:
+        return None
+    if data.get("incorrect_form") is not None and incorrect is None:
+        return None
+    if data.get("corrected_form") is not None and corrected is None:
+        return None
+
+    has_error_detail = any([correction, incorrect, corrected, category])
+    if not has_error_detail:
+        correction = None
+        incorrect = None
+        corrected = None
+        category = None
+    elif not category or not correction:
+        return None
+
+    return {
+        "score": round(float(score), 3),
+        "understandable": understandable,
+        "correction": correction,
+        "incorrect_form": incorrect,
+        "corrected_form": corrected,
+        "error_category": category,
+        "feedback": " ".join(feedback.strip().split())[:260],
+        "blocked_meaning": blocked_meaning,
+    }
+
+
+def _optional_clean_string(value: Any, limit: int) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    cleaned = " ".join(value.strip().split())
+    return cleaned[:limit] if cleaned else None
 
 
 def _extract_json(text: str) -> Any:

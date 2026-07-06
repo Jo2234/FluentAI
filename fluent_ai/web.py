@@ -377,6 +377,7 @@ def run_conversation_cycle(state_path: Path, language: str, turns: int, video_on
             video_on=video_on,
             video_object=video_object,
             tutor_reply_fn=provider.conversation_tutor_reply,
+            conversation_grade_fn=getattr(provider, "evaluate_conversation_reply", None),
         )
     except Exception as exc:
         return f"[OpenAI Model Agent] OpenAI conversation generation failed: {exc.__class__.__name__}: {exc}"

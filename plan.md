@@ -47,3 +47,4 @@ Create a demoable agentic language learning app with Lesson Mode and Conversatio
 - Implement WP4 Home workspace, memory inspector/export/reset/delete controls, and privacy-safe memory payloads.
 - Packaging steps 2/3: add API key manager, bridge validation, safe-storage/session key handling, and corrupt progress recovery.
 - Packaging step 6 reliability pass: realtime refresh, renderer timeouts, model-failure copy, empty-tutor recovery, lesson/call checkpoints, and camera voice-only fallback. Done.
+- Fix acceptance-run defects: packaged bridge Realtime SSL certificate setup and provider-graded Conversation mistake memory. Done.

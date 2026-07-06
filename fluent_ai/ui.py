@@ -66,6 +66,7 @@ def launch_ui(state_path: Path = DEFAULT_PROGRESS_PATH, language: str = "Spanish
             video_on=bool(video_enabled),
             video_object=visible_object.strip() or None,
             tutor_reply_fn=provider.conversation_tutor_reply if provider.available else None,
+            conversation_grade_fn=getattr(provider, "evaluate_conversation_reply", None) if provider.available else None,
         )
         save_state(state_path, updated_state)
 

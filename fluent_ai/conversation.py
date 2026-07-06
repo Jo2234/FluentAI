@@ -161,6 +161,17 @@ class ConversationTurn:
 
 
 TutorReplyFn = Callable[[dict[str, Any], dict[str, Any], list[ConversationTurn], str, str], str | None]
+ConversationGradeFn = Callable[[dict[str, Any], dict[str, Any], str], dict[str, Any] | None]
+
+ALLOWED_CONVERSATION_ERROR_CATEGORIES = {
+    "vocabulary_missing",
+    "wrong_conjugation",
+    "wrong_tense",
+    "word_order",
+    "comprehension",
+    "too_short",
+    "unnatural",
+}
 
 
 def choose_conversation_topic(state: dict[str, Any], video_on: bool, video_object: str | None) -> dict[str, Any]:
@@ -282,6 +293,7 @@ def run_conversation(
     video_on: bool,
     video_object: str | None,
     tutor_reply_fn: TutorReplyFn | None = None,
+    conversation_grade_fn: ConversationGradeFn | None = None,
 ) -> tuple[list[ConversationTurn], dict[str, Any], dict[str, Any]]:
     confidence_before = float(conversation_memory(state).get("speaking_confidence", 0.30) or 0.30)
     topic = choose_conversation_topic(state, video_on, video_object)
@@ -292,7 +304,12 @@ def run_conversation(
 
     for index in range(1, turns + 1):
         learner_text = get_learner_reply(topic, state, index, mode, tutor_text)
-        score, feedback, correction, mistake = evaluate_reply_with_metadata(topic, learner_text, state)
+        score, feedback, correction, mistake = evaluate_reply_with_provider(
+            topic,
+            learner_text,
+            state,
+            conversation_grade_fn,
+        )
         transcript.append(
             ConversationTurn(
                 turn_number=index,
@@ -426,6 +443,104 @@ def evaluate_reply_with_metadata(topic: dict[str, Any], learner_text: str, state
         "blocked_meaning": score < 0.30,
     }
     return score, "Good attempt. I will simplify and give you a model sentence.", correction, mistake
+
+
+def evaluate_reply_with_provider(
+    topic: dict[str, Any],
+    learner_text: str,
+    state: dict[str, Any],
+    conversation_grade_fn: ConversationGradeFn | None,
+) -> tuple[float, str, str | None, dict[str, Any] | None]:
+    if conversation_grade_fn is not None:
+        try:
+            grade = conversation_grade_fn(state, topic, learner_text)
+        except Exception:
+            grade = None
+        provider_result = _provider_grade_to_metadata(topic, learner_text, grade)
+        if provider_result is not None:
+            return provider_result
+    return evaluate_reply_with_metadata(topic, learner_text, state)
+
+
+def _provider_grade_to_metadata(
+    topic: dict[str, Any],
+    learner_text: str,
+    grade: dict[str, Any] | None,
+) -> tuple[float, str, str | None, dict[str, Any] | None] | None:
+    if not isinstance(grade, dict):
+        return None
+    required = {
+        "score",
+        "understandable",
+        "correction",
+        "incorrect_form",
+        "corrected_form",
+        "error_category",
+        "feedback",
+        "blocked_meaning",
+    }
+    if set(grade) != required:
+        return None
+    score = grade.get("score")
+    feedback = grade.get("feedback")
+    blocked_meaning = grade.get("blocked_meaning")
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or not 0 <= float(score) <= 1:
+        return None
+    if not isinstance(feedback, str) or not feedback.strip() or not isinstance(blocked_meaning, bool):
+        return None
+
+    category = grade.get("error_category")
+    if category is not None:
+        if not isinstance(category, str):
+            return None
+        category = category.strip().lower()
+        if category not in ALLOWED_CONVERSATION_ERROR_CATEGORIES:
+            return None
+
+    correction = _clean_optional(grade.get("correction"), 260)
+    incorrect = _clean_optional(grade.get("incorrect_form"), 120)
+    corrected = _clean_optional(grade.get("corrected_form"), 120)
+    if grade.get("correction") is not None and correction is None:
+        return None
+    if grade.get("incorrect_form") is not None and incorrect is None:
+        return None
+    if grade.get("corrected_form") is not None and corrected is None:
+        return None
+
+    if not any([correction, incorrect, corrected, category]):
+        return float(score), " ".join(feedback.strip().split())[:260], None, None
+    if not category or not correction:
+        return None
+
+    topic_name = str(topic.get("topic") or "conversation")
+    mistake = {
+        "incorrect_form": incorrect or _trim_mistake_text(learner_text),
+        "corrected_form": corrected or correction,
+        "error_category": category,
+        "skill": _skill_for_conversation_error(category),
+        "topic": topic_name,
+        "blocked_meaning": blocked_meaning,
+    }
+    return float(score), " ".join(feedback.strip().split())[:260], correction, mistake
+
+
+def _clean_optional(value: Any, limit: int) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    cleaned = " ".join(value.strip().split())
+    return cleaned[:limit] if cleaned else None
+
+
+def _skill_for_conversation_error(category: str) -> str:
+    if category in {"wrong_conjugation", "wrong_tense"}:
+        return "conjugations"
+    if category == "vocabulary_missing":
+        return "vocabulary"
+    if category in {"word_order", "unnatural"}:
+        return "grammar"
+    return "speaking"
 
 
 def correction_for(topic: dict[str, Any]) -> str:

@@ -22,8 +22,9 @@ class NaturalConversationTests(unittest.TestCase):
     def test_realtime_session_waits_for_real_silence_and_does_not_interrupt(self):
         captured = {}
 
-        def fake_urlopen(request, timeout=20):
+        def fake_urlopen(request, timeout=20, context=None):
             captured["payload"] = json.loads(request.data.decode("utf-8"))
+            captured["context"] = context
             return FakeHTTPResponse()
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "sk-test"}, clear=False), patch(
@@ -32,6 +33,7 @@ class NaturalConversationTests(unittest.TestCase):
             result = OpenAIProvider().realtime_client_secret(default_state("Spanish"))
 
         self.assertTrue(result["ok"])
+        self.assertIsNotNone(captured["context"])
         turn_detection = captured["payload"]["session"]["audio"]["input"]["turn_detection"]
         self.assertGreaterEqual(turn_detection["silence_duration_ms"], 2200)
         self.assertFalse(turn_detection["interrupt_response"])

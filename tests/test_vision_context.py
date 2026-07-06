@@ -32,8 +32,9 @@ class VisionContextTests(unittest.TestCase):
     def test_vision_context_uses_fast_default_model_and_uncertainty_prompt(self):
         captured = {}
 
-        def fake_urlopen(request, timeout=12):
+        def fake_urlopen(request, timeout=12, context=None):
             captured["timeout"] = timeout
+            captured["context"] = context
             captured["payload"] = json.loads(request.data.decode("utf-8"))
             return FakeHTTPResponse()
 
@@ -46,6 +47,7 @@ class VisionContextTests(unittest.TestCase):
         self.assertEqual(result["model"], "gpt-4.1-mini")
         self.assertEqual(result["primary_object"], "pillow")
         self.assertEqual(captured["timeout"], 12)
+        self.assertIsNotNone(captured["context"])
         prompt = captured["payload"]["input"][0]["content"][0]["text"].lower()
         self.assertIn("prefer being uncertain over being wrong", prompt)
         self.assertIn("if unclear", prompt)

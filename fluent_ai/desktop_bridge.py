@@ -30,6 +30,7 @@ from fluent_ai.conversation import (
     conversation_topic_to_lesson_topic,
     choose_conversation_topic,
     evaluate_reply_with_metadata,
+    evaluate_reply_with_provider,
     persist_post_call_summary,
 )
 from fluent_ai.openai_provider import OpenAIProvider
@@ -566,7 +567,12 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
             "profile": profile_for(state, provider),
         }
 
-    score, feedback, correction, mistake = evaluate_reply_with_metadata(topic, learner_text, state)
+    score, feedback, correction, mistake = evaluate_reply_with_provider(
+        topic,
+        learner_text,
+        state,
+        getattr(provider, "evaluate_conversation_reply", None),
+    )
     turn = {
         "turn_number": turn_number,
         "tutor_text": str(payload.get("tutor_message") or ""),

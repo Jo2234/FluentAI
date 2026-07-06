@@ -94,6 +94,48 @@ class PartialOpenAIGradingProvider(FakeOpenAIProvider):
         ]
 
 
+class ConversationWrongConjugationProvider(FakeOpenAIProvider):
+    calls = 0
+
+    def evaluate_conversation_reply(self, state, topic, learner_text):
+        type(self).calls += 1
+        return {
+            "score": 0.42,
+            "understandable": True,
+            "correction": "Yo estudio por la manana.",
+            "incorrect_form": "yo estudiar",
+            "corrected_form": "Yo estudio",
+            "error_category": "wrong_conjugation",
+            "feedback": "Use the conjugated form estudio with yo.",
+            "blocked_meaning": False,
+        }
+
+
+class MalformedConversationGradeProvider(FakeOpenAIProvider):
+    calls = 0
+
+    def evaluate_conversation_reply(self, state, topic, learner_text):
+        type(self).calls += 1
+        return {"score": 0.1, "feedback": "Malformed and incomplete."}
+
+
+class CorrectConversationGradeProvider(FakeOpenAIProvider):
+    calls = 0
+
+    def evaluate_conversation_reply(self, state, topic, learner_text):
+        type(self).calls += 1
+        return {
+            "score": 0.86,
+            "understandable": True,
+            "correction": None,
+            "incorrect_form": None,
+            "corrected_form": None,
+            "error_category": None,
+            "feedback": "Clear and appropriate for this level.",
+            "blocked_meaning": False,
+        }
+
+
 class MalformedQuizProvider(OpenAIProvider):
     @property
     def available(self):
@@ -101,6 +143,22 @@ class MalformedQuizProvider(OpenAIProvider):
 
     def _text_response(self, prompt):
         return '{"correct": false, "error_category": "not_allowed"}'
+
+
+class ValidConversationEvaluatorProvider(MalformedQuizProvider):
+    def _text_response(self, prompt):
+        return json.dumps(
+            {
+                "score": 0.4,
+                "understandable": True,
+                "correction": "Yo estudio por la manana.",
+                "incorrect_form": "yo estudiar",
+                "corrected_form": "Yo estudio",
+                "error_category": "wrong_conjugation",
+                "feedback": "Use estudio after yo.",
+                "blocked_meaning": False,
+            }
+        )
 
 
 class InvalidEntryQuizProvider(MalformedQuizProvider):
@@ -931,6 +989,36 @@ class AgentTests(unittest.TestCase):
 
         self.assertIsNone(provider.evaluate_quiz_answers(state, lesson, items))
 
+    def test_openai_conversation_evaluator_accepts_valid_strict_json(self):
+        provider = ValidConversationEvaluatorProvider()
+        state = default_state("Spanish")
+        topic = {
+            "topic": "daily routines",
+            "complexity": "beginner",
+            "support": "Model answer: Yo estudio por la manana.",
+            "keywords": ["estudio", "manana"],
+        }
+
+        result = provider.evaluate_conversation_reply(state, topic, "yo estudiar por la manana")
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["score"], 0.4)
+        self.assertEqual(result["incorrect_form"], "yo estudiar")
+        self.assertEqual(result["corrected_form"], "Yo estudio")
+        self.assertEqual(result["error_category"], "wrong_conjugation")
+
+    def test_openai_conversation_evaluator_rejects_malformed_output(self):
+        provider = MalformedQuizProvider()
+        state = default_state("Spanish")
+        topic = {
+            "topic": "daily routines",
+            "complexity": "beginner",
+            "support": "Model answer: Yo estudio por la manana.",
+            "keywords": ["estudio", "manana"],
+        }
+
+        self.assertIsNone(provider.evaluate_conversation_reply(state, topic, "yo estudiar por la manana"))
+
     def test_desktop_bridge_conversation_accepts_user_reply(self):
         with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", FakeOpenAIProvider):
             state_path = str(Path(tmpdir) / "progress.json")
@@ -957,6 +1045,127 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(len(reply["session"]["turns"]), 1)
             self.assertIn("manzana", reply["tutor_message"])
             self.assertGreater(reply["profile"]["fluency_score"], start["profile"]["fluency_score"])
+
+    def test_provider_conversation_grade_records_conjugation_mistake_and_summary(self):
+        ConversationWrongConjugationProvider.calls = 0
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", ConversationWrongConjugationProvider):
+            state_path = str(Path(tmpdir) / "progress.json")
+            session = {
+                "topic": {
+                    "topic": "daily routines",
+                    "complexity": "beginner",
+                    "support": "Model answer: Yo estudio por la manana.",
+                    "keywords": ["estudio", "manana"],
+                    "speaking_confidence_before": 0.30,
+                },
+                "turns": [],
+                "video_on": False,
+                "video_object": None,
+                "max_turns": 1,
+            }
+
+            reply = conversation_reply(
+                {
+                    "state_path": state_path,
+                    "language": "Spanish",
+                    "session": session,
+                    "message": "yo estudiar por la manana",
+                    "tutor_message": "¿Que haces por la manana?",
+                }
+            )
+
+            persisted = load_state(Path(state_path), "Spanish")
+            mistake = next(iter(language_state(persisted)["mistake_memory"].values()))
+            mistake["next_review"] = "2000-01-01T00:00:00+00:00"
+            review_queue(persisted)[f"review_{mistake['id']}"]["due_at"] = "2000-01-01T00:00:00+00:00"
+            lesson = generate_lesson(persisted)
+
+        self.assertTrue(reply["ok"])
+        self.assertEqual(ConversationWrongConjugationProvider.calls, 1)
+        self.assertEqual(reply["turn"]["score"], 0.42)
+        self.assertEqual(reply["turn"]["correction"], "Yo estudio por la manana.")
+        self.assertEqual(reply["turn"]["mistake"]["incorrect_form"], "yo estudiar")
+        self.assertEqual(reply["turn"]["mistake"]["corrected_form"], "Yo estudio")
+        self.assertEqual(reply["turn"]["mistake"]["error_category"], "wrong_conjugation")
+        self.assertEqual(mistake["incorrect_form"], "yo estudiar")
+        self.assertEqual(mistake["corrected_form"], "Yo estudio")
+        self.assertEqual(mistake["error_category"], "wrong_conjugation")
+        self.assertEqual(mistake["skill"], "conjugations")
+        self.assertEqual(mistake["topic"], "daily routines")
+        self.assertEqual(reply["post_call_summary"]["correction_to_remember"], "Yo estudio por la manana.")
+        self.assertEqual(reply["post_call_summary"]["phrase_to_review"], "Yo estudio por la manana.")
+        self.assertEqual(lesson["selection_source"], "mistake_memory")
+        self.assertIn("'yo estudiar' -> 'Yo estudio'", lesson["reason"])
+        self.assertIn("conversation", lesson["reason"])
+
+    def test_malformed_provider_conversation_grade_falls_back_to_local_evaluator(self):
+        MalformedConversationGradeProvider.calls = 0
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", MalformedConversationGradeProvider):
+            state_path = str(Path(tmpdir) / "progress.json")
+            session = {
+                "topic": {
+                    "topic": "weather",
+                    "complexity": "beginner",
+                    "support": "Model answer: Hace sol.",
+                    "keywords": ["hace", "sol"],
+                },
+                "turns": [],
+                "video_on": False,
+                "video_object": None,
+                "max_turns": 2,
+            }
+
+            reply = conversation_reply(
+                {
+                    "state_path": state_path,
+                    "language": "Spanish",
+                    "session": session,
+                    "message": "No se",
+                    "tutor_message": "¿Que tiempo hace?",
+                }
+            )
+
+        self.assertTrue(reply["ok"])
+        self.assertEqual(MalformedConversationGradeProvider.calls, 1)
+        self.assertEqual(reply["turn"]["score"], 0.2)
+        self.assertEqual(reply["turn"]["correction"], "Hace sol.")
+        self.assertEqual(reply["turn"]["mistake"]["error_category"], "other")
+
+    def test_correct_provider_conversation_grade_does_not_record_mistake(self):
+        CorrectConversationGradeProvider.calls = 0
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", CorrectConversationGradeProvider):
+            state_path = str(Path(tmpdir) / "progress.json")
+            session = {
+                "topic": {
+                    "topic": "daily routines",
+                    "complexity": "beginner",
+                    "support": "Model answer: Yo estudio por la manana.",
+                    "keywords": ["estudio", "manana"],
+                    "speaking_confidence_before": 0.30,
+                },
+                "turns": [],
+                "video_on": False,
+                "video_object": None,
+                "max_turns": 1,
+            }
+
+            reply = conversation_reply(
+                {
+                    "state_path": state_path,
+                    "language": "Spanish",
+                    "session": session,
+                    "message": "Yo estudio por la manana.",
+                    "tutor_message": "¿Que haces por la manana?",
+                }
+            )
+            persisted = load_state(Path(state_path), "Spanish")
+
+        self.assertTrue(reply["ok"])
+        self.assertEqual(CorrectConversationGradeProvider.calls, 1)
+        self.assertIsNone(reply["turn"]["correction"])
+        self.assertIsNone(reply["turn"]["mistake"])
+        self.assertIsNone(reply["post_call_summary"]["correction_to_remember"])
+        self.assertEqual(language_state(persisted)["mistake_memory"], {})
 
     def test_bridge_language_switch_preserves_per_language_state(self):
         with TemporaryDirectory() as tmpdir:

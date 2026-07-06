@@ -150,6 +150,7 @@ def run_conversation_loop(
         video_on=video_on,
         video_object=video_object,
         tutor_reply_fn=provider.conversation_tutor_reply,
+        conversation_grade_fn=getattr(provider, "evaluate_conversation_reply", None),
     )
 
     agent_log(
