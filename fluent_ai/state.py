@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -12,8 +14,13 @@ DEFAULT_SKILLS = {
     "vocabulary": 0.34,
     "grammar": 0.28,
     "conjugations": 0.26,
+    "listening": 0.30,
+    "speaking": 0.30,
+    "pronunciation": 0.30,
     "reading": 0.32,
+    "writing": 0.30,
     "translation": 0.30,
+    "fluency": 0.30,
 }
 
 DEFAULT_TOPIC_MASTERY = {
@@ -25,53 +32,56 @@ DEFAULT_TOPIC_MASTERY = {
     "vocabulary": 0.34,
 }
 
+DEFAULT_GOALS = [
+    "Hold a simple 5-minute conversation",
+    "Build useful daily vocabulary",
+    "Improve conjugation accuracy",
+]
+
+V2_LEARNER_KEYS = {
+    "id",
+    "display_name",
+    "native_language",
+    "motivation",
+    "active_goals",
+    "preferred_session_length_minutes",
+    "preferred_correction_style",
+    "preferred_tutor_tone",
+    "accessibility",
+    "created_at",
+}
+
+COMPAT_TOP_LEVEL_KEYS = {
+    "skills",
+    "topic_mastery",
+    "weak_topics",
+    "recent_topics",
+    "review_queue",
+    "conversation_memory",
+    "history",
+    "daily_summary",
+}
+
+COMPAT_LEARNER_KEYS = {
+    "name",
+    "target_language",
+    "current_level",
+    "level",
+    "xp",
+    "streak_days",
+    "learning_goals",
+}
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 def default_state(language: str) -> dict[str, Any]:
-    return {
-        "learner": {
-            "name": "Demo Learner",
-            "target_language": language,
-            "current_level": "A1",
-            "level": "A1",
-            "xp": 0,
-            "streak_days": 1,
-            "learning_goals": [
-                "Hold a simple 5-minute conversation",
-                "Build useful daily vocabulary",
-                "Improve conjugation accuracy",
-            ],
-        },
-        "weak_topics": ["past tense", "conjugations", "vocabulary"],
-        "skills": DEFAULT_SKILLS.copy(),
-        "topic_mastery": DEFAULT_TOPIC_MASTERY.copy(),
-        "preferences": {
-            "lesson_minutes": 10,
-            "daily_quiz_questions": 6,
-            "tone": "encouraging and specific",
-        },
-        "recent_topics": [],
-        "review_queue": {},
-        "history": [],
-        "daily_summary": {
-            "last_sent_at": None,
-            "lessons_completed": 0,
-        },
-        "conversation_memory": {
-            "sessions_completed": 0,
-            "total_turns": 0,
-            "fluency_score": 0.30,
-            "speaking_confidence": 0.30,
-            "recent_topics": [],
-            "missed_phrases": [],
-            "last_video_object": None,
-            "next_speaking_goal": f"Answer simple questions in full {language} sentences.",
-        },
-        "updated_at": utc_now(),
-    }
+    """Return a v2 state with temporary v1 compatibility mirrors attached."""
+    state = _default_v2_state(language)
+    sync_compat_views(state)
+    return state
 
 
 def load_state(path: Path, language: str) -> dict[str, Any]:
@@ -83,67 +93,173 @@ def load_state(path: Path, language: str) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as file:
         state = json.load(file)
 
-    return migrate_state(state, language)
+    state = migrate_state(state, language)
+    return sync_compat_views(state)
 
 
 def migrate_state(state: dict[str, Any], language: str) -> dict[str, Any]:
-    state.setdefault("learner", {})
-    learner = state["learner"]
-    learner.setdefault("name", "Demo Learner")
-    learner.setdefault("target_language", language)
-    learner.setdefault("current_level", learner.get("level", "A1"))
-    learner.setdefault("level", learner["current_level"])
-    learner.setdefault("xp", 0)
-    learner.setdefault("streak_days", 1)
-    learner.setdefault(
-        "learning_goals",
-        [
-            "Hold a simple 5-minute conversation",
-            "Build useful daily vocabulary",
-            "Improve conjugation accuracy",
-        ],
-    )
+    if state.get("schema_version") == 2 and isinstance(state.get("languages"), dict):
+        return _normalize_v2_state(state, language)
+    return _migrate_v1_to_v2(state, language)
 
-    state.setdefault("skills", {})
-    if "conjugation" in state["skills"]:
-        state["skills"]["conjugations"] = state["skills"].pop("conjugation")
-    for skill, score in DEFAULT_SKILLS.items():
-        state["skills"].setdefault(skill, score)
 
-    state.setdefault("topic_mastery", {})
-    for topic, score in DEFAULT_TOPIC_MASTERY.items():
-        state["topic_mastery"].setdefault(topic, score)
+def active_language(state: dict[str, Any]) -> str:
+    learner_language = state.get("learner", {}).get("target_language")
+    if isinstance(learner_language, str) and learner_language.strip():
+        return learner_language
+    language = state.get("active_language")
+    if isinstance(language, str) and language.strip():
+        return language
+    return "Spanish"
 
-    state.setdefault("weak_topics", recalculate_weak_topics(state))
-    state.setdefault("preferences", {})
-    state["preferences"].setdefault("lesson_minutes", 10)
-    state["preferences"].setdefault("daily_quiz_questions", 6)
-    state["preferences"].setdefault("tone", "encouraging and specific")
-    state.setdefault("recent_topics", [])
-    state.setdefault("review_queue", {})
-    state.setdefault("history", [])
-    state.setdefault("daily_summary", {"last_sent_at": None, "lessons_completed": 0})
-    state.setdefault("conversation_memory", {})
-    conversation_memory = state["conversation_memory"]
-    conversation_memory.setdefault("sessions_completed", 0)
-    conversation_memory.setdefault("total_turns", 0)
-    conversation_memory.setdefault("fluency_score", 0.30)
-    conversation_memory.setdefault("speaking_confidence", 0.30)
-    conversation_memory.setdefault("recent_topics", [])
-    conversation_memory.setdefault("missed_phrases", [])
-    conversation_memory.setdefault("last_video_object", None)
-    conversation_memory.setdefault(
-        "next_speaking_goal",
-        f"Answer simple questions in full {learner.get('target_language', language)} sentences.",
-    )
-    state.setdefault("updated_at", utc_now())
-    return state
+
+def language_state(state: dict[str, Any], language: str | None = None) -> dict[str, Any]:
+    language = language or active_language(state)
+    state.setdefault("languages", {})
+    if language not in state["languages"] or not isinstance(state["languages"][language], dict):
+        state["languages"][language] = _default_language_state(language)
+    return _normalize_language_state(state["languages"][language], language, state.get("updated_at"))
+
+
+def profile_state(state: dict[str, Any], language: str | None = None) -> dict[str, Any]:
+    return language_state(state, language)["profile"]
+
+
+def skill_scores(state: dict[str, Any], language: str | None = None) -> dict[str, float]:
+    return {
+        skill: _as_float(record.get("score"), DEFAULT_SKILLS.get(skill, 0.30))
+        for skill, record in language_state(state, language).get("skills", {}).items()
+        if isinstance(record, dict)
+    }
+
+
+def set_skill_score(
+    state: dict[str, Any],
+    skill: str,
+    score: float,
+    language: str | None = None,
+    evidence: dict[str, Any] | None = None,
+) -> None:
+    skill = "conjugations" if skill == "conjugation" else skill
+    language_data = language_state(state, language)
+    skills = language_data.setdefault("skills", {})
+    record = _skill_record(skills.get(skill, DEFAULT_SKILLS.get(skill, 0.30)))
+    previous = _as_float(record.get("score"), DEFAULT_SKILLS.get(skill, 0.30))
+    bounded = _bounded_score(score)
+    record["score"] = bounded
+    if bounded > previous:
+        record["trend"] = "up"
+    elif bounded < previous:
+        record["trend"] = "down"
+    else:
+        record["trend"] = "flat"
+    record["last_practiced"] = utc_now()
+    if evidence:
+        record["evidence"] = (record.get("evidence", []) + [copy.deepcopy(evidence)])[-8:]
+    else:
+        record.setdefault("evidence", [])
+    skills[skill] = record
+    language_data["updated_at"] = utc_now()
+    _attach_compat_from_v2(state)
+
+
+def topic_scores(state: dict[str, Any], language: str | None = None) -> dict[str, float]:
+    return {
+        topic: _as_float(record.get("recognition"), DEFAULT_TOPIC_MASTERY.get(topic, 0.30))
+        for topic, record in language_state(state, language).get("topic_mastery", {}).items()
+        if isinstance(record, dict)
+    }
+
+
+def set_topic_score(
+    state: dict[str, Any],
+    topic: str,
+    score: float,
+    language: str | None = None,
+    modality: str = "recognition",
+    evidence: dict[str, Any] | None = None,
+) -> None:
+    language_data = language_state(state, language)
+    topics = language_data.setdefault("topic_mastery", {})
+    record = _topic_record(topics.get(topic, DEFAULT_TOPIC_MASTERY.get(topic, 0.30)))
+    record[modality] = _bounded_score(score)
+    if evidence:
+        record["evidence"] = (record.get("evidence", []) + [copy.deepcopy(evidence)])[-8:]
+    else:
+        record.setdefault("evidence", [])
+    topics[topic] = record
+    language_data["updated_at"] = utc_now()
+    _attach_compat_from_v2(state)
+
+
+def conversation_memory(state: dict[str, Any], language: str | None = None) -> dict[str, Any]:
+    return language_state(state, language)["conversation_memory"]
+
+
+def review_queue(state: dict[str, Any], language: str | None = None) -> dict[str, Any]:
+    return language_state(state, language)["review_queue"]
+
+
+def append_history_event(state: dict[str, Any], event: dict[str, Any], language: str | None = None) -> None:
+    add_event(state, event, language)
+    _attach_compat_from_v2(state)
+
+
+def record_mistake(state: dict[str, Any], mistake: dict[str, Any], language: str | None = None) -> dict[str, Any]:
+    language_data = language_state(state, language)
+    mistake_memory = language_data.setdefault("mistake_memory", {})
+    incorrect = str(mistake.get("incorrect_form", ""))
+    corrected = str(mistake.get("corrected_form", ""))
+    skill = str(mistake.get("skill", "other") or "other")
+    topic = str(mistake.get("topic", "general") or "general")
+    mistake_id = mistake.get("id") or f"mistake_{_slugify('_'.join([incorrect, corrected, skill, topic]))}"
+    now = utc_now()
+    existing = mistake_memory.get(mistake_id, {})
+    record = {
+        "id": mistake_id,
+        "incorrect_form": incorrect,
+        "corrected_form": corrected,
+        "context": str(mistake.get("context", existing.get("context", ""))),
+        "skill": skill,
+        "topic": topic,
+        "error_category": str(mistake.get("error_category", existing.get("error_category", "other"))),
+        "first_seen": existing.get("first_seen", now),
+        "last_seen": now,
+        "frequency": int(existing.get("frequency", 0) or 0) + 1,
+        "severity": str(mistake.get("severity", existing.get("severity", "medium"))),
+        "blocked_meaning": bool(mistake.get("blocked_meaning", existing.get("blocked_meaning", False))),
+        "speech_recurrence": bool(mistake.get("speech_recurrence", existing.get("speech_recurrence", False))),
+        "next_review": mistake.get("next_review", existing.get("next_review")),
+    }
+    if "source" in mistake:
+        record["source"] = mistake["source"]
+    mistake_memory[mistake_id] = record
+    language_data["updated_at"] = now
+    return record
+
+
+def add_event(state: dict[str, Any], event: dict[str, Any], language: str | None = None) -> dict[str, Any]:
+    language = language or active_language(state)
+    language_data = language_state(state, language)
+    event_record = copy.deepcopy(event)
+    event_record.setdefault("type", "progress_updated")
+    event_record.setdefault("language", language)
+    event_record.setdefault("occurred_at", utc_now())
+    event_record.setdefault("source", "state")
+    event_record.setdefault("payload", {})
+    event_record.setdefault("id", _next_event_id(state))
+
+    language_data.setdefault("history", []).append(copy.deepcopy(event_record))
+    language_data["history"] = language_data["history"][-300:]
+    state.setdefault("events", []).append(copy.deepcopy(event_record))
+    state["events"] = state["events"][-1000:]
+    return event_record
 
 
 def recalculate_weak_topics(state: dict[str, Any], limit: int = 4) -> list[str]:
     candidates: list[tuple[str, float]] = []
-    candidates.extend(state.get("topic_mastery", {}).items())
-    candidates.extend(state.get("skills", {}).items())
+    candidates.extend((topic, _as_float(score, 0.30)) for topic, score in state.get("topic_mastery", {}).items())
+    candidates.extend((skill, _as_float(score, 0.30)) for skill, score in state.get("skills", {}).items())
     ordered = sorted(candidates, key=lambda item: item[1])
 
     weak_topics: list[str] = []
@@ -157,7 +273,559 @@ def recalculate_weak_topics(state: dict[str, Any], limit: int = 4) -> list[str]:
 
 def save_state(path: Path, state: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    sync_compat_views(state)
     state["updated_at"] = utc_now()
+    language_state(state)["updated_at"] = state["updated_at"]
+    _cap_events(state)
+    persisted = _strip_compat_views(state)
     with path.open("w", encoding="utf-8") as file:
-        json.dump(state, file, indent=2, ensure_ascii=False)
+        json.dump(persisted, file, indent=2, ensure_ascii=False)
         file.write("\n")
+
+
+def sync_compat_views(state: dict[str, Any]) -> dict[str, Any]:
+    """Bridge v1 callers to v2 state during WS1.
+
+    Runtime callers still read and write flat paths such as ``state["skills"]``.
+    This function first syncs those mirrors into the active language's v2
+    records, then rebuilds the mirrors from v2. ``save_state`` writes a stripped
+    copy, so these duplicate flat views are not persisted.
+    """
+    state.setdefault("schema_version", 2)
+    state.setdefault("languages", {})
+    _sync_compat_to_v2(state)
+    _attach_compat_from_v2(state)
+    return state
+
+
+def _default_v2_state(language: str) -> dict[str, Any]:
+    now = utc_now()
+    return {
+        "schema_version": 2,
+        "learner": {
+            "id": "local-demo-learner",
+            "display_name": "Demo Learner",
+            "native_language": None,
+            "motivation": "",
+            "active_goals": DEFAULT_GOALS.copy(),
+            "preferred_session_length_minutes": 10,
+            "preferred_correction_style": "gentle",
+            "preferred_tutor_tone": "encouraging and specific",
+            "accessibility": {"transliteration": False, "larger_text": False, "reduced_motion": False},
+            "created_at": now,
+        },
+        "active_language": language,
+        "languages": {language: _default_language_state(language, now)},
+        "preferences": {
+            "lesson_minutes": 10,
+            "daily_quiz_questions": 6,
+            "tone": "encouraging and specific",
+            "voice": "alloy",
+            "video_default": "off",
+        },
+        "privacy": {
+            "local_only": True,
+            "store_raw_audio": False,
+            "store_raw_video": False,
+            "store_camera_summaries": True,
+            "allow_export": True,
+            "allow_delete": True,
+            "allow_language_reset": True,
+            "last_exported_at": None,
+        },
+        "events": [],
+        "updated_at": now,
+    }
+
+
+def _default_language_state(language: str, now: str | None = None) -> dict[str, Any]:
+    now = now or utc_now()
+    return {
+        "profile": {
+            "target_language": language,
+            "current_level": "A1",
+            "level_confidence": 0.45,
+            "xp": 0,
+            "streak_days": 1,
+            "learning_goals": DEFAULT_GOALS.copy(),
+            "last_session_at": None,
+        },
+        "skills": {skill: _skill_record(score) for skill, score in DEFAULT_SKILLS.items()},
+        "topic_mastery": {topic: _topic_record(score) for topic, score in DEFAULT_TOPIC_MASTERY.items()},
+        "weak_topics": ["past tense", "conjugations", "vocabulary"],
+        "recent_topics": [],
+        "review_queue": {},
+        "conversation_memory": _default_conversation_memory(language),
+        "mistake_memory": {},
+        "history": [],
+        "daily_summary": {"last_sent_at": None, "lessons_completed": 0},
+        "updated_at": now,
+    }
+
+
+def _default_conversation_memory(language: str) -> dict[str, Any]:
+    return {
+        "sessions_completed": 0,
+        "total_turns": 0,
+        "fluency_score": 0.30,
+        "speaking_confidence": 0.30,
+        "recent_topics": [],
+        "missed_phrases": [],
+        "last_video_context": {"summary": None, "primary_object": None, "confidence": None, "used_at": None},
+        "next_speaking_goal": f"Answer simple questions in full {language} sentences.",
+        "next_conversation_goal": None,
+        "post_call_summaries": [],
+    }
+
+
+def _normalize_v2_state(state: dict[str, Any], language: str) -> dict[str, Any]:
+    default = _default_v2_state(state.get("active_language") or language)
+    for key, value in default.items():
+        if key not in state:
+            state[key] = copy.deepcopy(value)
+    state["schema_version"] = 2
+    state.setdefault("active_language", language)
+    state.setdefault("languages", {})
+    for lang, lang_state in list(state["languages"].items()):
+        if isinstance(lang_state, dict):
+            state["languages"][lang] = _normalize_language_state(lang_state, lang, state.get("updated_at"))
+    if state["active_language"] not in state["languages"]:
+        state["languages"][state["active_language"]] = _default_language_state(state["active_language"], state.get("updated_at"))
+    learner = state.setdefault("learner", {})
+    for key, value in default["learner"].items():
+        learner.setdefault(key, copy.deepcopy(value))
+    learner.setdefault("created_at", state.get("updated_at") or utc_now())
+    preferences = state.setdefault("preferences", {})
+    for key, value in default["preferences"].items():
+        preferences.setdefault(key, copy.deepcopy(value))
+    privacy = state.setdefault("privacy", {})
+    for key, value in default["privacy"].items():
+        privacy.setdefault(key, copy.deepcopy(value))
+    state.setdefault("events", [])
+    return state
+
+
+def _normalize_language_state(language_data: dict[str, Any], language: str, updated_at: str | None = None) -> dict[str, Any]:
+    default = _default_language_state(language, updated_at)
+    for key, value in default.items():
+        language_data.setdefault(key, copy.deepcopy(value))
+    profile = language_data.setdefault("profile", {})
+    for key, value in default["profile"].items():
+        profile.setdefault(key, copy.deepcopy(value))
+    profile.setdefault("target_language", language)
+
+    skills = language_data.setdefault("skills", {})
+    if "conjugation" in skills:
+        skills["conjugations"] = skills.pop("conjugation")
+    for skill, score in DEFAULT_SKILLS.items():
+        skills[skill] = _skill_record(skills.get(skill, score))
+    for skill, record in list(skills.items()):
+        skills[skill] = _skill_record(record)
+
+    topics = language_data.setdefault("topic_mastery", {})
+    for topic, score in DEFAULT_TOPIC_MASTERY.items():
+        topics[topic] = _topic_record(topics.get(topic, score))
+    for topic, record in list(topics.items()):
+        topics[topic] = _topic_record(record)
+
+    memory = language_data.setdefault("conversation_memory", {})
+    default_memory = _default_conversation_memory(language)
+    for key, value in default_memory.items():
+        memory.setdefault(key, copy.deepcopy(value))
+    if "last_video_object" in memory:
+        memory.setdefault("last_video_context", copy.deepcopy(default_memory["last_video_context"]))
+        memory["last_video_context"]["primary_object"] = memory.get("last_video_object")
+
+    language_data.setdefault("mistake_memory", {})
+    language_data.setdefault("review_queue", {})
+    language_data.setdefault("history", [])
+    language_data.setdefault("daily_summary", copy.deepcopy(default["daily_summary"]))
+    return language_data
+
+
+def _migrate_v1_to_v2(v1_state: dict[str, Any], language: str) -> dict[str, Any]:
+    source = copy.deepcopy(v1_state)
+    learner = source.get("learner", {}) if isinstance(source.get("learner"), dict) else {}
+    preferences = source.get("preferences", {}) if isinstance(source.get("preferences"), dict) else {}
+    target_language = learner.get("target_language") or language
+    updated_at = source.get("updated_at") or utc_now()
+    v2 = _default_v2_state(target_language)
+    v2["updated_at"] = updated_at
+    v2["active_language"] = target_language
+
+    v2["learner"]["display_name"] = learner.get("name", v2["learner"]["display_name"])
+    v2["learner"]["active_goals"] = copy.deepcopy(learner.get("learning_goals", v2["learner"]["active_goals"]))
+    v2["learner"]["preferred_session_length_minutes"] = preferences.get("lesson_minutes", v2["learner"]["preferred_session_length_minutes"])
+    v2["learner"]["preferred_tutor_tone"] = preferences.get("tone", v2["learner"]["preferred_tutor_tone"])
+    v2["learner"]["created_at"] = updated_at
+
+    language_data = v2["languages"][target_language]
+    profile = language_data["profile"]
+    profile["target_language"] = target_language
+    profile["current_level"] = learner.get("current_level") or learner.get("level", "A1")
+    profile["xp"] = int(learner.get("xp", 0) or 0)
+    profile["streak_days"] = int(learner.get("streak_days", 1) or 1)
+    profile["learning_goals"] = copy.deepcopy(learner.get("learning_goals", DEFAULT_GOALS))
+
+    skills = source.get("skills", {}) if isinstance(source.get("skills"), dict) else {}
+    if "conjugation" in skills and "conjugations" not in skills:
+        skills["conjugations"] = skills["conjugation"]
+    for skill, score in skills.items():
+        if skill == "conjugation":
+            continue
+        language_data["skills"][skill] = _skill_record(score)
+
+    topics = source.get("topic_mastery", {}) if isinstance(source.get("topic_mastery"), dict) else {}
+    for topic, score in topics.items():
+        language_data["topic_mastery"][topic] = _topic_record(score)
+
+    language_data["weak_topics"] = copy.deepcopy(source.get("weak_topics", language_data["weak_topics"]))
+    language_data["recent_topics"] = copy.deepcopy(source.get("recent_topics", []))
+    language_data["daily_summary"] = copy.deepcopy(source.get("daily_summary", language_data["daily_summary"]))
+    language_data["updated_at"] = updated_at
+
+    v2["preferences"]["lesson_minutes"] = preferences.get("lesson_minutes", v2["preferences"]["lesson_minutes"])
+    v2["preferences"]["daily_quiz_questions"] = preferences.get("daily_quiz_questions", v2["preferences"]["daily_quiz_questions"])
+    v2["preferences"]["tone"] = preferences.get("tone", v2["preferences"]["tone"])
+
+    _migrate_review_queue(source, language_data)
+    _migrate_conversation_memory(source, language_data, target_language)
+    _migrate_history(source, v2, target_language)
+
+    recognized = {
+        "learner",
+        "weak_topics",
+        "skills",
+        "topic_mastery",
+        "preferences",
+        "recent_topics",
+        "review_queue",
+        "history",
+        "daily_summary",
+        "conversation_memory",
+        "updated_at",
+    }
+    legacy_extra = {key: copy.deepcopy(value) for key, value in source.items() if key not in recognized}
+    if legacy_extra:
+        language_data["legacy_extra"] = legacy_extra
+
+    return _normalize_v2_state(v2, target_language)
+
+
+def _migrate_review_queue(source: dict[str, Any], language_data: dict[str, Any]) -> None:
+    queue = source.get("review_queue", {}) if isinstance(source.get("review_queue"), dict) else {}
+    for topic, value in queue.items():
+        review_id = f"review_topic_{_slugify(topic)}"
+        record = copy.deepcopy(value) if isinstance(value, dict) else {"value": value}
+        record.update(
+            {
+                "id": review_id,
+                "item_type": "topic",
+                "target": topic,
+                "topic": record.get("topic", topic),
+                "source": "lesson",
+            }
+        )
+        if "focus_skill" in record and "skill" not in record:
+            record["skill"] = record["focus_skill"]
+        language_data.setdefault("review_queue", {})[review_id] = record
+
+
+def _migrate_conversation_memory(source: dict[str, Any], language_data: dict[str, Any], language: str) -> None:
+    old_memory = source.get("conversation_memory", {}) if isinstance(source.get("conversation_memory"), dict) else {}
+    memory = language_data["conversation_memory"]
+    for key in ("sessions_completed", "total_turns", "fluency_score", "speaking_confidence", "recent_topics", "missed_phrases", "next_speaking_goal"):
+        if key in old_memory:
+            memory[key] = copy.deepcopy(old_memory[key])
+    if "last_video_object" in old_memory:
+        memory["last_video_context"]["primary_object"] = old_memory.get("last_video_object")
+    if "last_session_at" in old_memory:
+        memory["last_session_at"] = old_memory["last_session_at"]
+        language_data["profile"]["last_session_at"] = old_memory["last_session_at"]
+    if "fluency_score" in old_memory and "fluency" not in source.get("skills", {}):
+        language_data["skills"]["fluency"] = _skill_record(old_memory.get("fluency_score", 0.30))
+    for phrase in old_memory.get("missed_phrases", []) if isinstance(old_memory.get("missed_phrases"), list) else []:
+        record_mistake(
+            {"schema_version": 2, "active_language": language, "languages": {language: language_data}},
+            {
+                "incorrect_form": "",
+                "corrected_form": str(phrase),
+                "context": "Legacy missed phrase from v1 conversation memory.",
+                "skill": "speaking",
+                "topic": "conversation",
+                "error_category": "other",
+                "source": "legacy_missed_phrase",
+            },
+            language,
+        )
+
+
+def _migrate_history(source: dict[str, Any], v2: dict[str, Any], language: str) -> None:
+    history = source.get("history", []) if isinstance(source.get("history"), list) else []
+    for item in history:
+        legacy = copy.deepcopy(item)
+        if isinstance(item, dict):
+            mode = item.get("mode")
+            if mode == "conversation":
+                event_type = "conversation_started"
+            elif mode == "conversation_turn":
+                event_type = "learner_replied"
+            else:
+                event_type = "lesson_completed"
+            summary = _history_summary(item, event_type)
+        else:
+            event_type = "progress_updated"
+            summary = "Migrated legacy history item."
+        add_event(
+            v2,
+            {
+                "type": event_type,
+                "occurred_at": source.get("updated_at") or utc_now(),
+                "language": language,
+                "source": "legacy_migration",
+                "summary": summary,
+                "payload": {"legacy": legacy},
+            },
+            language,
+        )
+
+
+def _history_summary(item: dict[str, Any], event_type: str) -> str:
+    topic = item.get("topic", "unknown topic")
+    if event_type == "conversation_started":
+        return f"Migrated conversation on {topic}."
+    if event_type == "learner_replied":
+        return f"Migrated conversation turn on {topic}."
+    return f"Migrated lesson on {topic}."
+
+
+def _sync_compat_to_v2(state: dict[str, Any]) -> None:
+    learner = state.setdefault("learner", {})
+    if isinstance(learner.get("target_language"), str) and learner["target_language"].strip():
+        state["active_language"] = learner["target_language"]
+    language = state.get("active_language") or "Spanish"
+    language_data = language_state(state, language)
+    profile = language_data["profile"]
+
+    if "name" in learner:
+        learner["display_name"] = learner.get("name") or learner.get("display_name", "Demo Learner")
+    if "current_level" in learner or "level" in learner:
+        profile["current_level"] = learner.get("current_level") or learner.get("level") or profile.get("current_level", "A1")
+    if "xp" in learner:
+        profile["xp"] = int(learner.get("xp", profile.get("xp", 0)) or 0)
+    if "streak_days" in learner:
+        profile["streak_days"] = int(learner.get("streak_days", profile.get("streak_days", 1)) or 1)
+    if "learning_goals" in learner:
+        profile["learning_goals"] = copy.deepcopy(learner.get("learning_goals", profile.get("learning_goals", DEFAULT_GOALS)))
+        learner["active_goals"] = copy.deepcopy(profile["learning_goals"])
+
+    preferences = state.setdefault("preferences", {})
+    if "lesson_minutes" in preferences:
+        learner["preferred_session_length_minutes"] = preferences["lesson_minutes"]
+    if "tone" in preferences:
+        learner["preferred_tutor_tone"] = preferences["tone"]
+
+    if isinstance(state.get("skills"), dict):
+        for skill, score in state["skills"].items():
+            normalized = "conjugations" if skill == "conjugation" else skill
+            language_data.setdefault("skills", {})[normalized] = _skill_record(
+                {"score": score, **language_data.get("skills", {}).get(normalized, {})}
+                if isinstance(language_data.get("skills", {}).get(normalized), dict)
+                else score
+            )
+            language_data["skills"][normalized]["score"] = _bounded_score(score)
+
+    if isinstance(state.get("topic_mastery"), dict):
+        for topic, score in state["topic_mastery"].items():
+            language_data.setdefault("topic_mastery", {})[topic] = _topic_record(
+                {"recognition": score, **language_data.get("topic_mastery", {}).get(topic, {})}
+                if isinstance(language_data.get("topic_mastery", {}).get(topic), dict)
+                else score
+            )
+            language_data["topic_mastery"][topic]["recognition"] = _bounded_score(score)
+
+    for key in ("weak_topics", "recent_topics", "daily_summary"):
+        if key in state:
+            language_data[key] = copy.deepcopy(state[key])
+
+    if isinstance(state.get("conversation_memory"), dict):
+        memory = copy.deepcopy(state["conversation_memory"])
+        memory.setdefault("last_video_context", copy.deepcopy(language_data["conversation_memory"].get("last_video_context", {})))
+        if "last_video_object" in memory:
+            memory["last_video_context"]["primary_object"] = memory.get("last_video_object")
+        language_data["conversation_memory"].update(memory)
+
+    if isinstance(state.get("review_queue"), dict):
+        synced_queue: dict[str, Any] = {}
+        for key, value in state["review_queue"].items():
+            record = copy.deepcopy(value) if isinstance(value, dict) else {"value": value}
+            target = record.get("target") or record.get("topic") or key
+            review_id = record.get("id") or (key if str(key).startswith("review_topic_") else f"review_topic_{_slugify(str(target))}")
+            record.update({"id": review_id, "item_type": "topic", "target": target, "source": record.get("source", "lesson")})
+            record.setdefault("topic", target)
+            if "focus_skill" in record and "skill" not in record:
+                record["skill"] = record["focus_skill"]
+            synced_queue[review_id] = record
+        language_data["review_queue"] = synced_queue
+
+    if isinstance(state.get("history"), list):
+        known_legacy = {
+            json.dumps(event.get("payload", {}).get("legacy"), sort_keys=True, ensure_ascii=False)
+            for event in language_data.get("history", [])
+            if isinstance(event, dict) and isinstance(event.get("payload"), dict) and "legacy" in event["payload"]
+        }
+        for item in state["history"]:
+            if _looks_like_event(item):
+                continue
+            key = json.dumps(item, sort_keys=True, ensure_ascii=False)
+            if key in known_legacy:
+                continue
+            event_type = _legacy_history_event_type(item)
+            add_event(
+                state,
+                {
+                    "type": event_type,
+                    "source": "compat_history",
+                    "summary": _history_summary(item, event_type) if isinstance(item, dict) else "Legacy history item.",
+                    "payload": {"legacy": copy.deepcopy(item)},
+                },
+                language,
+            )
+            known_legacy.add(key)
+
+
+def _attach_compat_from_v2(state: dict[str, Any]) -> None:
+    language = state.get("active_language") or "Spanish"
+    language_data = language_state(state, language)
+    profile = language_data["profile"]
+    learner = state.setdefault("learner", {})
+    learner["name"] = learner.get("display_name", "Demo Learner")
+    learner["target_language"] = language
+    learner["current_level"] = profile.get("current_level", "A1")
+    learner["level"] = profile.get("current_level", "A1")
+    learner["xp"] = profile.get("xp", 0)
+    learner["streak_days"] = profile.get("streak_days", 1)
+    learner["learning_goals"] = copy.deepcopy(profile.get("learning_goals", DEFAULT_GOALS))
+    state["skills"] = skill_scores(state, language)
+    state["topic_mastery"] = topic_scores(state, language)
+    state["weak_topics"] = copy.deepcopy(language_data.get("weak_topics", []))
+    state["recent_topics"] = copy.deepcopy(language_data.get("recent_topics", []))
+    state["review_queue"] = _compat_review_queue(language_data.get("review_queue", {}))
+    state["conversation_memory"] = _compat_conversation_memory(language_data.get("conversation_memory", {}))
+    state["history"] = _compat_history(language_data.get("history", []))
+    state["daily_summary"] = copy.deepcopy(language_data.get("daily_summary", {"last_sent_at": None, "lessons_completed": 0}))
+
+
+def _strip_compat_views(state: dict[str, Any]) -> dict[str, Any]:
+    persisted = copy.deepcopy(state)
+    for key in COMPAT_TOP_LEVEL_KEYS:
+        persisted.pop(key, None)
+    learner = persisted.setdefault("learner", {})
+    for key in COMPAT_LEARNER_KEYS:
+        learner.pop(key, None)
+    persisted["learner"] = {key: value for key, value in learner.items() if key in V2_LEARNER_KEYS}
+    return persisted
+
+
+def _compat_review_queue(queue: dict[str, Any]) -> dict[str, Any]:
+    compat: dict[str, Any] = {}
+    for key, value in queue.items():
+        if not isinstance(value, dict):
+            continue
+        target = value.get("target") or value.get("topic") or key
+        record = copy.deepcopy(value)
+        record.setdefault("topic", target)
+        compat[str(target)] = record
+    return compat
+
+
+def _compat_conversation_memory(memory: dict[str, Any]) -> dict[str, Any]:
+    compat = copy.deepcopy(memory)
+    context = compat.get("last_video_context", {}) if isinstance(compat.get("last_video_context"), dict) else {}
+    compat["last_video_object"] = context.get("primary_object")
+    return compat
+
+
+def _compat_history(history: list[Any]) -> list[Any]:
+    compat: list[Any] = []
+    for event in history:
+        if isinstance(event, dict) and isinstance(event.get("payload"), dict) and "legacy" in event["payload"]:
+            compat.append(copy.deepcopy(event["payload"]["legacy"]))
+        else:
+            compat.append(copy.deepcopy(event))
+    return compat
+
+
+def _legacy_history_event_type(item: Any) -> str:
+    if isinstance(item, dict):
+        if item.get("mode") == "conversation":
+            return "conversation_started"
+        if item.get("mode") == "conversation_turn":
+            return "learner_replied"
+        return "lesson_completed"
+    return "progress_updated"
+
+
+def _looks_like_event(item: Any) -> bool:
+    return isinstance(item, dict) and {"id", "type", "occurred_at", "payload"}.issubset(item)
+
+
+def _skill_record(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        record = copy.deepcopy(value)
+        record["score"] = _bounded_score(record.get("score", 0.30))
+        record.setdefault("trend", "flat")
+        record.setdefault("last_practiced", None)
+        record.setdefault("evidence", [])
+        record["evidence"] = list(record["evidence"])[-8:] if isinstance(record["evidence"], list) else []
+        return record
+    return {"score": _bounded_score(value), "trend": "flat", "last_practiced": None, "evidence": []}
+
+
+def _topic_record(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        base = _bounded_score(value.get("recognition", 0.30))
+        record = copy.deepcopy(value)
+    else:
+        base = _bounded_score(value)
+        record = {}
+    record.setdefault("recognition", base)
+    record["recognition"] = _bounded_score(record["recognition"])
+    for key in ("recall", "spoken_use", "written_use", "listening"):
+        record.setdefault(key, base)
+        record[key] = _bounded_score(record[key])
+    record.setdefault("review_interval_days", 1)
+    record.setdefault("last_success", None)
+    record.setdefault("last_failure", None)
+    record.setdefault("evidence", [])
+    record["evidence"] = list(record["evidence"])[-8:] if isinstance(record["evidence"], list) else []
+    return record
+
+
+def _bounded_score(value: Any) -> float:
+    return max(0.05, min(0.99, _as_float(value, 0.30)))
+
+
+def _as_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _slugify(value: Any) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", str(value).lower()).strip("_")
+    return slug or "item"
+
+
+def _next_event_id(state: dict[str, Any]) -> str:
+    count = len(state.get("events", [])) + 1
+    return f"evt_{datetime.now(timezone.utc).strftime('%Y%m%d')}_{count:06d}"
+
+
+def _cap_events(state: dict[str, Any]) -> None:
+    if isinstance(state.get("events"), list):
+        state["events"] = state["events"][-1000:]
+    for lang, lang_state in state.get("languages", {}).items():
+        if isinstance(lang_state, dict) and isinstance(lang_state.get("history"), list):
+            lang_state["history"] = lang_state["history"][-300:]
