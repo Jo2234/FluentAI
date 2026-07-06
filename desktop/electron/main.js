@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, systemPreferences } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, systemPreferences } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -251,6 +251,43 @@ ipcMain.handle("placement:start", async (_event, payload) => {
 
 ipcMain.handle("placement:submit", async (_event, payload) => {
   return runBridge("placement_submit", payload || {});
+});
+
+ipcMain.handle("home:summary", async (_event, payload) => {
+  return runBridge("home_summary", payload || {});
+});
+
+ipcMain.handle("memory:inspect", async (_event, payload) => {
+  return runBridge("memory_inspect", payload || {});
+});
+
+ipcMain.handle("memory:export", async (_event, payload) => {
+  const result = await runBridge("memory_export", payload || {});
+  if (!result.ok) {
+    return result;
+  }
+  const save = await dialog.showSaveDialog(mainWindow, {
+    title: "Export FluentAI Memory",
+    defaultPath: result.filename || "fluentai-memory.json",
+    filters: [{ name: "JSON", extensions: ["json"] }]
+  });
+  if (save.canceled || !save.filePath) {
+    return { ok: false, canceled: true, logs: ["[Privacy Agent] Memory export canceled."] };
+  }
+  try {
+    fs.writeFileSync(save.filePath, JSON.stringify(result.data, null, 2));
+    return { ok: true, path: save.filePath, logs: result.logs || [] };
+  } catch (error) {
+    return { ok: false, error: `Could not write memory export: ${error.message}`, logs: result.logs || [] };
+  }
+});
+
+ipcMain.handle("memory:reset_language", async (_event, payload) => {
+  return runBridge("memory_reset_language", payload || {});
+});
+
+ipcMain.handle("memory:delete_all", async (_event, payload) => {
+  return runBridge("memory_delete_all", payload || {});
 });
 
 ipcMain.handle("lesson:start", async (_event, payload) => {

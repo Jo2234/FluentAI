@@ -427,6 +427,160 @@
       box-shadow: 0 3px 0 #d5e1e6;
     }
 
+    .home-pane {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+      grid-auto-rows: min-content;
+      gap: 14px;
+      align-content: start;
+      background:
+        radial-gradient(circle at 16% 8%, rgba(254, 202, 202, 0.42), transparent 280px),
+        #ffffff;
+    }
+
+    .home-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.92);
+      padding: 16px;
+      box-shadow: 0 2px 0 #e3eaee;
+    }
+
+    .today-panel {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      border-color: #fecaca;
+      background: linear-gradient(135deg, #fff1f2, #ffffff);
+    }
+
+    .today-panel h2,
+    .home-panel h3 {
+      margin-bottom: 6px;
+    }
+
+    .home-panel p,
+    .home-panel li,
+    .home-panel td,
+    .home-panel th {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .home-panel table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .home-panel th,
+    .home-panel td {
+      border-bottom: 1px solid #eef2f4;
+      padding: 7px 6px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    .home-panel th {
+      color: var(--ink);
+      font-weight: 850;
+    }
+
+    .home-list {
+      display: grid;
+      gap: 8px;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .home-list li {
+      border-bottom: 1px solid #eef2f4;
+      padding-bottom: 8px;
+    }
+
+    .home-list li:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .home-metric {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 9px;
+      margin: 4px 6px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+      background: #fff;
+    }
+
+    .memory-inspector {
+      grid-column: 1 / -1;
+    }
+
+    .memory-inspector summary {
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-weight: 850;
+    }
+
+    .memory-inspector summary span:last-child {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .memory-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 14px 0;
+    }
+
+    button.small-action {
+      min-height: 38px;
+      padding: 8px 10px;
+      text-align: center;
+      box-shadow: 0 2px 0 #d5e1e6;
+    }
+
+    .danger-text {
+      color: var(--danger) !important;
+    }
+
+    .memory-sections {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .memory-section {
+      border: 1px solid #eef2f4;
+      border-radius: 8px;
+      padding: 12px;
+      min-width: 0;
+    }
+
+    .memory-json {
+      max-height: 360px;
+      overflow: auto;
+      border: 1px solid #eef2f4;
+      border-radius: 8px;
+      background: #111827;
+      color: #f9fafb;
+      padding: 14px;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+
     #conversationPane {
       grid-column: 1 / -1;
       padding: 0;
@@ -1659,6 +1813,100 @@
       box-shadow: 0 28px 90px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.06);
     }
     .pane { border-radius: 20px; }
+    .home-pane {
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      background:
+        radial-gradient(circle at 14% 8%, rgba(124,124,255,0.24), transparent 300px),
+        radial-gradient(circle at 82% 12%, rgba(139,211,255,0.14), transparent 280px),
+        rgba(9,10,15,0.78);
+      border-color: rgba(255,255,255,0.10);
+      box-shadow: 0 20px 70px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+    .home-panel {
+      min-width: 0;
+      border-color: rgba(255,255,255,0.10);
+      background: rgba(10,12,18,0.82);
+      color: #f7f8f8;
+      box-shadow: 0 16px 42px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.055);
+      backdrop-filter: blur(18px);
+    }
+    .today-panel {
+      grid-template-columns: minmax(0, 1fr) auto;
+      border-color: rgba(139,211,255,0.24);
+      background:
+        radial-gradient(circle at 12% 18%, rgba(139,211,255,0.22), transparent 220px),
+        linear-gradient(135deg, rgba(18,22,32,0.94), rgba(10,12,18,0.88));
+      background-color: rgba(10,12,18,0.88);
+    }
+    .home-panel .eyebrow {
+      color: #aeb8ff;
+      font-size: 12px;
+      font-weight: 850;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 7px;
+    }
+    .today-panel h2,
+    .home-panel h3,
+    .memory-inspector summary span:first-child {
+      color: #f7f8f8;
+      font-weight: 850;
+    }
+    .home-panel p,
+    .home-panel li,
+    .home-panel td {
+      color: #d7dcee;
+    }
+    .home-panel th,
+    .home-panel strong {
+      color: #f7f8f8;
+    }
+    .home-panel th,
+    .home-panel td,
+    .home-list li {
+      border-bottom-color: rgba(255,255,255,0.08);
+    }
+    .home-metric {
+      border-color: rgba(139,211,255,0.22);
+      background: rgba(139,211,255,0.10);
+      color: #dff3ff;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+    .memory-inspector summary span:last-child {
+      color: #b4bfce;
+    }
+    .memory-section {
+      border-color: rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.035);
+    }
+    .memory-json {
+      border-color: rgba(255,255,255,0.10);
+      background: rgba(5,7,12,0.92);
+    }
+    .home-panel button.secondary,
+    .home-panel button.overlay-secondary {
+      border: 1px solid rgba(139,211,255,0.24);
+      background: rgba(10,12,18,0.86);
+      color: #f7f8f8;
+      min-height: 42px;
+      padding: 11px 13px;
+      text-align: center;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 10px 24px rgba(0,0,0,0.20);
+    }
+    .home-panel button.secondary:hover,
+    .home-panel button.overlay-secondary:hover {
+      border-color: rgba(139,211,255,0.42);
+      background: rgba(18,22,32,0.96);
+    }
+    .home-panel button.secondary.memory-danger {
+      border-color: rgba(255,107,122,0.36);
+      background: rgba(10,12,18,0.86);
+      color: #ff9aa5;
+    }
+    .home-panel button.secondary.memory-danger:hover {
+      border-color: rgba(255,107,122,0.58);
+      background: rgba(35,14,20,0.92);
+    }
     .lesson-grid {
       min-height: 100%;
       grid-template-columns: minmax(300px, 0.74fr) minmax(460px, 1.26fr);
@@ -1819,6 +2067,37 @@
         font-size: 28px;
       }
     }
+
+    @media (max-width: 900px) {
+      .workspace.logs-open,
+      .workspace.logs-closed {
+        grid-template-columns: 1fr;
+      }
+
+      .agent-log-panel {
+        grid-column: 1;
+        grid-row: auto;
+      }
+
+      .home-pane {
+        grid-template-columns: 1fr;
+        padding: 16px;
+      }
+
+      .today-panel {
+        grid-template-columns: 1fr;
+      }
+
+      .home-panel,
+      .memory-inspector {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+
+      .memory-sections {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1852,7 +2131,8 @@
         <option value="Spanish" selected>Spanish</option>
         <option value="French">French</option>
       </select>
-      <button class="header-tab active" id="headerLessonBtn" type="button">Lesson</button>
+      <button class="header-tab active" id="headerHomeBtn" type="button">Home</button>
+      <button class="header-tab" id="headerLessonBtn" type="button">Lesson</button>
       <button class="header-tab" id="headerConversationBtn" type="button">Conversation</button>
     </div>
   </header>
@@ -1860,7 +2140,11 @@
   <main>
     <section class="workspace" id="workspace">
       <div class="workspace-head">
-        <button class="ghost active" id="lessonModeBtn" type="button">
+        <button class="ghost active" id="homeModeBtn" type="button">
+          <strong>Home</strong>
+          <span>Your tutor workspace, memory, and next best action.</span>
+        </button>
+        <button class="ghost" id="lessonModeBtn" type="button">
           <strong>Lesson Mode</strong>
           <span>Adaptive lesson, quiz, evaluation, and progress update.</span>
         </button>
@@ -1909,11 +2193,29 @@
         <p><strong>Speaking goal:</strong> loading</p>
       </div>
 
-      <div class="memory-affordance">
-        <button class="memory-refresh-btn" id="meetTutorAgainBtn" type="button">Meet your tutor again</button>
+      <div class="pane home-pane" id="homePane">
+        <section class="home-panel today-panel" id="todayPanel"></section>
+        <section class="home-panel profile-panel" id="homeProfilePanel"></section>
+        <section class="home-panel" id="reviewPreviewPanel"></section>
+        <section class="home-panel" id="recentProgressPanel"></section>
+        <section class="home-panel" id="speakingTrendPanel"></section>
+        <details class="home-panel memory-inspector" id="memoryInspectorPanel">
+          <summary>
+            <span>Memory inspector</span>
+            <span>Profile, skills, mistakes, reviews, conversation, privacy</span>
+          </summary>
+          <div class="memory-toolbar">
+            <button class="secondary small-action" id="memoryExportBtn" type="button">Export memory</button>
+            <button class="secondary small-action" id="memoryJsonToggleBtn" type="button">Show JSON</button>
+            <button class="secondary small-action" id="memoryResetLanguageBtn" type="button">Reset language</button>
+            <button class="secondary small-action memory-danger" id="memoryDeleteAllBtn" type="button">Delete all memory</button>
+          </div>
+          <div class="memory-sections" id="memoryInspectorContent"></div>
+          <pre class="memory-json hidden" id="memoryJson"></pre>
+        </details>
       </div>
 
-      <div class="pane" id="lessonPane">
+      <div class="pane hidden" id="lessonPane">
         <div class="empty-state" id="lessonEmpty">
           <div><strong>Ready for today</strong><p>Start a lesson when you want the agents to build the next quiz.</p></div>
         </div>
@@ -1992,6 +2294,24 @@
         submitOnboarding: (payload) => bridge("onboarding_submit", payload),
         startPlacement: (payload) => bridge("placement_start", payload),
         submitPlacement: (payload) => bridge("placement_submit", payload),
+        homeSummary: (payload) => bridge("home_summary", payload),
+        memoryInspect: (payload) => bridge("memory_inspect", payload),
+        memoryExport: async (payload) => {
+          const result = await bridge("memory_export", payload);
+          if (result.ok && result.data) {
+            const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = result.filename || "fluentai-memory.json";
+            link.click();
+            URL.revokeObjectURL(url);
+            return { ok: true, path: link.download, logs: result.logs || [] };
+          }
+          return result;
+        },
+        memoryResetLanguage: (payload) => bridge("memory_reset_language", payload),
+        memoryDeleteAll: (payload) => bridge("memory_delete_all", payload),
         startLesson: (payload) => bridge("lesson_start", payload),
         submitLesson: (payload) => bridge("lesson_submit", payload),
         realtimeClientSecret: (payload) => bridge("realtime_client_secret", payload),
@@ -2005,9 +2325,12 @@
     }
 
     const state = {
-      mode: "lesson",
+      mode: "home",
       busy: false,
       profile: null,
+      homeSummary: null,
+      memoryPayload: null,
+      memoryJsonVisible: false,
       lessonSession: null,
       conversationSession: null,
       latestTutorMessage: "",
@@ -2061,6 +2384,19 @@
       profileBox: document.getElementById("profileBox"),
       workspace: document.getElementById("workspace"),
       workspaceStatus: document.getElementById("workspaceStatus"),
+      homePane: document.getElementById("homePane"),
+      todayPanel: document.getElementById("todayPanel"),
+      homeProfilePanel: document.getElementById("homeProfilePanel"),
+      reviewPreviewPanel: document.getElementById("reviewPreviewPanel"),
+      recentProgressPanel: document.getElementById("recentProgressPanel"),
+      speakingTrendPanel: document.getElementById("speakingTrendPanel"),
+      memoryInspectorPanel: document.getElementById("memoryInspectorPanel"),
+      memoryInspectorContent: document.getElementById("memoryInspectorContent"),
+      memoryJson: document.getElementById("memoryJson"),
+      memoryExportBtn: document.getElementById("memoryExportBtn"),
+      memoryJsonToggleBtn: document.getElementById("memoryJsonToggleBtn"),
+      memoryResetLanguageBtn: document.getElementById("memoryResetLanguageBtn"),
+      memoryDeleteAllBtn: document.getElementById("memoryDeleteAllBtn"),
       lessonPane: document.getElementById("lessonPane"),
       conversationPane: document.getElementById("conversationPane"),
       lessonEmpty: document.getElementById("lessonEmpty"),
@@ -2083,15 +2419,16 @@
       video: document.getElementById("video"),
       voiceMode: document.getElementById("voiceMode"),
       videoPreview: document.getElementById("videoPreview"),
+      headerHomeBtn: document.getElementById("headerHomeBtn"),
       headerLessonBtn: document.getElementById("headerLessonBtn"),
       headerConversationBtn: document.getElementById("headerConversationBtn"),
+      homeModeBtn: document.getElementById("homeModeBtn"),
       lessonModeBtn: document.getElementById("lessonModeBtn"),
       conversationModeBtn: document.getElementById("conversationModeBtn"),
       startLessonBtn: document.getElementById("startLessonBtn"),
       startConversationBtn: document.getElementById("startConversationBtn"),
       startTextFallbackBtn: document.getElementById("startTextFallbackBtn"),
       startVoiceFromTextBtn: document.getElementById("startVoiceFromTextBtn"),
-      meetTutorAgainBtn: document.getElementById("meetTutorAgainBtn"),
       agentLogPanel: document.getElementById("agentLogPanel"),
       agentLogToggle: document.getElementById("agentLogToggle"),
       agentLogs: document.getElementById("agentLogs")
@@ -2110,14 +2447,17 @@
 
     function setMode(mode) {
       state.mode = mode;
-      if (mode === "lesson") {
+      if (mode !== "conversation") {
         endRealtimeCall();
       }
+      els.homePane.classList.toggle("hidden", mode !== "home");
       els.lessonPane.classList.toggle("hidden", mode !== "lesson");
       els.conversationPane.classList.toggle("hidden", mode !== "conversation");
       els.workspace.classList.toggle("conversation-active", mode === "conversation");
+      els.homeModeBtn.classList.toggle("active", mode === "home");
       els.lessonModeBtn.classList.toggle("active", mode === "lesson");
       els.conversationModeBtn.classList.toggle("active", mode === "conversation");
+      els.headerHomeBtn.classList.toggle("active", mode === "home");
       els.headerLessonBtn.classList.toggle("active", mode === "lesson");
       els.headerConversationBtn.classList.toggle("active", mode === "conversation");
       els.conversationPane.classList.toggle("text-chat-active", mode === "conversation" && !shouldUseVoice());
@@ -2332,7 +2672,8 @@
       if (!result || !result.ok) {
         if (result && result.error) showError(result.error);
         await refreshStatus(true);
-        await ensureLessonStarted();
+        await loadHomeSummary();
+        setMode("home");
         return;
       }
       appendLogs(result.logs);
@@ -2344,7 +2685,8 @@
         renderProfile(result.profile);
       }
       await refreshStatus(true);
-      await ensureLessonStarted();
+      await loadHomeSummary();
+      setMode("home");
     }
 
     function showOnboardingOverlay(status) {
@@ -2564,7 +2906,7 @@
       state.onboarding.open = false;
       if (result && result.profile) renderProfile(result.profile);
       if (result && result.logs) appendLogs(result.logs);
-      refreshStatus(true).then(ensureLessonStarted);
+      refreshStatus(true).then(loadHomeSummary).then(() => setMode("home"));
       if (state.onboarding.previousFocus && state.onboarding.previousFocus.focus) {
         state.onboarding.previousFocus.focus();
       }
@@ -3172,6 +3514,7 @@
             state.postCallSummary = result.post_call_summary;
             renderChat();
           }
+          await loadHomeSummary();
         } catch {
           appendLogs(["[Conversation Orchestrator] Could not persist call summary."]);
         }
@@ -3317,6 +3660,269 @@
       }
       renderProfile(result.profile);
       appendLogs(result.logs);
+    }
+
+    async function loadHomeSummary() {
+      const result = await window.fluentAI.homeSummary(bridgePayload());
+      if (!result.ok) {
+        showError(result.error || "Could not load home workspace.");
+        appendLogs(result.logs);
+        return;
+      }
+      state.homeSummary = result;
+      if (result.profile) renderProfile(result.profile);
+      appendLogs(result.logs);
+      renderHome(result);
+    }
+
+    function renderHome(summary) {
+      const today = summary.today || {};
+      const todayCopy = document.createElement("div");
+      todayCopy.append(
+        text("p", "Today", "eyebrow"),
+        text("h2", today.title || "Start today's lesson"),
+        text("p", today.body || "Your tutor is ready to choose the next useful practice.")
+      );
+      const cta = document.createElement("button");
+      cta.type = "button";
+      cta.textContent = today.cta || "Start today's lesson";
+      cta.addEventListener("click", runTodayAction);
+      els.todayPanel.replaceChildren(todayCopy, cta);
+
+      const profile = summary.profile || state.profile || {};
+      const goals = (profile.learning_goals || []).slice(0, 2).join(", ") || profile.first_practice_goal || "Build useful daily fluency.";
+      const profileContent = document.createElement("div");
+      profileContent.append(
+        text("h3", "Profile"),
+        text("p", `${profile.name || "Learner"} · ${profile.language || currentLanguage()} · Level ${profile.level || "A1"}`),
+        text("p", `Goal: ${goals}`)
+      );
+      const meet = document.createElement("button");
+      meet.className = "secondary overlay-secondary";
+      meet.id = "meetTutorAgainBtn";
+      meet.type = "button";
+      meet.textContent = "Meet your tutor again";
+      meet.addEventListener("click", () => {
+        appendLogs(["[Onboarding Agent] Reopening tutor intake from Home."]);
+        showOnboardingOverlay({ rerun: true, defaults: {
+          language: currentLanguage(),
+          session_minutes: state.profile && state.profile.preferred_session_length_minutes ? state.profile.preferred_session_length_minutes : 10,
+          video_default: els.video.value || "off"
+        } });
+      });
+      els.homeProfilePanel.replaceChildren(profileContent, meet);
+
+      els.reviewPreviewPanel.replaceChildren(
+        text("h3", "Review queue"),
+        listOrEmpty(
+          summary.review_preview || [],
+          (item) => `${item.target || "Review item"}${item.skill ? ` · ${item.skill}` : ""}${item.due_at ? ` · ${formatDueDate(item.due_at)}` : ""}`,
+          "No reviews scheduled."
+        )
+      );
+      els.recentProgressPanel.replaceChildren(
+        text("h3", "Recent progress"),
+        listOrEmpty(
+          summary.recent_progress || [],
+          (item) => `${item.summary} ${item.relative_time ? `(${item.relative_time})` : ""}`,
+          "No completed practice yet."
+        )
+      );
+      const confidence = summary.speaking_confidence || { score: 0.30, trend: "flat", recent: [] };
+      els.speakingTrendPanel.replaceChildren(
+        text("h3", "Speaking trend"),
+        text("p", `${confidenceArrowName(confidence.trend)} ${Math.round(Number(confidence.score || 0) * 100)}% confidence`),
+        listOrEmpty(
+          confidence.recent || [],
+          (item) => `${item.topic || "Conversation"} · ${item.confidence_change || "steady"}`,
+          "No speaking sessions yet."
+        )
+      );
+      const counts = summary.memory_counts || {};
+      els.speakingTrendPanel.append(
+        metric(`Events ${counts.events || 0}`),
+        metric(`Mistakes ${counts.mistakes || 0}`),
+        metric(`Due ${counts.reviews_due || 0}`)
+      );
+    }
+
+    function listOrEmpty(items, render, emptyText) {
+      const list = document.createElement("ul");
+      list.className = "home-list";
+      if (!items.length) {
+        list.append(text("li", emptyText));
+        return list;
+      }
+      items.forEach((item) => list.append(text("li", render(item))));
+      return list;
+    }
+
+    function metric(value) {
+      return text("span", value, "home-metric");
+    }
+
+    function confidenceArrowName(trend) {
+      if (trend === "up") return "↑ Rising";
+      if (trend === "down") return "↓ Needs attention";
+      return "→ Steady";
+    }
+
+    async function runTodayAction() {
+      const today = state.homeSummary && state.homeSummary.today ? state.homeSummary.today : {};
+      appendLogs([`[Home Agent] CTA selected: ${today.cta || "Start today's lesson"}.`]);
+      if (today.mode === "conversation") {
+        setMode("conversation");
+        await startConversation();
+        return;
+      }
+      await startLesson();
+    }
+
+    function showHome() {
+      setMode("home");
+      loadHomeSummary();
+    }
+
+    async function openMemoryInspector() {
+      if (!els.memoryInspectorPanel.open) return;
+      appendLogs(["[Memory Inspector Agent] Opening sanitized memory inspector."]);
+      const result = await window.fluentAI.memoryInspect(bridgePayload());
+      if (!result.ok) {
+        showError(result.error || "Could not inspect memory.");
+        appendLogs(result.logs);
+        return;
+      }
+      state.memoryPayload = result;
+      appendLogs(result.logs);
+      renderMemoryInspector(result);
+    }
+
+    function renderMemoryInspector(memory) {
+      els.memoryInspectorContent.replaceChildren(
+        memorySection("Profile", [
+          ["Name", memory.learner && memory.learner.display_name],
+          ["Level", memory.profile && memory.profile.current_level],
+          ["Goal", memory.profile && (memory.profile.first_practice_goal || (memory.profile.learning_goals || [])[0])],
+        ]),
+        memoryTableSection("Skills", ["Skill", "Score", "Trend"], (memory.skills || []).map((item) => [
+          item.name,
+          percent(item.score),
+          item.trend || "flat",
+        ])),
+        memoryTableSection("Topic mastery", ["Topic", "Recognition", "Recall", "Speaking"], (memory.topic_mastery || []).map((item) => [
+          item.topic,
+          percent(item.recognition),
+          percent(item.recall),
+          percent(item.spoken_use),
+        ])),
+        memoryTableSection("Mistakes", ["Incorrect", "Corrected", "Topic"], (memory.mistakes || []).map((item) => [
+          item.incorrect_form || "",
+          item.corrected_form || "",
+          item.topic || "",
+        ])),
+        memoryTableSection("Review queue", ["Target", "Skill", "Due"], (memory.review_queue || []).map((item) => [
+          item.target || "",
+          item.skill || "",
+          item.due_at ? formatDueDate(item.due_at) : "",
+        ])),
+        memorySection("Conversation", [
+          ["Speaking confidence", percent(memory.conversation && memory.conversation.speaking_confidence)],
+          ["Next goal", memory.conversation && memory.conversation.next_speaking_goal],
+          ["Sessions", memory.conversation && memory.conversation.sessions_completed],
+        ]),
+        memoryTableSection("Recent events", ["Type", "When", "Summary"], (memory.recent_events || []).slice(-8).reverse().map((item) => [
+          item.type || "",
+          item.occurred_at ? formatDueDate(item.occurred_at) : "",
+          item.summary || "",
+        ])),
+        memorySection("Privacy", [
+          ["Local only", memory.privacy && String(memory.privacy.local_only)],
+          ["Raw audio", memory.privacy && String(memory.privacy.store_raw_audio)],
+          ["Raw video", memory.privacy && String(memory.privacy.store_raw_video)],
+          ["Redactions", (memory.redactions || []).join(", ")],
+        ])
+      );
+      els.memoryJson.textContent = JSON.stringify(memory, null, 2);
+      els.memoryJson.classList.toggle("hidden", !state.memoryJsonVisible);
+      els.memoryJsonToggleBtn.textContent = state.memoryJsonVisible ? "Hide JSON" : "Show JSON";
+    }
+
+    function memorySection(title, rows) {
+      const section = document.createElement("section");
+      section.className = "memory-section";
+      section.append(text("h3", title));
+      rows.forEach(([label, value]) => section.append(profileLine(label, value == null || value === "" ? "none" : String(value))));
+      return section;
+    }
+
+    function memoryTableSection(title, headings, rows) {
+      const section = document.createElement("section");
+      section.className = "memory-section";
+      section.append(text("h3", title));
+      if (!rows.length) {
+        section.append(text("p", "None yet."));
+        return section;
+      }
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      headings.forEach((heading) => headRow.append(text("th", heading)));
+      thead.append(headRow);
+      const tbody = document.createElement("tbody");
+      rows.slice(0, 10).forEach((row) => {
+        const tr = document.createElement("tr");
+        row.forEach((cell) => tr.append(text("td", cell == null || cell === "" ? "none" : String(cell))));
+        tbody.append(tr);
+      });
+      table.append(thead, tbody);
+      section.append(table);
+      return section;
+    }
+
+    function percent(value) {
+      const number = Number(value);
+      if (Number.isNaN(number)) return "none";
+      return `${Math.round(number * 100)}%`;
+    }
+
+    async function exportMemory() {
+      appendLogs(["[Privacy Agent] Export requested from Home."]);
+      const result = await window.fluentAI.memoryExport(bridgePayload({ scope: "language" }));
+      appendLogs(result.logs);
+      if (!result.ok) {
+        if (!result.canceled) showError(result.error || "Memory export failed.");
+        return;
+      }
+      els.workspaceStatus.textContent = result.path ? `Exported memory to ${result.path}.` : "Memory export ready.";
+      await loadHomeSummary();
+      if (els.memoryInspectorPanel.open) await openMemoryInspector();
+    }
+
+    async function resetLanguageMemory() {
+      const expected = `RESET ${currentLanguage()}`;
+      const confirmed = window.prompt(`Type ${expected} to reset this language.`);
+      appendLogs(["[Privacy Agent] Language reset requested from Home."]);
+      const result = await window.fluentAI.memoryResetLanguage(bridgePayload({ confirm: confirmed || "" }));
+      appendLogs(result.logs);
+      if (!result.ok) {
+        showError(result.error || "Language reset canceled.");
+        return;
+      }
+      if (result.profile) renderProfile(result.profile);
+      await loadHomeSummary();
+      if (els.memoryInspectorPanel.open) renderMemoryInspector(result.memory);
+    }
+
+    async function deleteAllMemory() {
+      const confirmed = window.prompt("Type DELETE ALL MEMORY to delete all memory.");
+      appendLogs(["[Privacy Agent] Delete-all requested from Home."]);
+      const result = await window.fluentAI.memoryDeleteAll(bridgePayload({ confirm: confirmed || "" }));
+      appendLogs(result.logs);
+      if (!result.ok) {
+        showError(result.error || "Delete all memory canceled.");
+        return;
+      }
+      await initOnboarding();
     }
 
     async function ensureLessonStarted() {
@@ -3542,6 +4148,7 @@
       appendLogs(result.logs);
       renderQuizResults(result.results, result.summary);
       setBusy(false, `Score ${result.summary.score}`);
+      await loadHomeSummary();
     }
 
     function renderQuizResults(results, summary) {
@@ -3709,6 +4316,7 @@
       appendLogs(result.logs);
       renderChat();
       setBusy(false, result.done ? "Turn target reached. You can keep chatting." : "Your turn.");
+      await loadHomeSummary();
       els.chatInput.focus();
     }
 
@@ -3778,8 +4386,10 @@
       return "→";
     }
 
+    els.homeModeBtn.addEventListener("click", showHome);
     els.lessonModeBtn.addEventListener("click", () => setMode("lesson"));
     els.conversationModeBtn.addEventListener("click", () => setMode("conversation"));
+    els.headerHomeBtn.addEventListener("click", showHome);
     els.headerLessonBtn.addEventListener("click", () => setMode("lesson"));
     els.headerConversationBtn.addEventListener("click", () => setMode("conversation"));
     els.startLessonBtn.addEventListener("click", startLesson);
@@ -3788,11 +4398,14 @@
     els.startVoiceFromTextBtn.addEventListener("click", showVoiceCallInterface);
     els.onboardingForm.addEventListener("submit", submitOnboarding);
     els.placementSkipBtn.addEventListener("click", () => submitPlacement({ skipBeginner: true }));
-    els.meetTutorAgainBtn.addEventListener("click", () => showOnboardingOverlay({ rerun: true, defaults: {
-      language: currentLanguage(),
-      session_minutes: state.profile && state.profile.preferred_session_length_minutes ? state.profile.preferred_session_length_minutes : 10,
-      video_default: els.video.value || "off"
-    } }));
+    els.memoryInspectorPanel.addEventListener("toggle", openMemoryInspector);
+    els.memoryExportBtn.addEventListener("click", exportMemory);
+    els.memoryJsonToggleBtn.addEventListener("click", () => {
+      state.memoryJsonVisible = !state.memoryJsonVisible;
+      if (state.memoryPayload) renderMemoryInspector(state.memoryPayload);
+    });
+    els.memoryResetLanguageBtn.addEventListener("click", resetLanguageMemory);
+    els.memoryDeleteAllBtn.addEventListener("click", deleteAllMemory);
     els.voiceCallBtn.addEventListener("click", startVoiceCallFromButton);
     els.muteBtn.addEventListener("click", toggleMute);
     els.cameraBtn.addEventListener("click", toggleCallCamera);
@@ -3817,7 +4430,8 @@
       renderChat();
       setBusy(false, `Switched to ${currentLanguage()}.`);
       await refreshStatus(true);
-      if (state.mode === "lesson") await ensureLessonStarted();
+      await loadHomeSummary();
+      setMode("home");
     });
     els.voiceMode.addEventListener("change", () => {
       endRealtimeCall();
@@ -3837,7 +4451,7 @@
     updateVideoPreview();
     syncAgentLogPanel();
     loadMediaDiagnostics().then(() => renderCallMedia());
-    setMode("lesson");
+    setMode("home");
     initOnboarding();
   </script>
 </body>

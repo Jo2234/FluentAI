@@ -249,6 +249,14 @@ class CurriculumTests(unittest.TestCase):
                 self.assertTrue(all(item.get("romanization") for item in topic["vocabulary_rich"]))
                 self.assertTrue(all(item.get("romanization") for item in topic["examples_rich"]))
 
+    def test_conversation_ladder_uses_display_topic_names_without_underscores(self):
+        for language in ("French", "Hindi"):
+            with self.subTest(language=language):
+                topics = [entry["topic"] for entry in curriculum.conversation_ladder(language)["B1"]]
+                self.assertIn("future plans", topics)
+                self.assertNotIn("future_plans", topics)
+                self.assertIsNotNone(curriculum.topic_lesson(language, "B1", "future_plans"))
+
     def test_loader_resolves_from_copied_package_layout(self):
         with TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

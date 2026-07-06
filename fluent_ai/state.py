@@ -256,6 +256,20 @@ def save_state(path: Path, state: dict[str, Any]) -> None:
         file.write("\n")
 
 
+def reset_language_state(state: dict[str, Any], language: str) -> dict[str, Any]:
+    state.setdefault("languages", {})
+    state["languages"][language] = _default_language_state(language)
+    if not state.get("active_language"):
+        state["active_language"] = language
+    return state["languages"][language]
+
+
+def delete_all_memory(path: Path, language: str) -> dict[str, Any]:
+    state = default_state(language)
+    save_state(path, state)
+    return state
+
+
 def _default_v2_state(language: str) -> dict[str, Any]:
     now = utc_now()
     return {

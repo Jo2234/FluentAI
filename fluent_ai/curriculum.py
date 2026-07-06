@@ -69,7 +69,7 @@ def conversation_ladder(language: str) -> dict[str, list[dict[str, Any]]]:
             if explicit_entries:
                 for entry in explicit_entries:
                     if isinstance(entry, dict):
-                        entries.append(copy.deepcopy(entry))
+                        entries.append(_conversation_entry(entry))
             else:
                 topics = details.get("topics", {}) if isinstance(details, dict) else {}
                 for topic in details.get("topic_order", []):
@@ -79,7 +79,7 @@ def conversation_ladder(language: str) -> dict[str, list[dict[str, Any]]]:
                     if isinstance(topic_details, dict):
                         for entry in topic_details.get("conversation", []) or []:
                             if isinstance(entry, dict):
-                                entries.append(copy.deepcopy(entry))
+                                entries.append(_conversation_entry(entry))
             if entries:
                 ladder[str(level)] = entries
         _CONVERSATION_CACHE[key] = ladder
@@ -162,6 +162,13 @@ def _topic_to_lesson(topic: dict[str, Any]) -> dict[str, Any]:
 
     # TODO: Include pronunciation_hints and cultural_note in OpenAI lesson enhancement once provider prompts are editable.
     return lesson
+
+
+def _conversation_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    copied = copy.deepcopy(entry)
+    if isinstance(copied.get("topic"), str):
+        copied["topic"] = copied["topic"].replace("_", " ")
+    return copied
 
 
 def _pairs(value: Any) -> list[tuple[str, str]]:

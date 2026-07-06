@@ -101,6 +101,93 @@ class RendererUITests(unittest.TestCase):
         self.assertIn("startPlacement: (payload) => bridge(\"placement_start\", payload)", self.html)
         self.assertIn("submitPlacement: (payload) => bridge(\"placement_submit\", payload)", self.html)
 
+    def test_home_workspace_and_memory_inspector_regions_exist(self):
+        for marker in [
+            'button class="header-tab active" id="headerHomeBtn"',
+            'button class="ghost active" id="homeModeBtn"',
+            'div class="pane home-pane" id="homePane"',
+            'section class="home-panel today-panel" id="todayPanel"',
+            'section class="home-panel profile-panel" id="homeProfilePanel"',
+            'section class="home-panel" id="reviewPreviewPanel"',
+            'section class="home-panel" id="recentProgressPanel"',
+            'section class="home-panel" id="speakingTrendPanel"',
+            'details class="home-panel memory-inspector" id="memoryInspectorPanel"',
+            "Profile, skills, mistakes, reviews, conversation, privacy",
+            "Export memory",
+            "Show JSON",
+            "Reset language",
+            "Delete all memory",
+        ]:
+            self.assertIn(marker, self.html)
+
+    def test_home_workspace_uses_dark_cards_and_responsive_stack(self):
+        for marker in [
+            ".home-panel {",
+            "background: rgba(10,12,18,0.82);",
+            "background-color: rgba(10,12,18,0.88);",
+            "color: #f7f8f8;",
+            ".home-panel button.secondary,",
+            ".home-panel button.overlay-secondary",
+            'meet.className = "secondary overlay-secondary";',
+            "@media (max-width: 900px)",
+            ".workspace.logs-open,\n      .workspace.logs-closed",
+            ".home-pane {\n        grid-template-columns: 1fr;",
+            ".memory-sections {\n        grid-template-columns: 1fr;",
+        ]:
+            self.assertIn(marker, self.html)
+
+    def test_home_renderer_functions_and_no_initial_lesson_autostart(self):
+        for function_name in [
+            "loadHomeSummary",
+            "renderHome",
+            "runTodayAction",
+            "showHome",
+            "openMemoryInspector",
+            "renderMemoryInspector",
+            "exportMemory",
+            "resetLanguageMemory",
+            "deleteAllMemory",
+        ]:
+            self.assertIn(f"function {function_name}", self.html)
+        self.assertIn('mode: "home"', self.html)
+        self.assertIn('setMode("home");\n    initOnboarding();', self.html)
+        self.assertIn('await loadHomeSummary();\n      setMode("home");', self.html)
+        self.assertNotIn("refreshStatus(true).then(ensureLessonStarted)", self.html)
+        self.assertIn('const expected = `RESET ${currentLanguage()}`;', self.html)
+        self.assertIn('Type DELETE ALL MEMORY to delete all memory.', self.html)
+
+    def test_web_fallback_includes_home_memory_bridge_methods(self):
+        self.assertIn("homeSummary: (payload) => bridge(\"home_summary\", payload)", self.html)
+        self.assertIn("memoryInspect: (payload) => bridge(\"memory_inspect\", payload)", self.html)
+        self.assertIn("const result = await bridge(\"memory_export\", payload)", self.html)
+        self.assertIn("new Blob([JSON.stringify(result.data, null, 2)]", self.html)
+        self.assertIn("memoryResetLanguage: (payload) => bridge(\"memory_reset_language\", payload)", self.html)
+        self.assertIn("memoryDeleteAll: (payload) => bridge(\"memory_delete_all\", payload)", self.html)
+
+    def test_preload_and_main_expose_home_memory_ipc(self):
+        preload = (Path(__file__).resolve().parents[1] / "desktop" / "electron" / "preload.js").read_text(encoding="utf-8")
+        main = (Path(__file__).resolve().parents[1] / "desktop" / "electron" / "main.js").read_text(encoding="utf-8")
+        for marker in [
+            "homeSummary: (payload) => ipcRenderer.invoke(\"home:summary\", payload)",
+            "memoryInspect: (payload) => ipcRenderer.invoke(\"memory:inspect\", payload)",
+            "memoryExport: (payload) => ipcRenderer.invoke(\"memory:export\", payload)",
+            "memoryResetLanguage: (payload) => ipcRenderer.invoke(\"memory:reset_language\", payload)",
+            "memoryDeleteAll: (payload) => ipcRenderer.invoke(\"memory:delete_all\", payload)",
+        ]:
+            self.assertIn(marker, preload)
+        for marker in [
+            'ipcMain.handle("home:summary"',
+            'runBridge("home_summary"',
+            'ipcMain.handle("memory:inspect"',
+            'runBridge("memory_inspect"',
+            'ipcMain.handle("memory:export"',
+            "dialog.showSaveDialog",
+            "fs.writeFileSync",
+            'runBridge("memory_reset_language"',
+            'runBridge("memory_delete_all"',
+        ]:
+            self.assertIn(marker, main)
+
 
 if __name__ == "__main__":
     unittest.main()

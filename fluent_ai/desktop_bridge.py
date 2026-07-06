@@ -3,14 +3,16 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from fluent_ai.agent import (
     QuizResult,
     current_level,
+    due_mistake_items,
     due_review_items,
     evaluate_answers,
     generate_lesson,
@@ -35,10 +37,12 @@ from fluent_ai.state import (
     add_event,
     active_language,
     conversation_memory,
+    delete_all_memory,
     language_state,
     load_state,
     profile_state,
     recalculate_weak_topics,
+    reset_language_state,
     save_state,
     set_skill_score,
     set_topic_score,
@@ -670,6 +674,128 @@ def conversation_end(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def home_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    state = _load(payload)
+    language = active_language(state)
+    data = language_state(state, language)
+    due_reviews = due_review_items(state)
+    due_mistakes = due_mistake_items(state)
+    today, log = _today_recommendation(state, due_reviews, due_mistakes)
+    counts = {
+        "events": len(data.get("history", [])) if isinstance(data.get("history"), list) else 0,
+        "mistakes": len(data.get("mistake_memory", {})) if isinstance(data.get("mistake_memory"), dict) else 0,
+        "reviews_due": len(due_reviews),
+    }
+    return {
+        "ok": True,
+        "profile": profile_for(state),
+        "today": today,
+        "review_preview": _review_preview(state, due_reviews, due_mistakes),
+        "recent_progress": _recent_progress(state),
+        "speaking_confidence": _speaking_confidence_summary(state),
+        "memory_counts": counts,
+        "logs": [log],
+    }
+
+
+def memory_inspect(payload: dict[str, Any]) -> dict[str, Any]:
+    state = _load(payload)
+    language = active_language(state)
+    inspected = _memory_payload(state, language)
+    inspected["logs"] = [f"[Memory Inspector Agent] Opened sanitized {language} memory."]
+    return inspected
+
+
+def memory_export(payload: dict[str, Any]) -> dict[str, Any]:
+    path = _path(payload)
+    language = _language(payload) if payload.get("language") else None
+    state = load_state(path, language)
+    if language and active_language(state) != language:
+        state["active_language"] = language
+        language_state(state, language)
+    exported_at = utc_now()
+    state.setdefault("privacy", {})["last_exported_at"] = exported_at
+    save_state(path, state)
+    scope = str(payload.get("scope") or "language").strip().lower()
+    if scope == "all":
+        data = sanitize_memory_payload(
+            {
+                "schema_version": state.get("schema_version"),
+                "active_language": active_language(state),
+                "exported_at": exported_at,
+                "learner": _learner_payload(state),
+                "privacy": _privacy_payload(state),
+                "languages": {
+                    lang: _language_memory_sections(state, lang)
+                    for lang in sorted(state.get("languages", {}))
+                    if isinstance(state.get("languages", {}).get(lang), dict)
+                },
+                "redactions": _redaction_labels(),
+            }
+        )
+    else:
+        data = _memory_payload(state, language or active_language(state))
+        data["exported_at"] = exported_at
+    return {
+        "ok": True,
+        "filename": f"fluentai-memory-{datetime.now(timezone.utc).strftime('%Y%m%d')}.json",
+        "data": data,
+        "logs": [f"[Privacy Agent] Prepared sanitized {scope} memory export."],
+    }
+
+
+def memory_reset_language(payload: dict[str, Any]) -> dict[str, Any]:
+    language = _language(payload)
+    if str(payload.get("confirm") or "") != f"RESET {language}":
+        return {
+            "ok": False,
+            "error": f'Type "RESET {language}" to reset this language.',
+            "logs": ["[Privacy Agent] Language reset confirmation did not match."],
+    }
+    path = _path(payload)
+    state = load_state(path, language)
+    reset_language_state(state, language)
+    add_event(
+        state,
+        {
+            "type": "language_reset",
+            "source": "privacy_controls",
+            "summary": f"Reset {language} learning memory.",
+            "payload": {"language": language},
+        },
+        language,
+    )
+    save_state(path, state)
+    return {
+        "ok": True,
+        "profile": profile_for(state),
+        "memory": _memory_payload(state, language),
+        "logs": [f"[Privacy Agent] Reset {language} memory and preserved other languages."],
+    }
+
+
+def memory_delete_all(payload: dict[str, Any]) -> dict[str, Any]:
+    if str(payload.get("confirm") or "") != "DELETE ALL MEMORY":
+        return {
+            "ok": False,
+            "error": 'Type "DELETE ALL MEMORY" to delete all memory.',
+            "logs": ["[Privacy Agent] Delete-all confirmation did not match."],
+        }
+    path = _path(payload)
+    language = _language(payload) if payload.get("language") else "Spanish"
+    if path.exists():
+        try:
+            language = active_language(load_state(path, language))
+        except (json.JSONDecodeError, OSError):
+            pass
+    state = delete_all_memory(path, language)
+    return {
+        "ok": True,
+        "profile": profile_for(state),
+        "logs": ["[Privacy Agent] Deleted all local memory and restored a fresh profile."],
+    }
+
+
 def apply_conversation_turn_progress(
     state: dict[str, Any],
     topic: dict[str, Any],
@@ -1017,6 +1143,459 @@ def _coerce_conversation_topic(value: Any, state: dict[str, Any]) -> dict[str, A
     return topic
 
 
+def _today_recommendation(
+    state: dict[str, Any],
+    due_reviews: list[tuple[datetime, str]],
+    due_mistakes: list[tuple[datetime, dict[str, Any]]],
+) -> tuple[dict[str, Any], str]:
+    profile = profile_state(state)
+    memory = conversation_memory(state)
+    data = language_state(state)
+    if due_reviews:
+        topic = due_reviews[0][1]
+        return (
+            {
+                "kind": "due_review",
+                "title": "Review due phrases",
+                "body": f"{len(due_reviews)} item{'s' if len(due_reviews) != 1 else ''} due; start with {topic}.",
+                "cta": "Review due phrases",
+                "mode": "lesson",
+                "topic": topic,
+                "reason": "Due reviews come before fresh lessons.",
+            },
+            "[Home Agent] Recommended due review before fresh lesson.",
+        )
+    if due_mistakes:
+        mistake = due_mistakes[0][1]
+        topic = str(mistake.get("topic") or "a weak topic")
+        return (
+            {
+                "kind": "due_mistake",
+                "title": "Practice yesterday's weak topic",
+                "body": f"Review the correction for {topic}: {mistake.get('corrected_form') or 'the model phrase'}.",
+                "cta": "Practice yesterday's weak topic",
+                "mode": "lesson",
+                "topic": topic,
+                "reason": "Due mistakes come before new material.",
+            },
+            "[Home Agent] Recommended due mistake practice.",
+        )
+    if _conversation_neglected(state):
+        return (
+            {
+                "kind": "neglected_conversation",
+                "title": "Talk with your tutor",
+                "body": "You have practiced lessons without a tutor call recently.",
+                "cta": "Start live tutor call",
+                "mode": "conversation",
+                "topic": "",
+                "reason": "You have practiced lessons without a tutor call recently.",
+            },
+            "[Home Agent] Recommended conversation because tutor calls were neglected.",
+        )
+    if _lesson_goal_waiting_for_conversation(state):
+        goal = memory.get("next_conversation_goal")
+        topic = str(goal.get("topic") or "") if isinstance(goal, dict) else ""
+        instruction = str(goal.get("instruction") or "Use the last lesson in conversation.") if isinstance(goal, dict) else ""
+        return (
+            {
+                "kind": "lesson_goal_conversation",
+                "title": "Use the last lesson out loud",
+                "body": instruction,
+                "cta": "Use this in conversation",
+                "mode": "conversation",
+                "topic": topic,
+                "reason": "The last lesson created a conversation goal that has not been practiced yet.",
+            },
+            "[Home Agent] Recommended conversation to use the latest lesson goal.",
+        )
+    daily_summary = data.get("daily_summary", {}) if isinstance(data.get("daily_summary"), dict) else {}
+    if profile.get("first_practice_goal") and int(daily_summary.get("lessons_completed", 0) or 0) == 0:
+        return (
+            {
+                "kind": "first_practice_goal",
+                "title": "Start your first practice goal",
+                "body": str(profile.get("first_practice_goal")),
+                "cta": "Start today's lesson",
+                "mode": "lesson",
+                "topic": "",
+                "reason": "Your placement set this as the first practice goal.",
+            },
+            "[Home Agent] Recommended first practice goal for today.",
+        )
+    return (
+        {
+            "kind": "fresh_lesson",
+            "title": "Start today's lesson",
+            "body": f"Build the next adaptive {active_language(state)} lesson from your current level and weak topics.",
+            "cta": "Start today's lesson",
+            "mode": "lesson",
+            "topic": "",
+            "reason": "No due reviews, due mistakes, or pending conversation goals are ahead of a fresh lesson.",
+        },
+        "[Home Agent] Recommended a fresh adaptive lesson.",
+    )
+
+
+def _conversation_neglected(state: dict[str, Any]) -> bool:
+    history = language_state(state).get("history", [])
+    if not isinstance(history, list):
+        return False
+    last_conversation_index = -1
+    lesson_count = 0
+    for index, event in enumerate(history):
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "conversation_started":
+            last_conversation_index = index
+        if event.get("type") == "lesson_completed":
+            lesson_count += 1
+    lessons_since = sum(
+        1
+        for event in history[last_conversation_index + 1 :]
+        if isinstance(event, dict) and event.get("type") == "lesson_completed"
+    )
+    sessions_completed = int(conversation_memory(state).get("sessions_completed", 0) or 0)
+    return lessons_since >= 3 or (sessions_completed == 0 and lesson_count >= 1)
+
+
+def _lesson_goal_waiting_for_conversation(state: dict[str, Any]) -> bool:
+    goal = conversation_memory(state).get("next_conversation_goal")
+    if not isinstance(goal, dict) or goal.get("source") != "lesson" or not goal.get("instruction"):
+        return False
+    history = language_state(state).get("history", [])
+    if not isinstance(history, list):
+        return True
+    last_lesson_index = -1
+    last_conversation_index = -1
+    for index, event in enumerate(history):
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "lesson_completed":
+            last_lesson_index = index
+        if event.get("type") == "conversation_started":
+            last_conversation_index = index
+    return last_lesson_index >= 0 and last_conversation_index < last_lesson_index
+
+
+def _review_preview(
+    state: dict[str, Any],
+    due_reviews: list[tuple[datetime, str]],
+    due_mistakes: list[tuple[datetime, dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for due_at, topic in due_reviews[:3]:
+        rows.append({"type": "review", "target": topic, "skill": "", "due_at": due_at.isoformat(), "source": "lesson"})
+    for due_at, mistake in due_mistakes[:3]:
+        rows.append(
+            {
+                "type": "mistake",
+                "target": str(mistake.get("topic") or ""),
+                "skill": str(mistake.get("skill") or ""),
+                "due_at": due_at.isoformat(),
+                "source": str(mistake.get("source") or "mistake_memory"),
+            }
+        )
+    if len(rows) < 3:
+        queue = review_queue(state)
+        if isinstance(queue, dict):
+            for item in queue.values():
+                if len(rows) >= 3:
+                    break
+                if not isinstance(item, dict):
+                    continue
+                target = str(item.get("target") or item.get("topic") or "")
+                if any(row["target"] == target and row["due_at"] == str(item.get("due_at") or "") for row in rows):
+                    continue
+                rows.append(
+                    {
+                        "type": str(item.get("item_type") or "review"),
+                        "target": target,
+                        "skill": str(item.get("skill") or ""),
+                        "due_at": str(item.get("due_at") or ""),
+                        "source": str(item.get("source") or "lesson"),
+                    }
+                )
+    return rows[:3]
+
+
+def _recent_progress(state: dict[str, Any]) -> list[dict[str, Any]]:
+    meaningful: list[dict[str, Any]] = []
+    for event in reversed(language_state(state).get("history", [])):
+        if not isinstance(event, dict):
+            continue
+        sentence = _event_sentence(event)
+        if sentence:
+            meaningful.append(
+                {
+                    "id": event.get("id"),
+                    "type": event.get("type"),
+                    "occurred_at": event.get("occurred_at"),
+                    "summary": sentence,
+                    "relative_time": _relative_time(event.get("occurred_at")),
+                }
+            )
+        if len(meaningful) >= 5:
+            break
+    return meaningful
+
+
+def _event_sentence(event: dict[str, Any]) -> str:
+    payload = event.get("payload", {}) if isinstance(event.get("payload"), dict) else {}
+    if event.get("type") == "lesson_completed":
+        score = payload.get("score")
+        topic = payload.get("topic") or "a lesson"
+        return f"Completed {topic} with score {score}." if score else str(event.get("summary") or "")
+    if event.get("type") == "placement_completed":
+        level = payload.get("judged_level") or "A1"
+        method = str(payload.get("method") or "placement").replace("_", " ")
+        return f"Placement set your starting level to {level} by {method}."
+    summary = payload.get("post_call_summary") if isinstance(payload.get("post_call_summary"), dict) else None
+    if summary:
+        topic = summary.get("topic") or "conversation"
+        turns = summary.get("turn_count") or 0
+        return f"Finished a {turns}-turn tutor call on {topic}."
+    return ""
+
+
+def _speaking_confidence_summary(state: dict[str, Any]) -> dict[str, Any]:
+    memory = conversation_memory(state)
+    recent: list[dict[str, Any]] = []
+    for event in reversed(language_state(state).get("history", [])):
+        if not isinstance(event, dict):
+            continue
+        payload = event.get("payload", {}) if isinstance(event.get("payload"), dict) else {}
+        summary = payload.get("post_call_summary") if isinstance(payload.get("post_call_summary"), dict) else None
+        if summary:
+            recent.append(
+                {
+                    "topic": summary.get("topic"),
+                    "average_score": summary.get("average_score"),
+                    "confidence_change": summary.get("confidence_change"),
+                    "ended_at": summary.get("ended_at") or event.get("occurred_at"),
+                }
+            )
+        elif event.get("type") == "learner_replied":
+            recent.append(
+                {
+                    "topic": payload.get("topic"),
+                    "average_score": payload.get("score"),
+                    "confidence_change": "improved" if float(payload.get("score", 0) or 0) >= 0.45 else "dipped",
+                    "ended_at": event.get("occurred_at"),
+                }
+            )
+        if len(recent) >= 5:
+            break
+    improved = sum(1 for item in recent if item.get("confidence_change") == "improved")
+    dipped = sum(1 for item in recent if item.get("confidence_change") == "dipped")
+    trend = "up" if improved > dipped else "down" if dipped > improved else "flat"
+    return {"score": float(memory.get("speaking_confidence", 0.30) or 0.30), "trend": trend, "recent": list(reversed(recent))}
+
+
+def _memory_payload(state: dict[str, Any], language: str) -> dict[str, Any]:
+    payload = {
+        "ok": True,
+        "language": language,
+        "learner": _learner_payload(state),
+        "profile": _profile_payload(state, language),
+        **_language_memory_sections(state, language),
+        "privacy": _privacy_payload(state),
+        "redactions": _redaction_labels(),
+    }
+    return sanitize_memory_payload(payload)
+
+
+def _language_memory_sections(state: dict[str, Any], language: str) -> dict[str, Any]:
+    data = language_state(state, language)
+    memory = conversation_memory(state, language)
+    return {
+        "skills": [
+            {
+                "name": name,
+                "score": record.get("score"),
+                "trend": record.get("trend"),
+                "last_practiced": record.get("last_practiced"),
+            }
+            for name, record in sorted(data.get("skills", {}).items())
+            if isinstance(record, dict)
+        ],
+        "topic_mastery": [
+            {
+                "topic": topic,
+                "recognition": record.get("recognition"),
+                "recall": record.get("recall"),
+                "spoken_use": record.get("spoken_use"),
+                "written_use": record.get("written_use"),
+            }
+            for topic, record in sorted(data.get("topic_mastery", {}).items())
+            if isinstance(record, dict)
+        ],
+        "mistakes": [
+            {
+                "incorrect_form": mistake.get("incorrect_form"),
+                "corrected_form": mistake.get("corrected_form"),
+                "skill": mistake.get("skill"),
+                "topic": mistake.get("topic"),
+                "frequency": mistake.get("frequency"),
+                "next_review": mistake.get("next_review"),
+            }
+            for mistake in data.get("mistake_memory", {}).values()
+            if isinstance(mistake, dict)
+        ],
+        "review_queue": [
+            {
+                "id": item.get("id"),
+                "target": item.get("target") or item.get("topic"),
+                "skill": item.get("skill"),
+                "due_at": item.get("due_at"),
+                "source": item.get("source"),
+            }
+            for item in data.get("review_queue", {}).values()
+            if isinstance(item, dict)
+        ],
+        "conversation": {
+            "speaking_confidence": memory.get("speaking_confidence"),
+            "fluency_score": memory.get("fluency_score"),
+            "sessions_completed": memory.get("sessions_completed"),
+            "total_turns": memory.get("total_turns"),
+            "next_speaking_goal": memory.get("next_speaking_goal"),
+            "next_conversation_goal": memory.get("next_conversation_goal"),
+            "last_video_context": memory.get("last_video_context"),
+            "post_call_summaries": list(memory.get("post_call_summaries", []))[-10:]
+            if isinstance(memory.get("post_call_summaries"), list)
+            else [],
+        },
+        "recent_events": [
+            {
+                "id": event.get("id"),
+                "type": event.get("type"),
+                "occurred_at": event.get("occurred_at"),
+                "summary": event.get("summary"),
+            }
+            for event in data.get("history", [])[-20:]
+            if isinstance(event, dict)
+        ],
+    }
+
+
+def _learner_payload(state: dict[str, Any]) -> dict[str, Any]:
+    learner = state.get("learner", {}) if isinstance(state.get("learner"), dict) else {}
+    return {
+        "display_name": learner.get("display_name"),
+        "motivation": learner.get("motivation"),
+        "active_goals": learner.get("active_goals", []),
+        "preferred_session_length_minutes": learner.get("preferred_session_length_minutes"),
+        "onboarded_at": learner.get("onboarded_at"),
+        "last_onboarding_at": learner.get("last_onboarding_at"),
+    }
+
+
+def _profile_payload(state: dict[str, Any], language: str) -> dict[str, Any]:
+    profile = profile_state(state, language)
+    return {
+        "target_language": profile.get("target_language"),
+        "current_level": profile.get("current_level"),
+        "level_confidence": profile.get("level_confidence"),
+        "learning_goals": profile.get("learning_goals", []),
+        "first_practice_goal": profile.get("first_practice_goal"),
+        "judged_strengths": profile.get("judged_strengths", []),
+        "judged_weaknesses": profile.get("judged_weaknesses", []),
+        "placement_completed_at": profile.get("placement_completed_at"),
+        "placement_method": profile.get("placement_method"),
+    }
+
+
+def _privacy_payload(state: dict[str, Any]) -> dict[str, Any]:
+    privacy = state.get("privacy", {}) if isinstance(state.get("privacy"), dict) else {}
+    return {
+        "local_only": privacy.get("local_only", True),
+        "store_raw_audio": privacy.get("store_raw_audio", False),
+        "store_raw_video": privacy.get("store_raw_video", False),
+        "store_camera_summaries": privacy.get("store_camera_summaries", True),
+        "allow_export": privacy.get("allow_export", True),
+        "allow_delete": privacy.get("allow_delete", True),
+        "allow_language_reset": privacy.get("allow_language_reset", True),
+        "last_exported_at": privacy.get("last_exported_at"),
+    }
+
+
+SECRET_PATTERN = re.compile(
+    r"(sk-[A-Za-z0-9_-]{8,}|(?:api[_-]?key|client[_-]?secret|authorization)\s*[:=]\s*['\"]?[A-Za-z0-9._-]{8,})",
+    re.IGNORECASE,
+)
+DATA_URL_PATTERN = re.compile(r"data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+", re.IGNORECASE)
+SENSITIVE_KEYS = {
+    "api_key",
+    "authorization",
+    "client_secret",
+    "realtime_client_secret",
+    "raw",
+    "raw_audio",
+    "raw_video",
+    "audio_data",
+    "video_data",
+    "image",
+    "image_data",
+    "image_data_url",
+    "transcript",
+    "raw_transcript",
+    "stderr",
+    "stdout",
+}
+
+
+def sanitize_memory_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        clean: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)
+            normalized_key = key_text.lower()
+            if normalized_key in SENSITIVE_KEYS or normalized_key.endswith("_transcript"):
+                continue
+            clean[key_text] = sanitize_memory_payload(item)
+        return clean
+    if isinstance(value, list):
+        return [sanitize_memory_payload(item) for item in value]
+    if isinstance(value, str):
+        if DATA_URL_PATTERN.search(value):
+            return "[redacted image data]"
+        if SECRET_PATTERN.search(value):
+            return SECRET_PATTERN.sub("[redacted secret]", value)
+        return value
+    return value
+
+
+def _redaction_labels() -> list[str]:
+    return ["raw audio", "raw video", "image data URLs", "API keys"]
+
+
+def _relative_time(value: Any) -> str:
+    parsed = _parse_datetime(value)
+    if not parsed:
+        return "recently"
+    delta = datetime.now(timezone.utc) - parsed
+    if delta.days <= 0:
+        return "today"
+    if delta.days == 1:
+        return "yesterday"
+    if delta.days < 7:
+        return f"{delta.days} days ago"
+    weeks = delta.days // 7
+    return f"{weeks} week{'s' if weeks != 1 else ''} ago"
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _load(payload: dict[str, Any]) -> dict[str, Any]:
     language = _language(payload) if "language" in payload else None
     path = _path(payload)
@@ -1059,6 +1638,11 @@ COMMANDS = {
     "onboarding_submit": onboarding_submit,
     "placement_start": placement_start,
     "placement_submit": placement_submit,
+    "home_summary": home_summary,
+    "memory_inspect": memory_inspect,
+    "memory_export": memory_export,
+    "memory_reset_language": memory_reset_language,
+    "memory_delete_all": memory_delete_all,
     "status": status,
     "realtime_client_secret": realtime_client_secret,
     "vision_analyze_frame": vision_analyze_frame,
