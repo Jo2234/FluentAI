@@ -26,6 +26,17 @@ class RendererUITests(unittest.TestCase):
         self.assertIn("Phrase Lab", self.html)
         self.assertIn("position: sticky", self.html)
 
+    def test_lesson_reason_and_error_category_feedback_render(self):
+        self.assertIn("lesson.reason", self.html)
+        self.assertIn("Why this lesson:", self.html)
+        self.assertIn("lesson-reason", self.html)
+        self.assertIn("function errorCategoryLabel", self.html)
+        self.assertIn("error-chip", self.html)
+        self.assertIn("error-chip.advisory", self.html)
+        self.assertIn('result.correct ? " advisory" : ""', self.html)
+        self.assertIn("Corrected form:", self.html)
+        self.assertIn("conjugation slip", self.html)
+
     def test_voice_controls_do_not_overlap_video_context_card(self):
         self.assertIn("grid-area: controls", self.html)
         self.assertIn("grid-template-areas", self.html)

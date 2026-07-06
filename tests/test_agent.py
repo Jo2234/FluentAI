@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 from unittest.mock import patch
 
-from fluent_ai.agent import choose_topic, due_review_items, evaluate_answers, generate_lesson, generate_quiz, update_progress
+from fluent_ai.agent import choose_topic, categorize_error, due_review_items, evaluate_answers, generate_lesson, generate_quiz, update_progress
 from fluent_ai.conversation import (
     asks_for_english_help,
     build_follow_up,
@@ -23,7 +23,8 @@ from fluent_ai.desktop_bridge import (
     profile_for,
     status,
 )
-from fluent_ai.state import conversation_memory, default_state, language_state, load_state, profile_state, review_queue, save_state
+from fluent_ai.openai_provider import OpenAIProvider
+from fluent_ai.state import conversation_memory, default_state, language_state, load_state, profile_state, record_mistake, review_queue, save_state
 
 
 def fake_tutor_reply(topic, state, transcript, phase, fallback):
@@ -45,6 +46,64 @@ class FakeOpenAIProvider:
 
     def conversation_tutor_reply(self, topic, state, transcript, phase, fallback):
         return fallback
+
+    def evaluate_quiz_answers(self, state, lesson, items):
+        return None
+
+
+class OpenAIGradingProvider(FakeOpenAIProvider):
+    calls = 0
+    seen_items = []
+
+    def evaluate_quiz_answers(self, state, lesson, items):
+        type(self).calls += 1
+        type(self).seen_items = items
+        return [
+            {
+                "correct": False,
+                "error_category": "wrong_tense",
+                "feedback": "Almost. Use the past-tense form from the lesson.",
+                "corrected_form": "fui",
+                "severity": "high",
+                "confidence": 0.91,
+            }
+            for _item in items
+        ]
+
+
+class PartialOpenAIGradingProvider(FakeOpenAIProvider):
+    calls = 0
+
+    def evaluate_quiz_answers(self, state, lesson, items):
+        type(self).calls += 1
+        return [
+            {
+                "correct": False,
+                "error_category": "comprehension",
+                "feedback": "Not quite. Use the meaning from the lesson.",
+                "corrected_form": "Me llamo Ana.",
+                "severity": "high",
+                "confidence": 0.87,
+            },
+            None,
+        ]
+
+
+class MalformedQuizProvider(OpenAIProvider):
+    @property
+    def available(self):
+        return True
+
+    def _text_response(self, prompt):
+        return '{"correct": false, "error_category": "not_allowed"}'
+
+
+class InvalidEntryQuizProvider(MalformedQuizProvider):
+    def _text_response(self, prompt):
+        return (
+            '[{"correct": false, "error_category": "not_allowed", "feedback": "Bad", '
+            '"corrected_form": "Quisiera un cafe, por favor.", "severity": "high", "confidence": 0.9}]'
+        )
 
 
 class AgentTests(unittest.TestCase):
@@ -75,6 +134,132 @@ class AgentTests(unittest.TestCase):
         self.assertIn("fill_blank", question_types)
         self.assertIn("open_ended", question_types)
 
+    def test_categorizes_too_short_open_answer(self):
+        question = {
+            "type": "open_ended",
+            "skill": "vocabulary",
+            "topic": "introductions",
+            "prompt": "Write one short sentence about introductions.",
+            "answer": "Me llamo Ana.",
+            "keywords": ["llamo"],
+        }
+
+        self.assertEqual(categorize_error(question, ""), "too_short")
+
+    def test_categorizes_vocabulary_missing_multiple_choice(self):
+        question = {
+            "type": "multiple_choice",
+            "skill": "vocabulary",
+            "topic": "cafe orders",
+            "prompt": "What does 'la cuenta' mean?",
+            "answer": "the bill",
+        }
+
+        self.assertEqual(categorize_error(question, "friend"), "vocabulary_missing")
+
+    def test_categorizes_wrong_conjugation_fill_blank(self):
+        question = {
+            "type": "fill_blank",
+            "skill": "conjugations",
+            "topic": "conjugations",
+            "prompt": "Fill in the blank: Yo ___ espanol.",
+            "answer": "hablo",
+            "acceptable_answers": ["hablo"],
+        }
+
+        self.assertEqual(categorize_error(question, "hablar"), "wrong_conjugation")
+
+    def test_categorizes_wrong_tense(self):
+        question = {
+            "type": "open_ended",
+            "skill": "conjugations",
+            "topic": "past tense",
+            "prompt": "Write one short sentence about past tense.",
+            "answer": "Ayer fui al mercado.",
+            "keywords": ["ayer", "fui"],
+        }
+
+        self.assertEqual(categorize_error(question, "Yo voy al mercado"), "wrong_tense")
+
+    def test_categorizes_word_order(self):
+        question = {
+            "type": "open_ended",
+            "skill": "vocabulary",
+            "topic": "vocabulary",
+            "prompt": "Write one model sentence.",
+            "answer": "Mi casa es pequena.",
+            "keywords": ["casa", "pequena"],
+        }
+
+        self.assertEqual(categorize_error(question, "casa mi pequena es"), "word_order")
+
+    def test_categorizes_comprehension(self):
+        question = {
+            "type": "open_ended",
+            "skill": "vocabulary",
+            "topic": "cafe orders",
+            "prompt": "Write one cafe order.",
+            "answer": "Quisiera un cafe, por favor.",
+            "keywords": ["quisiera", "cafe"],
+        }
+
+        self.assertEqual(categorize_error(question, "Trabajo oficina"), "comprehension")
+
+    def test_unnatural_keyword_match_is_advisory_correct(self):
+        state = default_state("Spanish")
+        lesson = {
+            "language": "Spanish",
+            "level": "A1",
+            "topic": "cafe orders",
+            "focus_skill": "vocabulary",
+            "difficulty": "steady",
+            "minutes": 10,
+        }
+        question = {
+            "type": "open_ended",
+            "skill": "vocabulary",
+            "topic": "cafe orders",
+            "prompt": "Write one cafe order.",
+            "answer": "Quisiera un cafe, por favor.",
+            "keywords": ["cafe"],
+        }
+
+        self.assertEqual(categorize_error(question, "cafe ahora"), "unnatural")
+        result = evaluate_answers([question], ["cafe ahora"])[0]
+        self.assertTrue(result.correct)
+        self.assertEqual(result.error_category, "unnatural")
+        self.assertEqual(result.corrected_form, "Quisiera un cafe, por favor.")
+        self.assertEqual(result.severity, "low")
+        self.assertEqual(
+            result.feedback,
+            "Understandable! A native speaker might say: 'Quisiera un cafe, por favor.'.",
+        )
+
+        update_progress(state, lesson, [result])
+
+        self.assertEqual(language_state(state)["mistake_memory"], {})
+        self.assertEqual(profile_state(state)["xp"], 15)
+
+    def test_personal_intro_variation_stays_correct_with_advisory(self):
+        question = {
+            "type": "open_ended",
+            "skill": "vocabulary",
+            "topic": "introductions",
+            "prompt": "Write one short sentence about introductions",
+            "answer": "Me llamo Ana.",
+            "keywords": ["llamo"],
+        }
+
+        result = evaluate_answers([question], ["Me llamo Johan."])[0]
+
+        self.assertTrue(result.correct)
+        self.assertEqual(result.error_category, "unnatural")
+        self.assertEqual(result.corrected_form, "Me llamo Ana.")
+        self.assertEqual(
+            result.feedback,
+            "Understandable! A native speaker might say: 'Me llamo Ana.'.",
+        )
+
     def test_missed_lesson_schedules_spaced_review(self):
         state = default_state("Spanish")
         lesson = generate_lesson(state)
@@ -89,6 +274,41 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(scheduled["focus_skill"], lesson["focus_skill"])
         self.assertEqual(scheduled["interval_days"], 1)
         self.assertIn("due_at", scheduled)
+
+    def test_missed_lesson_creates_mistake_memory_with_next_review(self):
+        state = default_state("Spanish")
+        lesson = {
+            "language": "Spanish",
+            "level": "A1",
+            "topic": "conjugations",
+            "focus_skill": "conjugations",
+            "difficulty": "steady",
+            "minutes": 10,
+        }
+        quiz = [
+            {
+                "type": "fill_blank",
+                "skill": "conjugations",
+                "topic": "conjugations",
+                "prompt": "Fill in the blank: Yo ___ espanol.",
+                "answer": "hablo",
+                "acceptable_answers": ["hablo"],
+            }
+        ]
+
+        results = evaluate_answers(quiz, ["hablar"])
+        update_progress(state, lesson, results)
+
+        mistakes = language_state(state)["mistake_memory"]
+        self.assertEqual(len(mistakes), 1)
+        mistake = next(iter(mistakes.values()))
+        self.assertEqual(mistake["incorrect_form"], "hablar")
+        self.assertEqual(mistake["corrected_form"], "hablo")
+        self.assertEqual(mistake["error_category"], "wrong_conjugation")
+        self.assertEqual(mistake["severity"], "medium")
+        self.assertIn("next_review", mistake)
+        self.assertTrue(mistake["next_review"])
+        self.assertIn(f"review_{mistake['id']}", review_queue(state))
 
     def test_due_spaced_review_overrides_recent_topic_rotation(self):
         state = default_state("Spanish")
@@ -105,6 +325,94 @@ class AgentTests(unittest.TestCase):
         }
 
         self.assertEqual(choose_topic(state), "past tense")
+
+    def test_lesson_reason_for_due_review(self):
+        state = default_state("Spanish")
+        review_queue(state)["review_topic_past_tense"] = {
+            "id": "review_topic_past_tense",
+            "item_type": "topic",
+            "target": "past tense",
+            "topic": "past tense",
+            "focus_skill": "conjugations",
+            "due_at": "2000-01-01T00:00:00+00:00",
+            "interval_days": 2,
+            "last_score": "3/6",
+        }
+
+        lesson = generate_lesson(state)
+
+        self.assertEqual(lesson["topic"], "past tense")
+        self.assertEqual(lesson["selection_source"], "due_review")
+        self.assertIn("last score was 3/6", lesson["reason"])
+        self.assertIn("interval is 2 days", lesson["reason"])
+
+    def test_lesson_reason_for_mistake_memory(self):
+        state = default_state("Spanish")
+        record_mistake(
+            state,
+            {
+                "incorrect_form": "yo hablar",
+                "corrected_form": "yo hablo",
+                "skill": "conjugations",
+                "topic": "conjugations",
+                "error_category": "wrong_conjugation",
+                "source": "conversation",
+                "next_review": "2000-01-01T00:00:00+00:00",
+            },
+        )
+
+        lesson = generate_lesson(state)
+
+        self.assertEqual(lesson["topic"], "conjugations")
+        self.assertEqual(lesson["selection_source"], "mistake_memory")
+        self.assertIn("'yo hablar' -> 'yo hablo'", lesson["reason"])
+
+    def test_lesson_reason_for_weak_topic(self):
+        state = default_state("Spanish")
+        language_state(state)["weak_topics"] = ["vocabulary"]
+
+        lesson = generate_lesson(state)
+
+        self.assertEqual(lesson["topic"], "vocabulary")
+        self.assertEqual(lesson["selection_source"], "weak_topic")
+        self.assertEqual(
+            lesson["reason"],
+            "Your weakest current topic is vocabulary based on recent lesson and conversation evidence.",
+        )
+
+    def test_lesson_reason_for_rotation(self):
+        state = default_state("Spanish")
+        language_state(state)["weak_topics"] = []
+
+        with patch("fluent_ai.agent.random.choice", return_value="daily routines"):
+            lesson = generate_lesson(state)
+
+        self.assertEqual(lesson["topic"], "daily routines")
+        self.assertEqual(lesson["selection_source"], "rotation")
+        self.assertEqual(lesson["reason"], "This avoids repeating recent topics while staying at level A1.")
+
+    def test_due_mistake_drives_topic_choice_after_reviews_before_weak_topics(self):
+        state = default_state("Spanish")
+        language_state(state)["weak_topics"] = ["past tense"]
+        record_mistake(
+            state,
+            {
+                "incorrect_form": "cuenta",
+                "corrected_form": "la cuenta",
+                "skill": "vocabulary",
+                "topic": "cafe orders",
+                "error_category": "vocabulary_missing",
+                "source": "lesson_practice",
+                "next_review": "2000-01-01T00:00:00+00:00",
+            },
+        )
+
+        lesson = generate_lesson(state)
+
+        self.assertEqual(choose_topic(state), "cafe orders")
+        self.assertEqual(lesson["topic"], "cafe orders")
+        self.assertEqual(lesson["selection_source"], "mistake_memory")
+        self.assertIn("so this lesson practices cafe orders", lesson["reason"])
 
     def test_profile_separates_due_reviews_from_future_schedule(self):
         state = default_state("Spanish")
@@ -278,6 +586,183 @@ class AgentTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertEqual(result["summary"]["score"], f"{len(answers)}/{len(answers)}")
             self.assertGreater(result["profile"]["xp"], 0)
+
+    def test_desktop_bridge_openai_grading_overrides_local_for_open_questions(self):
+        OpenAIGradingProvider.calls = 0
+        OpenAIGradingProvider.seen_items = []
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", OpenAIGradingProvider):
+            state_path = str(Path(tmpdir) / "progress.json")
+            lesson = {
+                "language": "Spanish",
+                "level": "A1",
+                "topic": "past tense",
+                "focus_skill": "conjugations",
+                "difficulty": "steady",
+                "minutes": 10,
+                "reason": "This is due for review because the last score was 2/6 and the interval is 1 day.",
+            }
+            quiz = [
+                {
+                    "type": "multiple_choice",
+                    "skill": "vocabulary",
+                    "topic": "past tense",
+                    "prompt": "What does mercado mean?",
+                    "answer": "market",
+                    "choices": ["market", "friend", "house"],
+                },
+                {
+                    "type": "fill_blank",
+                    "skill": "conjugations",
+                    "topic": "past tense",
+                    "prompt": "Fill in the blank: Ayer ___ al mercado.",
+                    "answer": "fui",
+                    "acceptable_answers": ["fui"],
+                },
+                {
+                    "type": "open_ended",
+                    "skill": "conjugations",
+                    "topic": "past tense",
+                    "prompt": "Write one past-tense sentence.",
+                    "answer": "Ayer fui al mercado.",
+                    "keywords": ["ayer", "fui"],
+                },
+            ]
+
+            result = lesson_submit(
+                {
+                    "state_path": state_path,
+                    "language": "Spanish",
+                    "lesson": lesson,
+                    "quiz": quiz,
+                    "answers": ["market", "voy", "Yo voy al mercado"],
+                }
+            )
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(OpenAIGradingProvider.calls, 1)
+            self.assertEqual([item["index"] for item in OpenAIGradingProvider.seen_items], [1, 2])
+            self.assertIsNone(result["results"][0]["error_category"])
+            self.assertEqual(result["results"][1]["error_category"], "wrong_tense")
+            self.assertEqual(result["results"][1]["corrected_form"], "fui")
+            self.assertEqual(result["results"][1]["severity"], "high")
+            self.assertIn("past-tense", result["results"][1]["feedback"])
+            self.assertEqual(result["results"][2]["error_category"], "wrong_tense")
+
+    def test_desktop_bridge_partial_openai_grading_falls_back_per_item(self):
+        PartialOpenAIGradingProvider.calls = 0
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", PartialOpenAIGradingProvider):
+            state_path = str(Path(tmpdir) / "progress.json")
+            lesson = {
+                "language": "Spanish",
+                "level": "A1",
+                "topic": "introductions",
+                "focus_skill": "vocabulary",
+                "difficulty": "steady",
+                "minutes": 10,
+                "reason": "Your weakest current topic is introductions based on recent lesson and conversation evidence.",
+            }
+            quiz = [
+                {
+                    "type": "open_ended",
+                    "skill": "vocabulary",
+                    "topic": "introductions",
+                    "prompt": "Write one short sentence about introductions.",
+                    "answer": "Me llamo Ana.",
+                    "keywords": ["llamo"],
+                },
+                {
+                    "type": "fill_blank",
+                    "skill": "conjugations",
+                    "topic": "conjugations",
+                    "prompt": "Fill in the blank: Yo ___ espanol.",
+                    "answer": "hablo",
+                    "acceptable_answers": ["hablo"],
+                },
+            ]
+
+            result = lesson_submit(
+                {
+                    "state_path": state_path,
+                    "language": "Spanish",
+                    "lesson": lesson,
+                    "quiz": quiz,
+                    "answers": ["No se", "hablar"],
+                }
+            )
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(PartialOpenAIGradingProvider.calls, 1)
+            self.assertEqual(result["results"][0]["error_category"], "comprehension")
+            self.assertEqual(result["results"][0]["feedback"], "Not quite. Use the meaning from the lesson.")
+            self.assertEqual(result["results"][1]["error_category"], "wrong_conjugation")
+            self.assertIn("verb form", result["results"][1]["feedback"])
+
+    def test_desktop_bridge_malformed_openai_grading_falls_back_to_local(self):
+        with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", FakeOpenAIProvider):
+            state_path = str(Path(tmpdir) / "progress.json")
+            lesson = {
+                "language": "Spanish",
+                "level": "A1",
+                "topic": "conjugations",
+                "focus_skill": "conjugations",
+                "difficulty": "steady",
+                "minutes": 10,
+                "reason": "Your weakest current topic is conjugations based on recent lesson and conversation evidence.",
+            }
+            quiz = [
+                {
+                    "type": "fill_blank",
+                    "skill": "conjugations",
+                    "topic": "conjugations",
+                    "prompt": "Fill in the blank: Yo ___ espanol.",
+                    "answer": "hablo",
+                    "acceptable_answers": ["hablo"],
+                }
+            ]
+
+            result = lesson_submit(
+                {
+                    "state_path": state_path,
+                    "language": "Spanish",
+                    "lesson": lesson,
+                    "quiz": quiz,
+                    "answers": ["hablar"],
+                }
+            )
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["results"][0]["error_category"], "wrong_conjugation")
+            self.assertIn("verb form", result["results"][0]["feedback"])
+
+    def test_openai_quiz_grading_rejects_malformed_category_entry(self):
+        provider = InvalidEntryQuizProvider()
+        state = default_state("Spanish")
+        question = {
+            "type": "open_ended",
+            "skill": "vocabulary",
+            "topic": "cafe orders",
+            "prompt": "Write one cafe order.",
+            "answer": "Quisiera un cafe, por favor.",
+        }
+        lesson = generate_lesson(state)
+        items = [{"index": 0, "question": question, "answer": "no se"}]
+
+        self.assertEqual(provider.evaluate_quiz_answers(state, lesson, items), [None])
+
+    def test_openai_quiz_grading_rejects_malformed_overall_response(self):
+        provider = MalformedQuizProvider()
+        state = default_state("Spanish")
+        question = {
+            "type": "open_ended",
+            "skill": "vocabulary",
+            "topic": "cafe orders",
+            "prompt": "Write one cafe order.",
+            "answer": "Quisiera un cafe, por favor.",
+        }
+        lesson = generate_lesson(state)
+        items = [{"index": 0, "question": question, "answer": "no se"}]
+
+        self.assertIsNone(provider.evaluate_quiz_answers(state, lesson, items))
 
     def test_desktop_bridge_conversation_accepts_user_reply(self):
         with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", FakeOpenAIProvider):

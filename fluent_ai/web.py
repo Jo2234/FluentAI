@@ -348,6 +348,7 @@ def run_lesson_cycle(state_path: Path, language: str) -> str:
     lines = [
         f"[OpenAI Model Agent] Source: {source}",
         f"[Lesson Generator Agent] {lesson['level']} lesson on {lesson['topic']}",
+        f"[Curriculum Agent] Selected {lesson['topic']}: {lesson.get('reason', 'Lesson selected for current progress.')}",
         "",
         "Vocabulary:",
     ]

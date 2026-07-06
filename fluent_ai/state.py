@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -171,6 +171,9 @@ def record_mistake(state: dict[str, Any], mistake: dict[str, Any], language: str
     mistake_id = mistake.get("id") or f"mistake_{_slugify('_'.join([incorrect, corrected, skill, topic]))}"
     now = utc_now()
     existing = mistake_memory.get(mistake_id, {})
+    next_review = mistake.get("next_review", existing.get("next_review"))
+    if not next_review:
+        next_review = (datetime.now(timezone.utc) + timedelta(days=1)).replace(microsecond=0).isoformat()
     record = {
         "id": mistake_id,
         "incorrect_form": incorrect,
@@ -185,11 +188,26 @@ def record_mistake(state: dict[str, Any], mistake: dict[str, Any], language: str
         "severity": str(mistake.get("severity", existing.get("severity", "medium"))),
         "blocked_meaning": bool(mistake.get("blocked_meaning", existing.get("blocked_meaning", False))),
         "speech_recurrence": bool(mistake.get("speech_recurrence", existing.get("speech_recurrence", False))),
-        "next_review": mistake.get("next_review", existing.get("next_review")),
+        "next_review": next_review,
     }
     if "source" in mistake:
         record["source"] = mistake["source"]
     mistake_memory[mistake_id] = record
+    review_id = f"review_{mistake_id}"
+    queue = language_data.setdefault("review_queue", {})
+    existing_review = queue.get(review_id, {}) if isinstance(queue.get(review_id), dict) else {}
+    queue[review_id] = {
+        "id": review_id,
+        "item_type": "mistake",
+        "target": topic,
+        "topic": topic,
+        "skill": skill,
+        "source": record.get("source", "mistake_memory"),
+        "due_at": next_review,
+        "mistake_id": mistake_id,
+        "created_at": existing_review.get("created_at", now),
+        "updated_at": now,
+    }
     language_data["updated_at"] = now
     return record
 

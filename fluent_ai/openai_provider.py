@@ -11,6 +11,19 @@ from fluent_ai.config import load_env_file, openai_model
 from fluent_ai.state import active_language, conversation_memory, language_state, profile_state
 
 
+ALLOWED_QUIZ_ERROR_CATEGORIES = {
+    "vocabulary_missing",
+    "wrong_conjugation",
+    "wrong_tense",
+    "word_order",
+    "comprehension",
+    "too_short",
+    "unnatural",
+}
+
+ALLOWED_QUIZ_SEVERITIES = {"low", "medium", "high"}
+
+
 NATURAL_TURN_POLICY = """
 Natural conversation policy:
 - Do not interrupt the learner. Treat short pauses, filler words, self-corrections, and thinking sounds as part of their turn.
@@ -209,6 +222,7 @@ Keep this lesson topic and focus:
 - topic: {lesson['topic']}
 - focus skill: {lesson['focus_skill']}
 - duration minutes: {lesson['minutes']}
+- selection reason: {lesson.get('reason', 'No selection reason provided.')}
 
 Return exactly these keys:
 {{
@@ -239,6 +253,52 @@ Requirements:
             enhanced["micro_task"] = data["micro_task"]
         enhanced["source"] = "openai"
         return enhanced
+
+    def evaluate_quiz_answers(
+        self,
+        state: dict[str, Any],
+        lesson: dict[str, Any],
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any] | None] | None:
+        if not self.available:
+            return None
+        if not items:
+            return []
+
+        prompt = f"""
+You are FluentAI's Quiz Evaluator Agent.
+Return strict JSON only. Do not use Markdown.
+
+Allowed error_category values for incorrect answers, plus advisory "unnatural" on correct answers:
+{", ".join(sorted(ALLOWED_QUIZ_ERROR_CATEGORIES))}
+
+Return a strict JSON array with one object per item, in the same order.
+Each object must be exactly:
+{{
+  "correct": true or false,
+  "error_category": null or one allowed value,
+  "feedback": "one specific learner-facing sentence",
+  "corrected_form": null or "the corrected target-language form",
+  "severity": "low" or "medium" or "high",
+  "confidence": number from 0 to 1
+}}
+
+Use correct=true and error_category="unnatural" only when the answer is understandable but not the native phrasing.
+
+Lesson context:
+- language: {active_language(state)}
+- level: {current_level(state)}
+- topic: {lesson.get('topic')}
+- focus skill: {lesson.get('focus_skill')}
+- reason: {lesson.get('reason', '')}
+
+Items:
+{json.dumps(items, ensure_ascii=True)}
+"""
+        data = _extract_json(self._text_response(prompt))
+        if not isinstance(data, list) or len(data) != len(items):
+            return None
+        return [_validate_quiz_grade(item) for item in data]
 
     def conversation_tutor_reply(
         self,
@@ -395,7 +455,55 @@ def _safe_error(exc: Exception) -> str:
     return f"{exc.__class__.__name__}: {message}" if message else exc.__class__.__name__
 
 
-def _extract_json(text: str) -> dict[str, Any] | None:
+def _validate_quiz_grade(data: Any) -> dict[str, Any] | None:
+    if not isinstance(data, dict):
+        return None
+    try:
+        correct = data["correct"]
+        feedback = data["feedback"]
+        severity = data["severity"]
+        confidence = data["confidence"]
+    except KeyError:
+        return None
+    if not isinstance(correct, bool) or not isinstance(feedback, str) or not isinstance(severity, str):
+        return None
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+        return None
+
+    feedback = feedback.strip()
+    severity = severity.strip().lower()
+    confidence = float(confidence)
+    if not feedback or severity not in ALLOWED_QUIZ_SEVERITIES or not 0 <= confidence <= 1:
+        return None
+
+    category = data.get("error_category")
+    if category is not None:
+        if not isinstance(category, str):
+            return None
+        category = category.strip().lower()
+    if correct:
+        if category not in {None, "unnatural"}:
+            return None
+    elif category not in ALLOWED_QUIZ_ERROR_CATEGORIES:
+        return None
+
+    corrected = data.get("corrected_form")
+    if corrected is not None:
+        if not isinstance(corrected, str):
+            return None
+        corrected = corrected.strip() or None
+
+    return {
+        "correct": correct,
+        "error_category": category,
+        "feedback": feedback[:260],
+        "corrected_form": corrected,
+        "severity": severity,
+        "confidence": round(confidence, 3),
+    }
+
+
+def _extract_json(text: str) -> Any:
     if not text:
         return None
     stripped = text.strip()
@@ -406,14 +514,18 @@ def _extract_json(text: str) -> dict[str, Any] | None:
     try:
         return json.loads(stripped)
     except json.JSONDecodeError:
-        start = stripped.find("{")
-        end = stripped.rfind("}")
-        if start == -1 or end == -1 or end <= start:
-            return None
-        try:
-            return json.loads(stripped[start : end + 1])
-        except json.JSONDecodeError:
-            return None
+        candidates: list[str] = []
+        for opener, closer in (("{", "}"), ("[", "]")):
+            start = stripped.find(opener)
+            end = stripped.rfind(closer)
+            if start != -1 and end > start:
+                candidates.append(stripped[start : end + 1])
+        for candidate in candidates:
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+        return None
 
 
 def _response_output_text(data: dict[str, Any]) -> str:

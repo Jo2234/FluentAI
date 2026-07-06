@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fluent_ai.agent import (
+    QuizResult,
     current_level,
     due_review_items,
     evaluate_answers,
@@ -117,6 +118,7 @@ def lesson_start(payload: dict[str, Any]) -> dict[str, Any]:
     if enhanced.get("source") != "openai":
         return _openai_required(state, provider, f"OpenAI lesson generation failed: {provider.last_error or 'empty model response'}")
     lesson = enhanced
+    logs.append(f"[Curriculum Agent] Selected {lesson['topic']}: {lesson.get('reason', 'Lesson selected for current progress.')}")
     logs.append("[OpenAI Model Agent] Generated lesson with the OpenAI Responses API.")
 
     quiz = generate_quiz(state, lesson)
@@ -146,6 +148,8 @@ def lesson_submit(payload: dict[str, Any]) -> dict[str, Any]:
         answers.append("")
 
     results = evaluate_answers(quiz, answers)
+    if provider.available:
+        results = _apply_openai_quiz_grading(provider, state, lesson, quiz, answers, results)
     correct_count = sum(1 for result in results if result.correct)
     state = update_progress(state, lesson, results)
     save_state(_path(payload), state)
@@ -391,6 +395,63 @@ COMMANDS = {
     "conversation_start": conversation_start,
     "conversation_reply": conversation_reply,
 }
+
+
+def _apply_openai_quiz_grading(
+    provider: OpenAIProvider,
+    state: dict[str, Any],
+    lesson: dict[str, Any],
+    quiz: list[dict[str, Any]],
+    answers: list[str],
+    local_results: list[QuizResult],
+) -> list[QuizResult]:
+    graded = list(local_results)
+    grader = getattr(provider, "evaluate_quiz_answers", None)
+    if not callable(grader):
+        return graded
+    items = [
+        {
+            "index": index,
+            "question": question,
+            "answer": answers[index],
+        }
+        for index, question in enumerate(quiz)
+        if question.get("type") != "multiple_choice" and index < len(graded)
+    ]
+    if not items:
+        return graded
+    provider_results = grader(state, lesson, items)
+    if not isinstance(provider_results, list) or len(provider_results) != len(items):
+        return graded
+    for item, provider_result in zip(items, provider_results):
+        index = int(item["index"])
+        question = quiz[index]
+        if not isinstance(provider_result, dict):
+            continue
+        expected = str(question.get("answer") or "")
+        category = provider_result.get("error_category")
+        corrected = provider_result.get("corrected_form")
+        if provider_result.get("correct") and category == "unnatural":
+            corrected = corrected or expected
+        elif provider_result.get("correct"):
+            corrected = None
+        else:
+            corrected = corrected or expected
+        graded[index] = QuizResult(
+            prompt=str(question.get("prompt") or ""),
+            expected=expected,
+            actual=answers[index],
+            skill=str(question.get("skill") or ""),
+            topic=str(question.get("topic") or lesson.get("topic") or ""),
+            question_type=str(question.get("type") or ""),
+            correct=bool(provider_result["correct"]),
+            feedback=str(provider_result["feedback"]),
+            error_category=category,
+            corrected_form=corrected,
+            severity=str(provider_result.get("severity") or "medium"),
+            confidence=float(provider_result.get("confidence") or 0.0),
+        )
+    return graded
 
 
 def main() -> None:

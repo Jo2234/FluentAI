@@ -681,6 +681,19 @@
       max-width: 46ch;
     }
 
+    .lesson-reason {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      padding: 7px 10px;
+      font-size: 13px;
+      font-weight: 750;
+      color: rgba(255, 255, 255, 0.92);
+    }
+
     .lesson-metrics {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -851,6 +864,31 @@
     .feedback.review {
       border-left-color: var(--warm);
       background: #fff7e8;
+    }
+
+    .error-chip {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      border: 1px solid #fbbf24;
+      border-radius: 999px;
+      background: #fffbeb;
+      color: #7c2d12;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 850;
+      margin: 2px 0 6px;
+    }
+
+    .error-chip.advisory {
+      border-color: #bbf7d0;
+      background: #f0fdf4;
+      color: #166534;
+    }
+
+    .corrected-form {
+      font-weight: 750;
+      color: #26323a;
     }
 
     .chat-shell {
@@ -2463,6 +2501,9 @@
         text("h3", titleCase(String(lesson.topic || `${lesson.language || currentLanguage()} practice`))),
         text("p", `A ${lesson.minutes}-minute ${lesson.level} session focused on ${lesson.focus_skill}.`)
       );
+      if (lesson.reason) {
+        node.append(text("div", `Why this lesson: ${lesson.reason}`, "lesson-reason"));
+      }
       const metrics = document.createElement("div");
       metrics.className = "lesson-metrics";
       [
@@ -2633,11 +2674,14 @@
         if (status) status.textContent = result.correct ? "Correct" : "Review";
         const feedback = document.createElement("div");
         feedback.className = `feedback${result.correct ? "" : " review"}`;
-        feedback.append(
-          text("strong", result.correct ? "Correct" : "Review"),
-          text("p", result.feedback),
-          text("p", `Expected: ${result.expected}`)
-        );
+        feedback.append(text("strong", result.correct ? "Correct" : "Review"));
+        if (result.error_category) {
+          feedback.append(text("span", errorCategoryLabel(result.error_category), `error-chip${result.correct ? " advisory" : ""}`));
+        }
+        feedback.append(text("p", result.feedback), text("p", `Expected: ${result.expected}`));
+        if (result.corrected_form) {
+          feedback.append(text("p", `Corrected form: ${result.corrected_form}`, "corrected-form"));
+        }
         question.append(feedback);
       });
 
@@ -2645,6 +2689,18 @@
       if (existing) existing.remove();
       panel.id = "quizSummary";
       els.lessonContent.prepend(panel);
+    }
+
+    function errorCategoryLabel(category) {
+      return ({
+        vocabulary_missing: "vocabulary gap",
+        wrong_conjugation: "conjugation slip",
+        wrong_tense: "tense mismatch",
+        word_order: "word order",
+        comprehension: "meaning check",
+        too_short: "too short",
+        unnatural: "natural phrasing"
+      })[category] || "review note";
     }
 
     async function startConversation() {

@@ -14,6 +14,7 @@ from fluent_ai.state import (
     language_state,
     profile_state,
     recalculate_weak_topics,
+    record_mistake,
     review_queue,
     set_skill_score,
     set_topic_score,
@@ -174,6 +175,34 @@ LESSON_BANK = {
 }
 
 
+ALLOWED_ERROR_CATEGORIES = {
+    "vocabulary_missing",
+    "wrong_conjugation",
+    "wrong_tense",
+    "word_order",
+    "comprehension",
+    "too_short",
+    "unnatural",
+}
+
+ERROR_SEVERITY = {
+    "too_short": "high",
+    "comprehension": "high",
+    "vocabulary_missing": "medium",
+    "wrong_conjugation": "medium",
+    "wrong_tense": "medium",
+    "word_order": "medium",
+    "unnatural": "low",
+}
+
+
+@dataclass
+class TopicSelection:
+    topic: str
+    source: str
+    details: dict[str, Any]
+
+
 @dataclass
 class QuizResult:
     prompt: str
@@ -184,6 +213,10 @@ class QuizResult:
     question_type: str
     correct: bool
     feedback: str
+    error_category: str | None = None
+    corrected_form: str | None = None
+    severity: str = "low"
+    confidence: float = 1.0
 
 
 def snapshot_progress(state: dict[str, Any]) -> dict[str, Any]:
@@ -241,6 +274,8 @@ def due_review_items(state: dict[str, Any], now: datetime | None = None) -> list
     for key, item in queue.items():
         if not isinstance(item, dict):
             continue
+        if item.get("item_type") and item.get("item_type") != "topic":
+            continue
         topic = str(item.get("target") or item.get("topic") or key)
         if topic not in LESSON_BANK:
             continue
@@ -258,6 +293,31 @@ def next_due_review_topic(state: dict[str, Any], now: datetime | None = None) ->
     return due_items[0][1]
 
 
+def _due_review_selection(state: dict[str, Any], now: datetime | None = None) -> TopicSelection | None:
+    due_items = due_review_items(state, now)
+    if not due_items:
+        return None
+
+    due_at, topic = due_items[0]
+    review_id = f"review_topic_{_slugify(topic)}"
+    item = review_queue(state).get(review_id, {})
+    if not isinstance(item, dict):
+        item = {}
+        for candidate in review_queue(state).values():
+            if isinstance(candidate, dict) and str(candidate.get("target") or candidate.get("topic") or "") == topic:
+                item = candidate
+                break
+    return TopicSelection(
+        topic=topic,
+        source="due_review",
+        details={
+            "due_at": due_at.isoformat(),
+            "last_score": str(item.get("last_score") or "not recorded"),
+            "interval_days": int(item.get("interval_days", item.get("review_interval_days", 1)) or 1),
+        },
+    )
+
+
 def _parse_due_at(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value.strip():
         return None
@@ -270,10 +330,50 @@ def _parse_due_at(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def choose_topic(state: dict[str, Any]) -> str:
-    due_review = next_due_review_topic(state)
+def due_mistake_items(state: dict[str, Any], now: datetime | None = None) -> list[tuple[datetime, dict[str, Any]]]:
+    now = now or datetime.now(timezone.utc)
+    items: list[tuple[datetime, dict[str, Any]]] = []
+    mistakes = language_state(state).get("mistake_memory", {})
+    if not isinstance(mistakes, dict):
+        return items
+
+    for mistake in mistakes.values():
+        if not isinstance(mistake, dict):
+            continue
+        topic = str(mistake.get("topic") or "").strip()
+        if not topic:
+            continue
+        due_at = _parse_due_at(mistake.get("next_review"))
+        if due_at and due_at <= now:
+            items.append((due_at, mistake))
+    items.sort(key=lambda item: (item[0], str(item[1].get("id") or "")))
+    return items
+
+
+def _mistake_memory_selection(state: dict[str, Any], now: datetime | None = None) -> TopicSelection | None:
+    for due_at, mistake in due_mistake_items(state, now):
+        topic = str(mistake.get("topic") or "").strip()
+        if not topic:
+            continue
+        return TopicSelection(
+            topic=topic,
+            source="mistake_memory",
+            details={
+                "due_at": due_at.isoformat(),
+                "mistake": copy.deepcopy(mistake),
+            },
+        )
+    return None
+
+
+def choose_topic_with_reason(state: dict[str, Any]) -> TopicSelection:
+    due_review = _due_review_selection(state)
     if due_review:
         return due_review
+
+    due_mistake = _mistake_memory_selection(state)
+    if due_mistake:
+        return due_mistake
 
     level = current_level(state)
     level_topics = TOPICS_BY_LEVEL.get(level, TOPICS_BY_LEVEL["A1"])
@@ -283,24 +383,50 @@ def choose_topic(state: dict[str, Any]) -> str:
 
     for topic in weak_topics:
         if topic in LESSON_BANK and topic not in recent:
-            return topic
+            return TopicSelection(topic=topic, source="weak_topic", details={"topic": topic})
 
     fresh_topics = [topic for topic in level_topics if topic not in recent]
-    return random.choice(fresh_topics or level_topics)
+    topic = random.choice(fresh_topics or level_topics)
+    return TopicSelection(topic=topic, source="rotation", details={"level": level})
+
+
+def choose_topic(state: dict[str, Any]) -> str:
+    return choose_topic_with_reason(state).topic
+
+
+def lesson_reason_for(state: dict[str, Any], selection: TopicSelection) -> str:
+    if selection.source == "due_review":
+        score = selection.details.get("last_score") or "not recorded"
+        interval = int(selection.details.get("interval_days", 1) or 1)
+        day_word = "day" if interval == 1 else "days"
+        return f"This is due for review because the last score was {score} and the interval is {interval} {day_word}."
+    if selection.source == "mistake_memory":
+        mistake = selection.details.get("mistake", {}) if isinstance(selection.details.get("mistake"), dict) else {}
+        incorrect = str(mistake.get("incorrect_form") or "an earlier answer")
+        corrected = str(mistake.get("corrected_form") or "the corrected form")
+        source = str(mistake.get("source") or "practice").replace("_", " ")
+        return f"You missed '{incorrect}' -> '{corrected}' in {source}, so this lesson practices {selection.topic}."
+    if selection.source == "weak_topic":
+        return f"Your weakest current topic is {selection.topic} based on recent lesson and conversation evidence."
+    return f"This avoids repeating recent topics while staying at level {current_level(state)}."
 
 
 def generate_lesson(state: dict[str, Any]) -> dict[str, Any]:
     language = active_language(state)
     level = current_level(state)
-    topic = choose_topic(state)
+    selection = choose_topic_with_reason(state)
+    topic = selection.topic
     bank = LESSON_BANK.get(topic, _generic_lesson_bank(language, topic)) if language == "Spanish" else _generic_lesson_bank(language, topic)
     focus_skill = bank["focus_skill"]
     difficulty = performance_band(state)
+    reason = lesson_reason_for(state, selection)
 
     return {
         "language": language,
         "level": level,
         "topic": topic,
+        "reason": reason,
+        "selection_source": selection.source,
         "focus_skill": focus_skill,
         "difficulty": difficulty,
         "minutes": state["preferences"].get("lesson_minutes", 10),
@@ -620,9 +746,13 @@ def answer_quiz(quiz: list[dict[str, Any]], state: dict[str, Any], mode: str) ->
 def evaluate_answers(quiz: list[dict[str, Any]], answers: list[str]) -> list[QuizResult]:
     results = []
     for question, answer in zip(quiz, answers):
+        category = categorize_error(question, answer)
         correct = is_correct(question, answer)
         expected = question["answer"]
-        feedback = feedback_for(question, answer, correct)
+        corrected_form = expected if (not correct or category == "unnatural") else None
+        severity = ERROR_SEVERITY.get(category or "", "low")
+        confidence = _category_confidence(category) if category else 1.0
+        feedback = feedback_for(question, answer, correct, category, corrected_form)
         results.append(
             QuizResult(
                 prompt=question["prompt"],
@@ -633,6 +763,10 @@ def evaluate_answers(quiz: list[dict[str, Any]], answers: list[str]) -> list[Qui
                 question_type=question["type"],
                 correct=correct,
                 feedback=feedback,
+                error_category=category,
+                corrected_form=corrected_form,
+                severity=severity,
+                confidence=confidence,
             )
         )
     return results
@@ -651,10 +785,109 @@ def is_correct(question: dict[str, Any], answer: str) -> bool:
     return False
 
 
-def feedback_for(question: dict[str, Any], answer: str, correct: bool) -> str:
+def categorize_error(question: dict[str, Any], answer: str) -> str | None:
+    if _is_exactly_accepted(question, answer):
+        return None
+
+    question_type = str(question.get("type") or "")
+    if question_type == "multiple_choice":
+        return "vocabulary_missing"
+
+    normalized = normalize(answer)
+    expected = normalize(str(question.get("answer") or ""))
+    answer_tokens = normalized.split()
+    expected_tokens = expected.split()
+    prompt = normalize(str(question.get("prompt") or ""))
+    topic = normalize(str(question.get("topic") or ""))
+    skill = normalize(str(question.get("skill") or ""))
+
+    if question_type == "open_ended" and len(answer_tokens) < 2:
+        return "too_short"
+    if question_type == "fill_blank" and skill == "conjugations":
+        return "wrong_conjugation"
+    if "past tense" in f"{prompt} {topic}" and not _has_past_tense_marker(normalized, expected):
+        return "wrong_tense"
+    if _same_tokens_different_order(answer_tokens, expected_tokens):
+        return "word_order"
+    if question_type == "open_ended":
+        keyword_overlap = _keyword_overlap(question, normalized)
+        if keyword_overlap:
+            return "unnatural"
+        return "comprehension"
+    return "vocabulary_missing"
+
+
+def _is_exactly_accepted(question: dict[str, Any], answer: str) -> bool:
+    normalized = normalize(answer)
+    accepted = [normalize(value) for value in question.get("acceptable_answers", [question["answer"]])]
+    return normalized in accepted
+
+
+def _has_past_tense_marker(normalized_answer: str, normalized_expected: str) -> bool:
+    markers = {"ayer", "fui", "comi", "comio", "hable", "vi", "pasado"}
+    expected_markers = {token for token in normalized_expected.split() if token in markers}
+    if expected_markers:
+        return bool(expected_markers.intersection(normalized_answer.split()))
+    return any(token in markers for token in normalized_answer.split())
+
+
+def _same_tokens_different_order(answer_tokens: list[str], expected_tokens: list[str]) -> bool:
+    if len(answer_tokens) < 2 or len(expected_tokens) < 2:
+        return False
+    if answer_tokens == expected_tokens:
+        return False
+    answer_set = set(answer_tokens)
+    expected_set = set(expected_tokens)
+    return answer_set == expected_set
+
+
+def _keyword_overlap(question: dict[str, Any], normalized_answer: str) -> bool:
+    keywords = [normalize(keyword) for keyword in question.get("keywords", [])]
+    if not keywords:
+        keywords = [token for token in normalize(str(question.get("answer") or "")).split() if len(token) >= 3]
+    return any(keyword and keyword in normalized_answer for keyword in keywords)
+
+
+def _category_confidence(category: str | None) -> float:
+    return {
+        "too_short": 0.99,
+        "vocabulary_missing": 0.95,
+        "wrong_conjugation": 0.92,
+        "wrong_tense": 0.90,
+        "word_order": 0.88,
+        "comprehension": 0.86,
+        "unnatural": 0.78,
+    }.get(category or "", 0.75)
+
+
+def feedback_for(
+    question: dict[str, Any],
+    answer: str,
+    correct: bool,
+    error_category: str | None = None,
+    corrected_form: str | None = None,
+) -> str:
     if correct:
+        if error_category == "unnatural":
+            corrected = corrected_form or str(question["answer"])
+            return f"Understandable! A native speaker might say: '{corrected}'."
         return f"Good retrieval. Keep using '{question['answer']}' in short personal sentences."
 
+    corrected = corrected_form or str(question["answer"])
+    if error_category == "too_short":
+        return f"Almost. Add a complete answer. A good model is '{corrected}'."
+    if error_category == "vocabulary_missing":
+        return f"Review the key word here. The best answer was '{corrected}'."
+    if error_category == "wrong_conjugation":
+        return f"Almost. The verb form changes here. Use '{corrected}'."
+    if error_category == "wrong_tense":
+        return f"Almost. This prompt needs the past-tense form. Use '{corrected}'."
+    if error_category == "word_order":
+        return f"Close. The words are familiar, but the order should be '{corrected}'."
+    if error_category == "comprehension":
+        return f"Not quite. The answer should show the meaning of the prompt, such as '{corrected}'."
+    if error_category == "unnatural":
+        return f"Good keyword, but make the full phrase natural: '{corrected}'."
     if question["type"] == "fill_blank":
         return f"Close. The missing form was '{question['answer']}'. Review the pattern before the next round."
     if question["type"] == "open_ended":
@@ -702,8 +935,29 @@ def update_progress(state: dict[str, Any], lesson: dict[str, Any], results: list
                 "question_type": result.question_type,
                 "correct": result.correct,
                 "feedback": result.feedback,
+                "error_category": result.error_category,
+                "corrected_form": result.corrected_form,
+                "severity": result.severity,
+                "confidence": result.confidence,
             }
         )
+        if not result.correct:
+            next_review = (datetime.now(timezone.utc) + timedelta(days=1)).replace(microsecond=0).isoformat()
+            record_mistake(
+                state,
+                {
+                    "incorrect_form": result.actual,
+                    "corrected_form": result.corrected_form or result.expected,
+                    "error_category": result.error_category or "other",
+                    "skill": skill,
+                    "topic": result.topic,
+                    "context": result.prompt,
+                    "severity": result.severity,
+                    "source": "lesson_practice",
+                    "next_review": next_review,
+                },
+                language,
+            )
 
     next_xp = int(profile.get("xp", 0) + correct_count * 10 + 5)
     next_level = level_from_mastery(sum(skill_updates.values()) / len(skill_updates))

@@ -73,6 +73,7 @@ def run_loop(
             raise RuntimeError(f"OpenAI lesson generation failed: {provider.last_error or 'empty model response'}")
         lesson = enhanced_lesson
         agent_log("OpenAI Model Agent", "Generated the lesson with the OpenAI Responses API.")
+        agent_log("Curriculum Agent", f"Selected {lesson['topic']}: {lesson.get('reason', 'Lesson selected for current progress.')}")
         agent_log(
             "Lesson Generator Agent",
             f"Created a {lesson['minutes']}-minute {lesson['level']} lesson on {lesson['topic']} ({lesson['difficulty']}).",
@@ -183,6 +184,7 @@ def print_lesson(lesson: dict) -> None:
     print(f"- Language: {lesson['language']}")
     print(f"- Level: {lesson['level']}")
     print(f"- Topic: {lesson['topic']}")
+    print(f"- Why this lesson: {lesson.get('reason', 'Lesson selected for current progress.')}")
     print(f"- Focus: {lesson['focus_skill']}")
     print("- Vocabulary:")
     for word, meaning in lesson["vocabulary"]:
