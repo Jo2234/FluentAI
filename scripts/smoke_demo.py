@@ -9,8 +9,13 @@ requires OPENAI_API_KEY.
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from fluent_ai.agent import answer_quiz, evaluate_answers, generate_lesson, generate_quiz, update_progress
 from fluent_ai.conversation import run_conversation

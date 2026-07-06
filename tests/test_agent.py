@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fluent_ai.agent import choose_topic, due_review_items, evaluate_answers, generate_lesson, generate_quiz, update_progress
-from fluent_ai.conversation import asks_for_english_help, build_follow_up, choose_conversation_topic, run_conversation
+from fluent_ai.conversation import asks_for_english_help, build_follow_up, build_opening, choose_conversation_topic, run_conversation
 from fluent_ai.desktop_bridge import conversation_reply, conversation_start, lesson_start, lesson_submit, profile_for, status
 from fluent_ai.state import default_state
 
@@ -195,6 +195,21 @@ class AgentTests(unittest.TestCase):
         self.assertIn("नमस्ते", [item[0] for item in lesson["vocabulary"]])
         self.assertEqual(quiz[0]["answer"], "hello")
         self.assertTrue(any("Hindi" in question["prompt"] for question in quiz))
+
+    def test_non_spanish_conversation_scaffold_uses_target_language(self):
+        french_state = default_state("French")
+        hindi_state = default_state("Hindi")
+        french_state["conversation_memory"]["recent_topics"] = ["weather", "likes and food"]
+        hindi_state["conversation_memory"]["recent_topics"] = ["weather", "likes and food"]
+
+        french_topic = choose_conversation_topic(french_state, video_on=False, video_object=None)
+        hindi_topic = choose_conversation_topic(hindi_state, video_on=False, video_object=None)
+        french_help = build_follow_up(french_topic, "I don't understand", 0.2, 1, french_state)
+
+        self.assertIn("Bonjour", build_opening(french_topic, french_state))
+        self.assertIn("नमस्ते", build_opening(hindi_topic, hindi_state))
+        self.assertIn("Je m'appelle", french_help)
+        self.assertNotIn("Hace sol", french_help)
 
     def test_desktop_bridge_lesson_waits_for_real_answers(self):
         with TemporaryDirectory() as tmpdir, patch("fluent_ai.desktop_bridge.OpenAIProvider", FakeOpenAIProvider):

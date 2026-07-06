@@ -100,6 +100,91 @@ TOPIC_LADDER = {
     ],
 }
 
+LANGUAGE_TOPIC_OVERRIDES = {
+    "French": {
+        "A1": [
+            {
+                "topic": "introductions",
+                "complexity": "beginner",
+                "opening": "Bonjour, je commence. Comment tu t'appelles ?",
+                "support": "Model answer: Je m'appelle Ana.",
+                "keywords": ["je", "m appelle", "suis"],
+            },
+            {
+                "topic": "weather",
+                "complexity": "beginner",
+                "opening": "Bonjour. Quel temps fait-il aujourd'hui ?",
+                "support": "Model answer: Il fait beau.",
+                "keywords": ["il fait", "beau", "pluie", "froid", "chaud"],
+            },
+            {
+                "topic": "likes and food",
+                "complexity": "beginner",
+                "opening": "Bonjour. J'aime les pommes. Est-ce que tu aimes les pommes ?",
+                "support": "Model answer: Oui, j'aime les pommes.",
+                "keywords": ["aime", "pommes", "oui", "non"],
+            },
+        ],
+        "A2": [
+            {
+                "topic": "daily routines",
+                "complexity": "early conversation",
+                "opening": "Raconte-moi : qu'est-ce que tu fais le matin ?",
+                "support": "Try: Je me lève, je déjeune et j'étudie.",
+                "keywords": ["leve", "dejeune", "travaille", "etudie", "matin"],
+            },
+            {
+                "topic": "past weekend",
+                "complexity": "early conversation",
+                "opening": "Parlons de ton week-end. Qu'est-ce que tu as fait hier ?",
+                "support": "Try: Hier, je suis allé au marché.",
+                "keywords": ["hier", "suis alle", "mange", "parle", "vu"],
+            },
+        ],
+    },
+    "Hindi": {
+        "A1": [
+            {
+                "topic": "introductions",
+                "complexity": "beginner",
+                "opening": "नमस्ते, मैं शुरू करता हूँ। आपका नाम क्या है?",
+                "support": "Model answer: मेरा नाम आना है।",
+                "keywords": ["मेरा", "नाम", "है"],
+            },
+            {
+                "topic": "weather",
+                "complexity": "beginner",
+                "opening": "नमस्ते। आज मौसम कैसा है?",
+                "support": "Model answer: आज धूप है।",
+                "keywords": ["आज", "धूप", "बारिश", "ठंड", "गर्मी"],
+            },
+            {
+                "topic": "likes and food",
+                "complexity": "beginner",
+                "opening": "नमस्ते। मुझे सेब पसंद हैं। क्या आपको सेब पसंद हैं?",
+                "support": "Model answer: हाँ, मुझे सेब पसंद हैं।",
+                "keywords": ["पसंद", "सेब", "हाँ", "नहीं"],
+            },
+        ],
+        "A2": [
+            {
+                "topic": "daily routines",
+                "complexity": "early conversation",
+                "opening": "बताइए: आप सुबह आम तौर पर क्या करते हैं?",
+                "support": "Try: मैं उठता हूँ, नाश्ता करता हूँ और पढ़ता हूँ।",
+                "keywords": ["उठता", "नाश्ता", "काम", "पढ़ता", "सुबह"],
+            },
+            {
+                "topic": "past weekend",
+                "complexity": "early conversation",
+                "opening": "आपके सप्ताहांत के बारे में बात करें। आपने कल क्या किया?",
+                "support": "Try: कल मैं बाज़ार गया।",
+                "keywords": ["कल", "गया", "खाया", "बात", "देखा"],
+            },
+        ],
+    },
+}
+
 VISIBLE_OBJECTS = {
     "apple": {
         "spanish": "manzana",
@@ -132,6 +217,22 @@ VISIBLE_OBJECTS = {
 }
 
 
+VISIBLE_OBJECT_TRANSLATIONS = {
+    "French": {
+        "apple": {"target_word": "pomme", "article": "une", "model": "C'est une pomme.", "prompt": "Je vois une pomme. C'est une pomme. Est-ce que tu aimes les pommes ?", "keywords": ["pomme", "aime", "rouge", "verte", "manger"]},
+        "banana": {"target_word": "banane", "article": "une", "model": "C'est une banane.", "prompt": "Je vois une banane. C'est une banane. De quelle couleur est-elle ?", "keywords": ["banane", "jaune", "aime", "manger"]},
+        "book": {"target_word": "livre", "article": "un", "model": "C'est un livre.", "prompt": "Je vois un livre. C'est un livre. Est-ce que tu lis beaucoup ?", "keywords": ["livre", "lis", "lire", "beaucoup", "peu"]},
+        "cup": {"target_word": "tasse", "article": "une", "model": "C'est une tasse.", "prompt": "Je vois une tasse. C'est une tasse. Qu'est-ce que tu bois normalement ?", "keywords": ["tasse", "bois", "cafe", "the", "eau"]},
+    },
+    "Hindi": {
+        "apple": {"target_word": "सेब", "article": "एक", "model": "यह एक सेब है।", "prompt": "मैं एक सेब देखता हूँ। यह एक सेब है। क्या आपको सेब पसंद है?", "keywords": ["सेब", "पसंद", "लाल", "हरा", "खाना"]},
+        "banana": {"target_word": "केला", "article": "एक", "model": "यह एक केला है।", "prompt": "मैं एक केला देखता हूँ। यह एक केला है। यह किस रंग का है?", "keywords": ["केला", "पीला", "पसंद", "खाना"]},
+        "book": {"target_word": "किताब", "article": "एक", "model": "यह एक किताब है।", "prompt": "मैं एक किताब देखता हूँ। यह एक किताब है। क्या आप बहुत पढ़ते हैं?", "keywords": ["किताब", "पढ़ता", "पढ़ना", "बहुत", "थोड़ा"]},
+        "cup": {"target_word": "कप", "article": "एक", "model": "यह एक कप है।", "prompt": "मैं एक कप देखता हूँ। यह एक कप है। आप आम तौर पर क्या पीते हैं?", "keywords": ["कप", "पीता", "कॉफी", "चाय", "पानी"]},
+    },
+}
+
+
 class TutorGenerationError(RuntimeError):
     """Raised when the required OpenAI tutor response is unavailable."""
 
@@ -156,10 +257,10 @@ TutorReplyFn = Callable[[dict[str, Any], dict[str, Any], list[ConversationTurn],
 def choose_conversation_topic(state: dict[str, Any], video_on: bool, video_object: str | None) -> dict[str, Any]:
     level = current_level(state)
     if video_on and video_object:
-        visual = resolve_visible_object(video_object)
+        visual = resolve_visible_object(video_object, state.get("learner", {}).get("target_language", "Spanish"))
         if visual:
             return {
-                "topic": f"visible object: {visual['spanish']}",
+                "topic": f"visible object: {visual['target_word']}",
                 "complexity": "visual beginner" if level in {"A1", "A2"} else "visual conversation",
                 "opening": visual["prompt"],
                 "support": f"Useful sentence: {visual['model']}",
@@ -167,24 +268,34 @@ def choose_conversation_topic(state: dict[str, Any], video_on: bool, video_objec
                 "visual": visual,
             }
 
-    candidates = TOPIC_LADDER.get(level, TOPIC_LADDER["A1"])
+    candidates = conversation_topics_for(state, level)
     recent = set(state.get("conversation_memory", {}).get("recent_topics", [])[-3:])
     fresh = [candidate for candidate in candidates if candidate["topic"] not in recent]
     return random.choice(fresh or candidates)
 
 
-def resolve_visible_object(value: str | None) -> dict[str, Any] | None:
+def conversation_topics_for(state: dict[str, Any], level: str) -> list[dict[str, Any]]:
+    language = state.get("learner", {}).get("target_language", "Spanish")
+    language_topics = LANGUAGE_TOPIC_OVERRIDES.get(language, {})
+    return language_topics.get(level) or TOPIC_LADDER.get(level, TOPIC_LADDER["A1"])
+
+
+def resolve_visible_object(value: str | None, language: str = "Spanish") -> dict[str, Any] | None:
     if not value:
         return None
     lowered = value.lower()
     for key, details in VISIBLE_OBJECTS.items():
         if key in lowered or details["spanish"] in lowered:
             resolved = details.copy()
+            localized = VISIBLE_OBJECT_TRANSLATIONS.get(language, {}).get(key, {})
+            resolved.update(localized)
             resolved["label"] = key
+            resolved.setdefault("target_word", resolved["spanish"])
             return resolved
     return {
         "label": lowered,
         "spanish": lowered,
+        "target_word": lowered,
         "article": "un",
         "model": f"Esto es {lowered}.",
         "prompt": f"Veo {lowered}. ¿Como se dice esto en español?",
@@ -265,9 +376,9 @@ def simulate_reply(topic: dict[str, Any], state: dict[str, Any], turn_number: in
     if visual and level in {"A1", "A2"}:
         return random.choice(
             [
-                f"Si, me gusta la {visual['spanish']}.",
+                f"Si, me gusta la {visual['target_word']}.",
                 visual["model"],
-                f"Es {visual['article']} {visual['spanish']}.",
+                f"Es {visual['article']} {visual['target_word']}.",
             ]
         )
 
@@ -338,7 +449,7 @@ def build_follow_up(topic: dict[str, Any], learner_text: str, score: float, turn
     if topic.get("visual"):
         visual = topic["visual"]
         if turn_number == 1:
-            return f"Muy bien. Ahora dime una frase mas: La {visual['spanish']} es..."
+            return f"Muy bien. Ahora dime una frase mas: La {visual['target_word']} es..."
         return "Perfecto. Ahora usa esa palabra en una frase sobre ti."
 
     if level in {"A1", "A2"}:
