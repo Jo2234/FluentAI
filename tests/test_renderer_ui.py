@@ -150,7 +150,10 @@ class RendererUITests(unittest.TestCase):
         ]:
             self.assertIn(f"function {function_name}", self.html)
         self.assertIn('mode: "home"', self.html)
-        self.assertIn('setMode("home");\n    initOnboarding();', self.html)
+        self.assertIn('setMode("home");\n    initKeyGate().then((blocked) => {', self.html)
+        self.assertIn("if (!blocked) initOnboarding();", self.html)
+        self.assertIn("function initKeyGate", self.html)
+        self.assertIn("Validate & Save", self.html)
         self.assertIn('await loadHomeSummary();\n      setMode("home");', self.html)
         self.assertNotIn("refreshStatus(true).then(ensureLessonStarted)", self.html)
         self.assertIn('const expected = `RESET ${currentLanguage()}`;', self.html)
@@ -168,6 +171,10 @@ class RendererUITests(unittest.TestCase):
         preload = (Path(__file__).resolve().parents[1] / "desktop" / "electron" / "preload.js").read_text(encoding="utf-8")
         main = (Path(__file__).resolve().parents[1] / "desktop" / "electron" / "main.js").read_text(encoding="utf-8")
         for marker in [
+            "keyStatus: () => ipcRenderer.invoke(\"key:status\")",
+            "validateKey: (payload) => ipcRenderer.invoke(\"key:validate\", payload)",
+            "saveKey: (payload) => ipcRenderer.invoke(\"key:save\", payload)",
+            "deleteKey: () => ipcRenderer.invoke(\"key:delete\")",
             "homeSummary: (payload) => ipcRenderer.invoke(\"home:summary\", payload)",
             "memoryInspect: (payload) => ipcRenderer.invoke(\"memory:inspect\", payload)",
             "memoryExport: (payload) => ipcRenderer.invoke(\"memory:export\", payload)",
@@ -176,6 +183,10 @@ class RendererUITests(unittest.TestCase):
         ]:
             self.assertIn(marker, preload)
         for marker in [
+            'ipcMain.handle("key:status"',
+            'ipcMain.handle("key:validate"',
+            'ipcMain.handle("key:save"',
+            'ipcMain.handle("key:delete"',
             'ipcMain.handle("home:summary"',
             'runBridge("home_summary"',
             'ipcMain.handle("memory:inspect"',

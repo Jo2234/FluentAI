@@ -765,6 +765,51 @@
       background: rgba(18,22,32,0.96);
     }
 
+    .key-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .key-actions button {
+      flex: 1 1 190px;
+    }
+
+    .key-source,
+    .key-hint {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .key-hint a {
+      color: #d7dcee;
+      font-weight: 850;
+    }
+
+    .recovery-notice {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-color: rgba(255, 193, 7, 0.36);
+      background: rgba(255, 193, 7, 0.10);
+    }
+
+    .recovery-notice button {
+      min-height: 34px;
+      padding: 7px 10px;
+      flex-shrink: 0;
+    }
+
+    .home-action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
     .placement-item {
       border: 1px solid rgba(255,255,255,0.10);
       border-radius: 18px;
@@ -2121,6 +2166,30 @@
     </div>
   </section>
 
+  <section class="onboarding-overlay hidden" id="keySetupOverlay" aria-modal="true" role="dialog" aria-labelledby="keySetupTitle">
+    <div class="onboarding-card">
+      <div class="onboarding-progress" id="keySetupProgress">API key</div>
+      <div class="onboarding-stage">
+        <h2 id="keySetupTitle">Connect your OpenAI key.</h2>
+        <p>FluentAI runs on your own OpenAI account so lessons, tutor calls, and vision context stay API-key-first.</p>
+      </div>
+      <form class="onboarding-form" id="keySetupForm">
+        <div class="onboarding-field">
+          <label for="apiKeyInput">OpenAI API key</label>
+          <input id="apiKeyInput" type="password" autocomplete="off" spellcheck="false" placeholder="sk-...">
+          <p class="key-source" id="keySetupSource"></p>
+        </div>
+        <div class="onboarding-hint hidden" id="keySetupHint"></div>
+        <div class="key-actions">
+          <button id="keyValidateSaveBtn" type="submit">Validate & Save</button>
+          <button class="ghost overlay-secondary hidden" id="keyDeleteBtn" type="button">Remove key</button>
+          <button class="ghost overlay-secondary hidden" id="keyCancelBtn" type="button">Cancel</button>
+        </div>
+        <p class="key-hint">Where do I get a key? Create one in your OpenAI dashboard, then paste it here.</p>
+      </form>
+    </div>
+  </section>
+
   <header>
     <h1><span class="brand-mark">F</span>FluentAI</h1>
     <p class="header-meta" id="headerMeta">Loading local learner memory...</p>
@@ -2194,6 +2263,10 @@
       </div>
 
       <div class="pane home-pane" id="homePane">
+        <section class="home-panel recovery-notice hidden" id="recoveryNotice">
+          <p>Your progress file was damaged, so FluentAI started fresh and saved a backup beside it.</p>
+          <button class="secondary small-action" id="recoveryDismissBtn" type="button">Dismiss</button>
+        </section>
         <section class="home-panel today-panel" id="todayPanel"></section>
         <section class="home-panel profile-panel" id="homeProfilePanel"></section>
         <section class="home-panel" id="reviewPreviewPanel"></section>
@@ -2331,6 +2404,10 @@
       homeSummary: null,
       memoryPayload: null,
       memoryJsonVisible: false,
+      keyStatus: null,
+      keySetupOpen: false,
+      progressRecovered: false,
+      recoveryNoticeDismissed: false,
       lessonSession: null,
       conversationSession: null,
       latestTutorMessage: "",
@@ -2373,6 +2450,15 @@
       onboardingFields: document.getElementById("onboardingFields"),
       onboardingHint: document.getElementById("onboardingHint"),
       onboardingNextBtn: document.getElementById("onboardingNextBtn"),
+      keySetupOverlay: document.getElementById("keySetupOverlay"),
+      keySetupProgress: document.getElementById("keySetupProgress"),
+      keySetupForm: document.getElementById("keySetupForm"),
+      apiKeyInput: document.getElementById("apiKeyInput"),
+      keySetupSource: document.getElementById("keySetupSource"),
+      keySetupHint: document.getElementById("keySetupHint"),
+      keyValidateSaveBtn: document.getElementById("keyValidateSaveBtn"),
+      keyDeleteBtn: document.getElementById("keyDeleteBtn"),
+      keyCancelBtn: document.getElementById("keyCancelBtn"),
       placementStage: document.getElementById("placementStage"),
       placementItems: document.getElementById("placementItems"),
       placementResult: document.getElementById("placementResult"),
@@ -2386,6 +2472,8 @@
       workspaceStatus: document.getElementById("workspaceStatus"),
       homePane: document.getElementById("homePane"),
       todayPanel: document.getElementById("todayPanel"),
+      recoveryNotice: document.getElementById("recoveryNotice"),
+      recoveryDismissBtn: document.getElementById("recoveryDismissBtn"),
       homeProfilePanel: document.getElementById("homeProfilePanel"),
       reviewPreviewPanel: document.getElementById("reviewPreviewPanel"),
       recentProgressPanel: document.getElementById("recentProgressPanel"),
@@ -2549,6 +2637,129 @@
       els.workspaceStatus.append(text("span", message, "error"));
     }
 
+    function setKeyHint(message) {
+      els.keySetupHint.textContent = message || "";
+      els.keySetupHint.classList.toggle("hidden", !message);
+    }
+
+    function keySourceLabel(status) {
+      if (!status || !status.available) {
+        return status && status.encryptionAvailable === false
+          ? "Secure storage is unavailable on this Mac; a saved key will last for this app session only."
+          : "No key is saved yet.";
+      }
+      if (status.source === "env") return "Using OPENAI_API_KEY from this app launch.";
+      if (status.source === "stored") return "Using a key saved in macOS secure storage.";
+      if (status.source === "session") return "Using a session-only key.";
+      if (status.source === "dev-env-file") return "Using the development .env file.";
+      return "OpenAI key is available.";
+    }
+
+    async function refreshKeyStatus() {
+      if (!window.fluentAI.keyStatus) return { ok: true, available: true, source: "web" };
+      const status = await window.fluentAI.keyStatus();
+      state.keyStatus = status;
+      return status;
+    }
+
+    async function initKeyGate() {
+      if (!window.fluentAI.keyStatus) return false;
+      let status = null;
+      try {
+        status = await refreshKeyStatus();
+      } catch (error) {
+        showError(error.message || "Could not check API key status.");
+        return false;
+      }
+      if (status && status.ok && status.available) {
+        appendLogs([`[OpenAI Key Agent] Key source: ${status.source}.`]);
+        return false;
+      }
+      showKeySetup({ required: true });
+      return true;
+    }
+
+    function showKeySetup(options = {}) {
+      state.keySetupOpen = true;
+      els.keySetupOverlay.classList.remove("hidden");
+      els.keyCancelBtn.classList.toggle("hidden", Boolean(options.required));
+      els.keyDeleteBtn.classList.toggle("hidden", !(state.keyStatus && ["stored", "session"].includes(state.keyStatus.source)));
+      els.keySetupProgress.textContent = options.required ? "First run setup" : "API key";
+      els.keySetupSource.textContent = keySourceLabel(state.keyStatus);
+      els.apiKeyInput.value = "";
+      els.keyValidateSaveBtn.disabled = false;
+      els.keyValidateSaveBtn.textContent = "Validate & Save";
+      setKeyHint("");
+      setTimeout(() => els.apiKeyInput.focus(), 0);
+    }
+
+    function hideKeySetup() {
+      state.keySetupOpen = false;
+      els.keySetupOverlay.classList.add("hidden");
+      els.apiKeyInput.value = "";
+      setKeyHint("");
+    }
+
+    async function submitKeySetup(event) {
+      event.preventDefault();
+      if (!window.fluentAI.validateKey || !window.fluentAI.saveKey) return;
+      const candidate = els.apiKeyInput.value.trim();
+      if (!candidate) {
+        setKeyHint("Paste an OpenAI API key to continue.");
+        return;
+      }
+      els.keyValidateSaveBtn.disabled = true;
+      els.keyValidateSaveBtn.textContent = "Validating...";
+      setKeyHint("");
+      let validation = null;
+      try {
+        validation = await window.fluentAI.validateKey({ key: candidate });
+      } catch (error) {
+        validation = { ok: false, message: error.message || "Could not validate the key." };
+      }
+      if (!validation || !validation.ok || !validation.valid) {
+        els.keyValidateSaveBtn.disabled = false;
+        els.keyValidateSaveBtn.textContent = "Validate & Save";
+        setKeyHint((validation && (validation.message || validation.error)) || "That key did not validate. Check it and try again.");
+        return;
+      }
+      els.keyValidateSaveBtn.textContent = "Saving...";
+      const save = await window.fluentAI.saveKey({ key: candidate });
+      els.apiKeyInput.value = "";
+      if (!save || !save.ok) {
+        els.keyValidateSaveBtn.disabled = false;
+        els.keyValidateSaveBtn.textContent = "Validate & Save";
+        setKeyHint((save && (save.message || save.error)) || "Could not save the key.");
+        return;
+      }
+      await refreshKeyStatus();
+      hideKeySetup();
+      appendLogs([`[OpenAI Key Agent] Key source: ${state.keyStatus.source}.`]);
+      await initOnboarding();
+    }
+
+    async function deleteKey() {
+      if (!window.fluentAI.deleteKey) return;
+      els.keyDeleteBtn.disabled = true;
+      const result = await window.fluentAI.deleteKey();
+      els.keyDeleteBtn.disabled = false;
+      await refreshKeyStatus();
+      els.keySetupSource.textContent = keySourceLabel(state.keyStatus);
+      els.keyDeleteBtn.classList.add("hidden");
+      setKeyHint(result && result.ok ? "Stored key removed." : "Could not remove the stored key.");
+    }
+
+    function trackRecovery(result) {
+      if (result && result.recovered) {
+        state.progressRecovered = true;
+      }
+    }
+
+    function renderRecoveryNotice() {
+      const visible = state.progressRecovered && !state.recoveryNoticeDismissed;
+      els.recoveryNotice.classList.toggle("hidden", !visible);
+    }
+
     function shouldUseVoice() {
       return els.voiceMode.value === "openai";
     }
@@ -2676,6 +2887,7 @@
         setMode("home");
         return;
       }
+      trackRecovery(result);
       appendLogs(result.logs);
       if (result.requires_onboarding) {
         showOnboardingOverlay(result);
@@ -3658,6 +3870,7 @@
         showError(result.error || "Could not load status.");
         return;
       }
+      trackRecovery(result);
       renderProfile(result.profile);
       appendLogs(result.logs);
     }
@@ -3669,6 +3882,7 @@
         appendLogs(result.logs);
         return;
       }
+      trackRecovery(result);
       state.homeSummary = result;
       if (result.profile) renderProfile(result.profile);
       appendLogs(result.logs);
@@ -3677,6 +3891,7 @@
 
     function renderHome(summary) {
       const today = summary.today || {};
+      renderRecoveryNotice();
       const todayCopy = document.createElement("div");
       todayCopy.append(
         text("p", "Today", "eyebrow"),
@@ -3697,6 +3912,8 @@
         text("p", `${profile.name || "Learner"} · ${profile.language || currentLanguage()} · Level ${profile.level || "A1"}`),
         text("p", `Goal: ${goals}`)
       );
+      const actionRow = document.createElement("div");
+      actionRow.className = "home-action-row";
       const meet = document.createElement("button");
       meet.className = "secondary overlay-secondary";
       meet.id = "meetTutorAgainBtn";
@@ -3710,7 +3927,30 @@
           video_default: els.video.value || "off"
         } });
       });
-      els.homeProfilePanel.replaceChildren(profileContent, meet);
+      actionRow.append(meet);
+      if (window.fluentAI.keyStatus) {
+        const keyButton = document.createElement("button");
+        keyButton.className = "secondary overlay-secondary";
+        keyButton.type = "button";
+        keyButton.textContent = "API key";
+        keyButton.addEventListener("click", async () => {
+          await refreshKeyStatus();
+          showKeySetup({ required: false });
+        });
+        actionRow.append(keyButton);
+        if (state.keyStatus && ["stored", "session"].includes(state.keyStatus.source)) {
+          const removeKeyButton = document.createElement("button");
+          removeKeyButton.className = "secondary overlay-secondary";
+          removeKeyButton.type = "button";
+          removeKeyButton.textContent = "Remove key";
+          removeKeyButton.addEventListener("click", async () => {
+            await deleteKey();
+            await loadHomeSummary();
+          });
+          actionRow.append(removeKeyButton);
+        }
+      }
+      els.homeProfilePanel.replaceChildren(profileContent, actionRow);
 
       els.reviewPreviewPanel.replaceChildren(
         text("h3", "Review queue"),
@@ -4397,6 +4637,13 @@
     els.startTextFallbackBtn.addEventListener("click", startTextFallback);
     els.startVoiceFromTextBtn.addEventListener("click", showVoiceCallInterface);
     els.onboardingForm.addEventListener("submit", submitOnboarding);
+    els.keySetupForm.addEventListener("submit", submitKeySetup);
+    els.keyDeleteBtn.addEventListener("click", deleteKey);
+    els.keyCancelBtn.addEventListener("click", hideKeySetup);
+    els.recoveryDismissBtn.addEventListener("click", () => {
+      state.recoveryNoticeDismissed = true;
+      renderRecoveryNotice();
+    });
     els.placementSkipBtn.addEventListener("click", () => submitPlacement({ skipBeginner: true }));
     els.memoryInspectorPanel.addEventListener("toggle", openMemoryInspector);
     els.memoryExportBtn.addEventListener("click", exportMemory);
@@ -4452,7 +4699,9 @@
     syncAgentLogPanel();
     loadMediaDiagnostics().then(() => renderCallMedia());
     setMode("home");
-    initOnboarding();
+    initKeyGate().then((blocked) => {
+      if (!blocked) initOnboarding();
+    });
   </script>
 </body>
 </html>

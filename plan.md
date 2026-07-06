@@ -45,3 +45,4 @@ Create a demoable agentic language learning app with Lesson Mode and Conversatio
 - Add richer browser/desktop regression tests for voice and camera behavior.
 - Tune Realtime voice turn-taking and English-help behavior for natural language-learning conversations. Done.
 - Implement WP4 Home workspace, memory inspector/export/reset/delete controls, and privacy-safe memory payloads.
+- Packaging steps 2/3: add API key manager, bridge validation, safe-storage/session key handling, and corrupt progress recovery.

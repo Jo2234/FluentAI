@@ -262,6 +262,48 @@ class StateV2Tests(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(state["event_counter"], 1005)
 
+    def test_corrupt_json_is_backed_up_once_and_replaced_with_fresh_state(self):
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "progress.json"
+            path.write_text("{bad json", encoding="utf-8")
+
+            recovered = load_state(path, "Spanish")
+            backups = list(Path(tmpdir).glob("progress.corrupt.*.json"))
+
+            self.assertTrue(recovered["_recovered_from_corruption"])
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_text(encoding="utf-8"), "{bad json")
+            self.assertEqual(recovered["schema_version"], 2)
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertNotIn("_recovered_from_corruption", persisted)
+
+            reloaded = load_state(path, "Spanish")
+            self.assertNotIn("_recovered_from_corruption", reloaded)
+            self.assertEqual(len(list(Path(tmpdir).glob("progress.corrupt.*.json"))), 1)
+
+    def test_non_dict_json_root_recovers_without_touching_valid_files(self):
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "progress.json"
+            path.write_text("[]", encoding="utf-8")
+
+            recovered = load_state(path, "French")
+
+            self.assertTrue(recovered["_recovered_from_corruption"])
+            self.assertEqual(recovered["active_language"], "French")
+            self.assertEqual(len(list(Path(tmpdir).glob("progress.corrupt.*.json"))), 1)
+
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "progress.json"
+            state = default_state("Spanish")
+            save_state(path, state)
+            before = path.read_text(encoding="utf-8")
+
+            loaded = load_state(path, "Spanish")
+
+            self.assertNotIn("_recovered_from_corruption", loaded)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+            self.assertEqual(list(Path(tmpdir).glob("progress.corrupt.*.json")), [])
+
 
 if __name__ == "__main__":
     unittest.main()

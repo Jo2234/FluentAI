@@ -98,6 +98,7 @@ def onboarding_status(payload: dict[str, Any]) -> dict[str, Any]:
         log = "[Onboarding Agent] Onboarding and placement are complete."
     return {
         "ok": True,
+        "recovered": _was_recovered(state),
         "requires_onboarding": requires_onboarding,
         "is_first_launch": False,
         "requires_placement": requires_placement,
@@ -107,7 +108,7 @@ def onboarding_status(payload: dict[str, Any]) -> dict[str, Any]:
             "session_minutes": int(state.get("preferences", {}).get("lesson_minutes", 10) or 10),
             "video_default": state.get("preferences", {}).get("video_default", "off"),
         },
-        "logs": [log],
+        "logs": _recovery_logs(state) + [log],
     }
 
 
@@ -367,12 +368,22 @@ def status(payload: dict[str, Any]) -> dict[str, Any]:
     provider = OpenAIProvider()
     return {
         "ok": True,
+        "recovered": _was_recovered(state),
         "profile": profile_for(state, provider),
-        "logs": [
+        "logs": _recovery_logs(state) + [
             "[Memory Agent] Loaded local learner profile.",
             f"[OpenAI Model Agent] {provider.status()}",
         ],
     }
+
+
+def validate_key(payload: dict[str, Any]) -> dict[str, Any]:
+    provider = OpenAIProvider()
+    if not provider.api_key:
+        return {"ok": True, "valid": False, "message": "No OpenAI API key was provided."}
+    if provider.health_check():
+        return {"ok": True, "valid": True, "message": "OpenAI key validated."}
+    return {"ok": True, "valid": False, "message": "That key did not validate. Check it and try again."}
 
 
 def realtime_client_secret(payload: dict[str, Any]) -> dict[str, Any]:
@@ -688,13 +699,14 @@ def home_summary(payload: dict[str, Any]) -> dict[str, Any]:
     }
     return {
         "ok": True,
+        "recovered": _was_recovered(state),
         "profile": profile_for(state),
         "today": today,
         "review_preview": _review_preview(state, due_reviews, due_mistakes),
         "recent_progress": _recent_progress(state),
         "speaking_confidence": _speaking_confidence_summary(state),
         "memory_counts": counts,
-        "logs": [log],
+        "logs": _recovery_logs(state) + [log],
     }
 
 
@@ -1607,6 +1619,16 @@ def _load(payload: dict[str, Any]) -> dict[str, Any]:
     return state
 
 
+def _was_recovered(state: dict[str, Any]) -> bool:
+    return bool(state.get("_recovered_from_corruption"))
+
+
+def _recovery_logs(state: dict[str, Any]) -> list[str]:
+    if not _was_recovered(state):
+        return []
+    return ["[Memory Agent] Your progress file was damaged; a backup was saved."]
+
+
 def _language(payload: dict[str, Any]) -> str:
     raw = str(payload.get("language") or "Spanish").strip().lower()
     return SUPPORTED_LANGUAGES.get(raw, "Spanish")
@@ -1644,6 +1666,7 @@ COMMANDS = {
     "memory_reset_language": memory_reset_language,
     "memory_delete_all": memory_delete_all,
     "status": status,
+    "validate_key": validate_key,
     "realtime_client_secret": realtime_client_secret,
     "vision_analyze_frame": vision_analyze_frame,
     "lesson_start": lesson_start,

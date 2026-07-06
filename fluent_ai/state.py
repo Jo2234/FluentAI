@@ -53,10 +53,32 @@ def load_state(path: Path, language: str | None = None) -> dict[str, Any]:
         save_state(path, state)
         return state
 
-    with path.open("r", encoding="utf-8") as file:
-        state = json.load(file)
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            state = json.load(file)
+    except json.JSONDecodeError:
+        return _recover_corrupt_state(path, default_language)
+
+    if not isinstance(state, dict):
+        return _recover_corrupt_state(path, default_language)
 
     return migrate_state(state, default_language)
+
+
+def _recover_corrupt_state(path: Path, language: str) -> dict[str, Any]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup_path = path.with_name(f"{path.stem}.corrupt.{timestamp}{path.suffix}")
+    index = 1
+    while backup_path.exists():
+        backup_path = path.with_name(f"{path.stem}.corrupt.{timestamp}.{index}{path.suffix}")
+        index += 1
+    path.replace(backup_path)
+    state = default_state(language)
+    state["_recovered_from_corruption"] = True
+    state["_corrupt_backup_path"] = str(backup_path)
+    save_state(path, state)
+    return state
 
 
 def migrate_state(state: dict[str, Any], language: str) -> dict[str, Any]:
@@ -251,8 +273,13 @@ def save_state(path: Path, state: dict[str, Any]) -> None:
     language_state(state)["updated_at"] = state["updated_at"]
     _normalize_event_counter(state)
     _cap_events(state)
+    persisted_state = {
+        key: value
+        for key, value in state.items()
+        if key not in {"_recovered_from_corruption", "_corrupt_backup_path"}
+    }
     with path.open("w", encoding="utf-8") as file:
-        json.dump(state, file, indent=2, ensure_ascii=False)
+        json.dump(persisted_state, file, indent=2, ensure_ascii=False)
         file.write("\n")
 
 

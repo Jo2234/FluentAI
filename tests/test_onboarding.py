@@ -73,6 +73,18 @@ class OnboardingBridgeTests(unittest.TestCase):
             self.assertFalse(result["is_first_launch"])
             self.assertTrue(result["requires_placement"])
 
+    def test_onboarding_status_surfaces_corrupt_progress_recovery(self):
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "progress.json"
+            path.write_text("{damaged", encoding="utf-8")
+
+            result = onboarding_status({"state_path": str(path), "language": "Spanish"})
+
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["recovered"])
+            self.assertIn("[Memory Agent] Your progress file was damaged; a backup was saved.", result["logs"])
+            self.assertEqual(len(list(Path(tmpdir).glob("progress.corrupt.*.json"))), 1)
+
     def test_onboarding_submit_writes_fields_event_and_preserves_memory_on_rerun(self):
         with TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "progress.json"

@@ -1,11 +1,13 @@
-const { app, BrowserWindow, dialog, ipcMain, systemPreferences } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, safeStorage, systemPreferences } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
+const { redactSecrets } = require("./security");
 
 const projectRoot = process.env.FLUENTAI_PROJECT_ROOT || path.resolve(__dirname, "..", "..");
 const pythonExecutable = resolvePythonExecutable();
 let mainWindow = null;
+let sessionOpenAIKey = null;
 
 function resolvePythonExecutable() {
   if (process.env.PYTHON_EXECUTABLE) {
@@ -23,6 +25,9 @@ function resolvePythonExecutable() {
 }
 
 app.setName("FluentAI");
+if (process.env.FLUENTAI_USER_DATA_PATH) {
+  app.setPath("userData", process.env.FLUENTAI_USER_DATA_PATH);
+}
 
 function resolveStatePath() {
   if (process.env.FLUENTAI_STATE_PATH) {
@@ -69,7 +74,107 @@ function migratePackagedStateIfNeeded() {
   console.log("[Memory Agent] Migrated learner profile to Application Support.");
 }
 
-function buildPackagedEnv(statePath) {
+function settingsPath() {
+  return path.join(app.getPath("userData"), "settings.json");
+}
+
+function readSettings() {
+  try {
+    const filePath = settingsPath();
+    if (!fs.existsSync(filePath)) {
+      return {};
+    }
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function writeSettings(settings) {
+  const filePath = settingsPath();
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(settings, null, 2) + "\n");
+}
+
+function readStoredOpenAIKey() {
+  if (!safeStorage.isEncryptionAvailable()) {
+    return null;
+  }
+  const encrypted = readSettings().openai_api_key_encrypted;
+  if (!encrypted || typeof encrypted !== "string") {
+    return null;
+  }
+  try {
+    return safeStorage.decryptString(Buffer.from(encrypted, "base64"));
+  } catch (_error) {
+    return null;
+  }
+}
+
+function saveStoredOpenAIKey(key) {
+  const now = new Date().toISOString();
+  const encrypted = safeStorage.encryptString(key).toString("base64");
+  writeSettings({
+    openai_api_key_encrypted: encrypted,
+    created_at: readSettings().created_at || now,
+    last_validated_at: now
+  });
+}
+
+function deleteStoredOpenAIKey() {
+  const current = readSettings();
+  delete current.openai_api_key_encrypted;
+  delete current.created_at;
+  delete current.last_validated_at;
+  writeSettings(current);
+}
+
+function devEnvFileHasOpenAIKey() {
+  if (app.isPackaged) {
+    return false;
+  }
+  const envPath = path.join(projectRoot, ".env");
+  try {
+    const text = fs.readFileSync(envPath, "utf-8");
+    return text.split(/\r?\n/).some((line) => /^\s*OPENAI_API_KEY\s*=\s*\S+/.test(line));
+  } catch (_error) {
+    return false;
+  }
+}
+
+function resolveOpenAIKeyStatus() {
+  if (process.env.OPENAI_API_KEY) {
+    return { available: true, source: "env", persisted: false, encryptionAvailable: safeStorage.isEncryptionAvailable() };
+  }
+
+  if (sessionOpenAIKey) {
+    return { available: true, source: "session", persisted: false, encryptionAvailable: safeStorage.isEncryptionAvailable() };
+  }
+
+  const stored = readStoredOpenAIKey();
+  if (stored) {
+    return { available: true, source: "stored", persisted: true, encryptionAvailable: safeStorage.isEncryptionAvailable() };
+  }
+
+  if (devEnvFileHasOpenAIKey()) {
+    return { available: true, source: "dev-env-file", persisted: false, encryptionAvailable: safeStorage.isEncryptionAvailable() };
+  }
+
+  return { available: false, source: "missing", persisted: false, encryptionAvailable: safeStorage.isEncryptionAvailable() };
+}
+
+function resolvedOpenAIKeyForChild() {
+  if (process.env.OPENAI_API_KEY) {
+    return process.env.OPENAI_API_KEY;
+  }
+  if (sessionOpenAIKey) {
+    return sessionOpenAIKey;
+  }
+  return readStoredOpenAIKey();
+}
+
+function buildPackagedEnv(statePath, openAIKeyOverride) {
   const env = {};
   for (const key of ["PATH", "HOME", "TMPDIR", "LANG"]) {
     if (process.env[key]) {
@@ -77,8 +182,9 @@ function buildPackagedEnv(statePath) {
     }
   }
 
-  if (process.env.OPENAI_API_KEY) {
-    env.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  const openAIKey = openAIKeyOverride || resolvedOpenAIKeyForChild();
+  if (openAIKey) {
+    env.OPENAI_API_KEY = openAIKey;
   }
 
   for (const [key, value] of Object.entries(process.env)) {
@@ -91,8 +197,9 @@ function buildPackagedEnv(statePath) {
   return env;
 }
 
-function resolveBridgeCommand(bridgeCommand) {
+function resolveBridgeCommand(bridgeCommand, options = {}) {
   const statePath = resolveStatePath();
+  const openAIKey = options.openAIKey || resolvedOpenAIKeyForChild();
 
   if (app.isPackaged) {
     const userDataPath = app.getPath("userData");
@@ -101,19 +208,24 @@ function resolveBridgeCommand(bridgeCommand) {
       command: path.join(process.resourcesPath, "bridge", "fluentai-bridge", "fluentai-bridge"),
       args: [bridgeCommand],
       cwd: userDataPath,
-      env: buildPackagedEnv(statePath),
+      env: buildPackagedEnv(statePath, openAIKey),
       statePath
     };
+  }
+
+  const env = {
+    ...process.env,
+    PYTHONPATH: projectRoot
+  };
+  if (openAIKey) {
+    env.OPENAI_API_KEY = openAIKey;
   }
 
   return {
     command: pythonExecutable,
     args: ["-m", "fluent_ai.desktop_bridge", bridgeCommand],
     cwd: projectRoot,
-    env: {
-      ...process.env,
-      PYTHONPATH: projectRoot
-    },
+    env,
     statePath
   };
 }
@@ -140,9 +252,9 @@ if (process.env.FLUENTAI_FAKE_MEDIA === "1") {
   app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 }
 
-function runBridge(command, payload = {}) {
+function runBridge(command, payload = {}, options = {}) {
   return new Promise((resolve) => {
-    const bridge = resolveBridgeCommand(command);
+    const bridge = resolveBridgeCommand(command, options);
     const child = spawn(bridge.command, bridge.args, {
       cwd: bridge.cwd,
       env: bridge.env
@@ -156,17 +268,17 @@ function runBridge(command, payload = {}) {
       output += chunk.toString();
     });
     child.on("error", (error) => {
-      resolve({ ok: false, error: `Could not start Python agent process: ${error.message}` });
+      resolve(redactSecrets({ ok: false, error: `Could not start Python agent process: ${error.message}` }));
     });
     child.on("close", (code) => {
       if (code !== 0) {
-        resolve({ ok: false, error: `Agent process exited with status ${code}.`, raw: output.trim() });
+        resolve(redactSecrets({ ok: false, error: `Agent process exited with status ${code}.`, raw: output.trim() }));
         return;
       }
       try {
-        resolve(JSON.parse(output));
+        resolve(redactSecrets(JSON.parse(output)));
       } catch (error) {
-        resolve({ ok: false, error: `Agent returned non-JSON output: ${error.message}`, raw: output.trim() });
+        resolve(redactSecrets({ ok: false, error: `Agent returned non-JSON output: ${error.message}`, raw: output.trim() }));
       }
     });
     child.stdin.write(JSON.stringify(withStatePath(payload, bridge.statePath)));
@@ -235,6 +347,54 @@ app.on("window-all-closed", () => {
 
 ipcMain.handle("status", async (_event, payload) => {
   return runBridge("status", payload || {});
+});
+
+ipcMain.handle("key:status", async () => {
+  return { ok: true, ...resolveOpenAIKeyStatus() };
+});
+
+ipcMain.handle("key:validate", async (_event, payload = {}) => {
+  const candidate = typeof payload.key === "string" ? payload.key.trim() : "";
+  if (!candidate) {
+    return { ok: true, valid: false, message: "Add an OpenAI API key to continue." };
+  }
+  return runBridge("validate_key", {}, { openAIKey: candidate });
+});
+
+ipcMain.handle("key:save", async (_event, payload = {}) => {
+  const candidate = typeof payload.key === "string" ? payload.key.trim() : "";
+  if (!candidate) {
+    return { ok: false, message: "Add an OpenAI API key to continue." };
+  }
+
+  if (!safeStorage.isEncryptionAvailable()) {
+    sessionOpenAIKey = candidate;
+    return { ok: true, persisted: false, source: "session", message: "Key is available for this session." };
+  }
+
+  try {
+    saveStoredOpenAIKey(candidate);
+    sessionOpenAIKey = null;
+    return { ok: true, persisted: true, source: "stored", message: "Key saved securely." };
+  } catch (error) {
+    sessionOpenAIKey = candidate;
+    return {
+      ok: true,
+      persisted: false,
+      source: "session",
+      message: `Secure storage was unavailable; key is available for this session.`
+    };
+  }
+});
+
+ipcMain.handle("key:delete", async () => {
+  sessionOpenAIKey = null;
+  try {
+    deleteStoredOpenAIKey();
+  } catch (_error) {
+    return { ok: false, message: "Could not remove the stored key." };
+  }
+  return { ok: true, ...resolveOpenAIKeyStatus() };
 });
 
 ipcMain.handle("onboarding:status", async (_event, payload) => {
