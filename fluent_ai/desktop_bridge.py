@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -30,13 +32,20 @@ from fluent_ai.conversation import (
 )
 from fluent_ai.openai_provider import OpenAIProvider
 from fluent_ai.state import (
+    add_event,
     active_language,
     conversation_memory,
     language_state,
     load_state,
     profile_state,
-    review_queue,
+    recalculate_weak_topics,
     save_state,
+    set_skill_score,
+    set_topic_score,
+    skill_scores,
+    review_queue,
+    topic_scores,
+    utc_now,
 )
 
 
@@ -48,6 +57,305 @@ SUPPORTED_LANGUAGES = {
     "francais": "French",
     "français": "French",
 }
+
+SPEAKING_COMFORT_SEEDS = {
+    "quiet": 0.22,
+    "some": 0.35,
+    "comfortable": 0.50,
+}
+
+def onboarding_status(payload: dict[str, Any]) -> dict[str, Any]:
+    path = _path(payload)
+    language = _language(payload) if "language" in payload else "Spanish"
+    if not path.exists():
+        return {
+            "ok": True,
+            "requires_onboarding": True,
+            "is_first_launch": True,
+            "requires_placement": True,
+            "profile": {},
+            "defaults": {"language": "Spanish", "session_minutes": 10, "video_default": "off"},
+            "logs": ["[Onboarding Agent] First launch detected."],
+        }
+
+    state = load_state(path, language)
+    if language and active_language(state) != language:
+        state["active_language"] = language
+        language_state(state, language)
+    learner = state.setdefault("learner", {})
+    profile = profile_state(state, language)
+    requires_onboarding = not bool(learner.get("onboarded_at"))
+    requires_placement = not bool(profile.get("placement_completed_at"))
+    if requires_onboarding:
+        log = "[Onboarding Agent] Existing learner profile needs onboarding metadata."
+    elif requires_placement:
+        log = "[Onboarding Agent] Onboarding complete; placement still needed."
+    else:
+        log = "[Onboarding Agent] Onboarding and placement are complete."
+    return {
+        "ok": True,
+        "requires_onboarding": requires_onboarding,
+        "is_first_launch": False,
+        "requires_placement": requires_placement,
+        "profile": profile_for(state),
+        "defaults": {
+            "language": active_language(state),
+            "session_minutes": int(state.get("preferences", {}).get("lesson_minutes", 10) or 10),
+            "video_default": state.get("preferences", {}).get("video_default", "off"),
+        },
+        "logs": [log],
+    }
+
+
+def onboarding_submit(payload: dict[str, Any]) -> dict[str, Any]:
+    language = _language(payload)
+    path = _path(payload)
+    state = load_state(path, language)
+    state["active_language"] = language
+    data = language_state(state, language)
+    learner = state.setdefault("learner", {})
+    profile = data.setdefault("profile", {})
+    preferences = state.setdefault("preferences", {})
+    privacy = state.setdefault("privacy", {})
+
+    now = _next_timestamp_after(learner.get("last_onboarding_at"))
+    display_name = str(payload.get("display_name") or "").strip()
+    if display_name:
+        learner["display_name"] = display_name
+    learner["motivation"] = str(payload.get("motivation") or "").strip()
+    goals = _string_list(payload.get("goals"))
+    if goals:
+        learner["active_goals"] = goals
+        profile["learning_goals"] = goals.copy()
+    session_minutes = _bounded_int(payload.get("session_minutes"), 5, 15, 10)
+    learner["preferred_session_length_minutes"] = session_minutes
+    preferences["lesson_minutes"] = session_minutes
+
+    if "voice_default" in payload:
+        preferences["voice_default"] = str(payload.get("voice_default") or "").strip() or None
+    if "video_default" in payload:
+        preferences["video_default"] = "on" if str(payload.get("video_default")).lower() == "on" else "off"
+
+    privacy["local_only"] = bool(payload.get("privacy_local_only", True))
+    privacy["store_raw_audio"] = False
+    privacy["store_raw_video"] = False
+    privacy["store_camera_summaries"] = True
+    privacy["local_memory_notice_seen_at"] = now
+
+    profile["target_language"] = language
+    self_reported_level = _self_reported_level(payload.get("self_reported_level"))
+    profile["self_reported_level"] = self_reported_level
+    speaking_comfort = _speaking_comfort(payload.get("speaking_comfort"))
+    profile["speaking_comfort"] = speaking_comfort
+    conversation_memory(state, language)["speaking_confidence"] = SPEAKING_COMFORT_SEEDS[speaking_comfort]
+
+    learner.setdefault("onboarded_at", now)
+    if not learner.get("onboarded_at"):
+        learner["onboarded_at"] = now
+    learner["last_onboarding_at"] = now
+
+    add_event(
+        state,
+        {
+            "type": "onboarding_completed",
+            "source": "onboarding_bridge",
+            "summary": f"Completed onboarding for {language}.",
+            "occurred_at": now,
+            "payload": {
+                "language": language,
+                "self_reported_level": self_reported_level,
+                "speaking_comfort": speaking_comfort,
+                "session_minutes": session_minutes,
+                "video_default": preferences.get("video_default", "off"),
+            },
+        },
+        language,
+    )
+    save_state(path, state)
+    return {
+        "ok": True,
+        "profile": profile_for(state),
+        "requires_placement": not bool(profile.get("placement_completed_at")),
+        "logs": [
+            f"[Onboarding Agent] Saved tutor intake for {learner.get('display_name', 'learner')}.",
+            "[Memory Agent] Preserved existing learning memory.",
+        ],
+    }
+
+
+def placement_start(payload: dict[str, Any]) -> dict[str, Any]:
+    language = _language(payload) if "language" in payload else None
+    state = load_state(_path(payload), language)
+    language = language or active_language(state)
+    state["active_language"] = language
+    language_state(state, language)
+    placement_state = copy.deepcopy(state)
+    lesson = generate_lesson(placement_state)
+    quiz = generate_quiz(placement_state, lesson)
+    items = [copy.deepcopy(item) for item in quiz if item.get("type") != "open_ended"][:5]
+    if len(items) < 3:
+        items = [copy.deepcopy(item) for item in quiz[:5]]
+    written_prompt = {}
+    if payload.get("include_written", True):
+        written_prompt = _written_prompt_from(quiz, lesson)
+    conversation_prompt = {}
+    if payload.get("include_conversation", True):
+        topic = choose_conversation_topic(placement_state, video_on=False, video_object=None)
+        conversation_prompt = {
+            "type": "conversation",
+            "topic": topic.get("topic"),
+            "complexity": topic.get("complexity"),
+            "prompt": topic.get("opening"),
+            "support": topic.get("support"),
+            "keywords": topic.get("keywords", []),
+        }
+    session = {
+        "id": _placement_session_id(),
+        "language": language,
+        "lesson": lesson,
+        "items": items[:5],
+        "written_prompt": written_prompt,
+        "conversation_prompt": conversation_prompt,
+    }
+    return {
+        "ok": True,
+        "session": session,
+        "profile": profile_for(state),
+        "logs": [f"[Placement Agent] Built a {len(session['items'])}-item adaptive check from the lesson bank."],
+    }
+
+
+def placement_submit(payload: dict[str, Any]) -> dict[str, Any]:
+    session = payload.get("session") if isinstance(payload.get("session"), dict) else {}
+    language = _language({"language": session.get("language") or payload.get("language") or "Spanish"})
+    path = _path(payload)
+    state = load_state(path, language)
+    state["active_language"] = language
+    data = language_state(state, language)
+    profile = data.setdefault("profile", {})
+
+    if payload.get("skip_beginner"):
+        result = _complete_skip_beginner_placement(state, language)
+        save_state(path, state)
+        return {
+            "ok": True,
+            "profile": profile_for(state),
+            "placement": result,
+            "logs": ["[Placement Agent] Placement skipped; starting as A1 beginner."],
+        }
+
+    items = [item for item in session.get("items", []) if isinstance(item, dict)]
+    answers = [str(answer).strip() for answer in payload.get("answers", [])]
+    while len(answers) < len(items):
+        answers.append("")
+    results = evaluate_answers(items, answers)
+    correct_count = sum(1 for result in results if result.correct)
+    quiz_accuracy = correct_count / len(results) if results else 0.0
+
+    written_prompt = session.get("written_prompt") if isinstance(session.get("written_prompt"), dict) else {}
+    written_score = None
+    written_result = None
+    if written_prompt and "written_answer" in payload:
+        written_answers = [str(payload.get("written_answer") or "").strip()]
+        written_result = evaluate_answers([written_prompt], written_answers)[0]
+        written_score = _quiz_result_score(written_result)
+
+    conversation_prompt = session.get("conversation_prompt") if isinstance(session.get("conversation_prompt"), dict) else {}
+    conversation_score = None
+    if conversation_prompt and "conversation_answer" in payload:
+        conversation_topic = {
+            "topic": conversation_prompt.get("topic") or "introductions",
+            "complexity": conversation_prompt.get("complexity") or "beginner",
+            "opening": conversation_prompt.get("prompt") or "",
+            "support": conversation_prompt.get("support") or "",
+            "keywords": conversation_prompt.get("keywords") if isinstance(conversation_prompt.get("keywords"), list) else [],
+        }
+        conversation_score, _feedback, _correction, _mistake = evaluate_reply_with_metadata(
+            conversation_topic,
+            str(payload.get("conversation_answer") or ""),
+            state,
+        )
+
+    signals = [quiz_accuracy]
+    if written_score is not None:
+        signals.append(written_score)
+    if conversation_score is not None:
+        signals.append(conversation_score)
+    placement_score = sum(signals) / len(signals)
+    judged_level = _judged_level(placement_score)
+    self_reported_level = profile.get("self_reported_level")
+    level_cap_applied = False
+    if self_reported_level in {"new", "A1", "not sure"} and _level_rank(judged_level) > _level_rank("B1"):
+        judged_level = "B1"
+        level_cap_applied = True
+    level_confidence = _placement_confidence(written_score is not None, conversation_score is not None)
+
+    completed_at = utc_now()
+    profile["current_level"] = judged_level
+    profile["level_confidence"] = level_confidence
+    profile["placement_completed_at"] = completed_at
+    profile["placement_method"] = "adaptive"
+    first_practice_goal = _first_practice_goal(judged_level)
+    first_conversation_goal = _first_conversation_goal(judged_level, language)
+    profile["first_practice_goal"] = first_practice_goal
+
+    event = add_event(
+        state,
+        {
+            "type": "placement_completed",
+            "source": "placement_bridge",
+            "summary": f"Completed adaptive placement at {judged_level}.",
+            "occurred_at": completed_at,
+            "payload": {
+                "method": "adaptive",
+                "self_reported_level": self_reported_level,
+                "judged_level": judged_level,
+                "level_cap_applied": level_cap_applied,
+                "quiz_score": f"{correct_count}/{len(results)}",
+                "written_score": written_score,
+                "conversation_score": conversation_score,
+                "first_practice_goal": first_practice_goal,
+                "first_conversation_goal": first_conversation_goal["instruction"],
+            },
+        },
+        language,
+    )
+    _apply_placement_seeds(
+        state,
+        language,
+        results,
+        written_result,
+        written_score,
+        conversation_prompt,
+        conversation_score,
+        event["id"],
+    )
+    scores = skill_scores(state, language)
+    strongest, weakest = _strongest_weakest(scores)
+    profile["judged_strengths"] = strongest
+    profile["judged_weaknesses"] = weakest
+    data["weak_topics"] = recalculate_weak_topics(state, language=language)
+    memory = conversation_memory(state, language)
+    if conversation_score is not None:
+        memory["speaking_confidence"] = _bounded_score(max(float(memory.get("speaking_confidence", 0.30) or 0.30), conversation_score))
+    memory["next_speaking_goal"] = first_conversation_goal["instruction"]
+    memory["next_conversation_goal"] = first_conversation_goal
+    _update_event_payload(state, event["id"], {"strongest_skills": strongest, "weakest_skills": weakest}, language)
+    save_state(path, state)
+
+    return {
+        "ok": True,
+        "profile": profile_for(state),
+        "placement": {
+            "judged_level": judged_level,
+            "level_confidence": level_confidence,
+            "strongest_skills": strongest,
+            "weakest_skills": weakest,
+            "first_practice_goal": first_practice_goal,
+            "first_conversation_goal": first_conversation_goal["instruction"],
+        },
+        "logs": [f"[Placement Agent] Judged starting level {judged_level} from {correct_count}/{len(results)} placement items."],
+    }
 
 
 def status(payload: dict[str, Any]) -> dict[str, Any]:
@@ -394,10 +702,20 @@ def profile_for(state: dict[str, Any], provider: OpenAIProvider | None = None) -
         "name": state["learner"].get("display_name", "Demo Learner"),
         "language": active_language(state),
         "level": current_level(state),
+        "level_confidence": profile.get("level_confidence", 0.45),
         "xp": profile.get("xp", 0),
         "streak_days": profile.get("streak_days", 1),
         "weak_topics": data.get("weak_topics", []),
         "learning_goals": profile.get("learning_goals", []),
+        "onboarded_at": state["learner"].get("onboarded_at"),
+        "last_onboarding_at": state["learner"].get("last_onboarding_at"),
+        "self_reported_level": profile.get("self_reported_level"),
+        "speaking_comfort": profile.get("speaking_comfort"),
+        "placement_completed_at": profile.get("placement_completed_at"),
+        "placement_method": profile.get("placement_method"),
+        "first_practice_goal": profile.get("first_practice_goal"),
+        "judged_strengths": profile.get("judged_strengths", []),
+        "judged_weaknesses": profile.get("judged_weaknesses", []),
         "fluency_score": memory.get("fluency_score", 0.30),
         "speaking_confidence": memory.get("speaking_confidence", 0.30),
         "next_speaking_goal": memory.get("next_speaking_goal", ""),
@@ -440,6 +758,247 @@ def _turn_from_dict(value: dict[str, Any]) -> ConversationTurn:
         correction=value.get("correction"),
         mistake=value.get("mistake") if isinstance(value.get("mistake"), dict) else None,
     )
+
+
+def _string_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value or "").strip()
+    return [text] if text else []
+
+
+def _self_reported_level(value: Any) -> str:
+    raw = str(value or "not sure").strip()
+    normalized = raw.lower()
+    mapping = {"b1+": "B1+", "a1": "A1", "a2": "A2"}
+    if normalized in mapping:
+        return mapping[normalized]
+    if normalized in {"new", "not sure"}:
+        return normalized
+    return "not sure"
+
+
+def _speaking_comfort(value: Any) -> str:
+    raw = str(value or "some").strip().lower()
+    return raw if raw in SPEAKING_COMFORT_SEEDS else "some"
+
+
+def _next_timestamp_after(previous: Any) -> str:
+    now = utc_now()
+    if not previous:
+        return now
+    try:
+        previous_dt = datetime.fromisoformat(str(previous).replace("Z", "+00:00"))
+        now_dt = datetime.fromisoformat(now)
+    except ValueError:
+        return now
+    if now_dt <= previous_dt:
+        return (previous_dt + timedelta(seconds=1)).replace(microsecond=0).isoformat()
+    return now
+
+
+def _placement_session_id() -> str:
+    stamp = datetime.fromisoformat(utc_now()).strftime("%Y%m%d_%H%M%S")
+    return f"placement_{stamp}"
+
+
+def _written_prompt_from(quiz: list[dict[str, Any]], lesson: dict[str, Any]) -> dict[str, Any]:
+    for item in quiz:
+        if item.get("type") == "open_ended":
+            return copy.deepcopy(item)
+    return {
+        "type": "open_ended",
+        "skill": str(lesson.get("focus_skill") or "writing"),
+        "topic": str(lesson.get("topic") or "introductions"),
+        "prompt": f"Write one short {lesson.get('language', 'Spanish')} sentence about {lesson.get('topic', 'yourself')}.",
+        "answer": str((lesson.get("examples") or [["Me llamo Ana."]])[0][0]),
+        "acceptable_answers": [str((lesson.get("examples") or [["Me llamo Ana."]])[0][0])],
+        "keywords": [str(word).split(" ")[0] for word in (lesson.get("vocabulary") or [["hola"]])[:3]],
+    }
+
+
+def _quiz_result_score(result: QuizResult | None) -> float | None:
+    if result is None:
+        return None
+    if result.correct:
+        return 1.0
+    if result.actual.strip() and result.error_category in {"unnatural", "word_order"}:
+        return 0.62
+    if result.actual.strip():
+        return 0.35
+    return 0.0
+
+
+def _judged_level(score: float) -> str:
+    if score < 0.45:
+        return "A1"
+    if score <= 0.72:
+        return "A2"
+    return "B1"
+
+
+def _placement_confidence(has_written: bool, has_conversation: bool) -> float:
+    if has_written and has_conversation:
+        return 0.70
+    if has_written:
+        return 0.60
+    return 0.50
+
+
+def _level_rank(level: str) -> int:
+    order = {"A1": 1, "A2": 2, "B1": 3, "B2": 4, "C1": 5, "C2": 6}
+    return order.get(str(level), 1)
+
+
+def _first_practice_goal(level: str) -> str:
+    if level == "A1":
+        return "Build basic introductions and daily phrases."
+    if level == "A2":
+        return "Practice daily introductions with complete sentences."
+    return "Practice opinions and short explanations with clear reasons."
+
+
+def _first_conversation_goal(level: str, language: str) -> dict[str, Any]:
+    if level == "A1":
+        topic = "introductions"
+        skill = "speaking"
+        instruction = f"Answer two simple introduction questions in full {language} sentences."
+        reason = "Placement starts beginner conversation practice with names and simple identity."
+    elif level == "A2":
+        topic = "daily routines"
+        skill = "fluency"
+        instruction = f"Answer two daily-routine questions in complete {language} sentences."
+        reason = "Placement showed readiness for simple connected sentences."
+    else:
+        topic = "opinions"
+        skill = "fluency"
+        instruction = f"Give one opinion in {language} and support it with porque or a clear reason."
+        reason = "Placement showed readiness for richer conversation topics."
+    return {"source": "placement", "topic": topic, "skill": skill, "instruction": instruction, "reason": reason}
+
+
+def _complete_skip_beginner_placement(state: dict[str, Any], language: str) -> dict[str, Any]:
+    data = language_state(state, language)
+    profile = data.setdefault("profile", {})
+    completed_at = utc_now()
+    profile["current_level"] = "A1"
+    profile["level_confidence"] = 0.35
+    profile["placement_completed_at"] = completed_at
+    profile["placement_method"] = "skip_beginner"
+    profile["first_practice_goal"] = "Build basic introductions and daily phrases."
+    profile["judged_strengths"] = []
+    profile["judged_weaknesses"] = ["speaking", "vocabulary"]
+    memory = conversation_memory(state, language)
+    memory["next_speaking_goal"] = f"Answer two simple introduction questions in full {language} sentences."
+    memory["next_conversation_goal"] = _first_conversation_goal("A1", language)
+    data["weak_topics"] = recalculate_weak_topics(state, language=language)
+    add_event(
+        state,
+        {
+            "type": "placement_completed",
+            "source": "placement_bridge",
+            "summary": "Placement skipped; learner starts as A1.",
+            "occurred_at": completed_at,
+            "payload": {
+                "method": "skip_beginner",
+                "self_reported_level": profile.get("self_reported_level"),
+                "judged_level": "A1",
+                "level_cap_applied": False,
+                "quiz_score": "0/0",
+                "written_score": None,
+                "conversation_score": None,
+                "strongest_skills": [],
+                "weakest_skills": profile["judged_weaknesses"],
+                "first_practice_goal": profile["first_practice_goal"],
+                "first_conversation_goal": memory["next_conversation_goal"]["instruction"],
+            },
+        },
+        language,
+    )
+    return {
+        "judged_level": "A1",
+        "level_confidence": 0.35,
+        "strongest_skills": [],
+        "weakest_skills": profile["judged_weaknesses"],
+        "first_practice_goal": profile["first_practice_goal"],
+        "first_conversation_goal": memory["next_conversation_goal"]["instruction"],
+    }
+
+
+def _apply_placement_seeds(
+    state: dict[str, Any],
+    language: str,
+    results: list[QuizResult],
+    written_result: QuizResult | None,
+    written_score: float | None,
+    conversation_prompt: dict[str, Any],
+    conversation_score: float | None,
+    event_id: str,
+) -> None:
+    base_scores = skill_scores(state, language)
+    grouped: dict[str, list[float]] = {}
+    for result in results:
+        grouped.setdefault(result.skill or "vocabulary", []).append(1.0 if result.correct else 0.0)
+    if written_result is not None and written_score is not None:
+        grouped.setdefault("writing", []).append(written_score)
+        grouped.setdefault(written_result.skill or "writing", []).append(written_score)
+    evidence = {"event_id": event_id, "mode": "placement", "note": "Initial placement seed"}
+    for skill, values in grouped.items():
+        placement_score = sum(values) / len(values)
+        seed = 0.18 + placement_score * 0.64
+        set_skill_score(state, skill, max(base_scores.get(skill, 0.30), seed), language, evidence={**evidence, "skill": skill})
+
+    if conversation_score is not None:
+        for skill in ("speaking", "fluency"):
+            seed = 0.18 + conversation_score * 0.64
+            set_skill_score(state, skill, max(base_scores.get(skill, 0.30), seed), language, evidence={**evidence, "skill": skill})
+        topic_name = str(conversation_prompt.get("topic") or "introductions")
+        set_topic_score(
+            state,
+            topic_name,
+            0.18 + conversation_score * 0.64,
+            language,
+            modality="spoken_use",
+            evidence={**evidence, "topic": topic_name},
+        )
+
+    topic_base = topic_scores(state, language)
+    by_topic: dict[str, list[float]] = {}
+    for result in results:
+        by_topic.setdefault(result.topic or "placement", []).append(1.0 if result.correct else 0.0)
+    for topic, values in by_topic.items():
+        placement_score = sum(values) / len(values)
+        set_topic_score(
+            state,
+            topic,
+            max(topic_base.get(topic, 0.30), 0.18 + placement_score * 0.64),
+            language,
+            evidence={**evidence, "topic": topic},
+        )
+
+
+def _strongest_weakest(scores: dict[str, float]) -> tuple[list[str], list[str]]:
+    ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    strongest = [skill for skill, _score in ordered[:2]]
+    weakest = [skill for skill, _score in sorted(scores.items(), key=lambda item: item[1])[:2]]
+    return strongest, weakest
+
+
+def _bounded_score(value: Any) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        score = 0.30
+    return max(0.05, min(0.99, score))
+
+
+def _update_event_payload(state: dict[str, Any], event_id: str, payload: dict[str, Any], language: str) -> None:
+    for event in state.get("events", []):
+        if isinstance(event, dict) and event.get("id") == event_id:
+            event.setdefault("payload", {}).update(copy.deepcopy(payload))
+    for event in language_state(state, language).get("history", []):
+        if isinstance(event, dict) and event.get("id") == event_id:
+            event.setdefault("payload", {}).update(copy.deepcopy(payload))
 
 
 def _coerce_conversation_topic(value: Any, state: dict[str, Any]) -> dict[str, Any]:
@@ -496,6 +1055,10 @@ def _bounded_int(value: Any, low: int, high: int, default: int) -> int:
 
 
 COMMANDS = {
+    "onboarding_status": onboarding_status,
+    "onboarding_submit": onboarding_submit,
+    "placement_start": placement_start,
+    "placement_submit": placement_submit,
     "status": status,
     "realtime_client_secret": realtime_client_secret,
     "vision_analyze_frame": vision_analyze_frame,

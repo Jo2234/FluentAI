@@ -2,6 +2,10 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("fluentAI", {
   status: (payload) => ipcRenderer.invoke("status", payload),
+  onboardingStatus: (payload) => ipcRenderer.invoke("onboarding:status", payload),
+  submitOnboarding: (payload) => ipcRenderer.invoke("onboarding:submit", payload),
+  startPlacement: (payload) => ipcRenderer.invoke("placement:start", payload),
+  submitPlacement: (payload) => ipcRenderer.invoke("placement:submit", payload),
   startLesson: (payload) => ipcRenderer.invoke("lesson:start", payload),
   submitLesson: (payload) => ipcRenderer.invoke("lesson:submit", payload),
   realtimeClientSecret: (payload) => ipcRenderer.invoke("realtime:client_secret", payload),

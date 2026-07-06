@@ -237,6 +237,22 @@ ipcMain.handle("status", async (_event, payload) => {
   return runBridge("status", payload || {});
 });
 
+ipcMain.handle("onboarding:status", async (_event, payload) => {
+  return runBridge("onboarding_status", payload || {});
+});
+
+ipcMain.handle("onboarding:submit", async (_event, payload) => {
+  return runBridge("onboarding_submit", payload || {});
+});
+
+ipcMain.handle("placement:start", async (_event, payload) => {
+  return runBridge("placement_start", payload || {});
+});
+
+ipcMain.handle("placement:submit", async (_event, payload) => {
+  return runBridge("placement_submit", payload || {});
+});
+
 ipcMain.handle("lesson:start", async (_event, payload) => {
   return runBridge("lesson_start", payload || {});
 });
