@@ -15,6 +15,7 @@ from fluent_ai.state import (
     language_state,
     recalculate_weak_topics,
     record_mistake,
+    record_practice_session,
     set_skill_score,
     set_topic_score,
     skill_scores,
@@ -643,6 +644,10 @@ def apply_turn_progress(
     aggregate_turns = int(turn_dict.get("aggregate_turns", len(turn_events)) or len(turn_events))
 
     if is_first_turn:
+        record_practice_session(state, language)
+        daily_summary = data.setdefault("daily_summary", {})
+        daily_summary["conversations_completed"] = int(daily_summary.get("conversations_completed", 0) or 0) + 1
+        daily_summary["last_sent_at"] = utc_now()
         memory["sessions_completed"] = int(memory.get("sessions_completed", 0)) + 1
         memory["recent_topics"] = (memory.get("recent_topics", []) + [topic_name])[-8:]
         add_event(

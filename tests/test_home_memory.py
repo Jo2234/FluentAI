@@ -1,5 +1,6 @@
 import json
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -16,6 +17,8 @@ from fluent_ai.state import (
     default_state,
     language_state,
     load_state,
+    profile_state,
+    record_practice_session,
     save_state,
 )
 from fluent_ai.desktop_bridge import onboarding_status
@@ -143,6 +146,30 @@ class HomeMemoryBridgeTests(unittest.TestCase):
             self.assertEqual(language_state(saved, "French")["profile"]["xp"], 220)
             self.assertEqual(language_state(saved, "Spanish")["profile"]["xp"], 0)
             self.assertIn("language_reset", [event["type"] for event in saved["events"]])
+
+    def test_practice_session_updates_language_streak_and_resets_daily_summary(self):
+        state = default_state("Spanish")
+        profile = profile_state(state)
+        yesterday = datetime(2026, 7, 7, 9, 0, tzinfo=timezone.utc)
+        today = yesterday + timedelta(days=1)
+        next_week = today + timedelta(days=6)
+
+        record_practice_session(state, "Spanish", yesterday)
+        language_state(state)["daily_summary"]["lessons_completed"] = 2
+        self.assertEqual(profile["streak_days"], 1)
+        self.assertEqual(profile["last_practice_date"], "2026-07-07")
+
+        record_practice_session(state, "Spanish", today)
+        self.assertEqual(profile["streak_days"], 2)
+        self.assertEqual(language_state(state)["daily_summary"]["lessons_completed"], 0)
+        self.assertEqual(language_state(state)["daily_summary"]["conversations_completed"], 0)
+
+        record_practice_session(state, "Spanish", today.replace(hour=18))
+        self.assertEqual(profile["streak_days"], 2)
+
+        record_practice_session(state, "Spanish", next_week)
+        self.assertEqual(profile["streak_days"], 1)
+        self.assertEqual(profile["last_practice_date"], "2026-07-14")
 
     def test_delete_all_resets_default_state_and_requires_onboarding(self):
         with TemporaryDirectory() as tmpdir:

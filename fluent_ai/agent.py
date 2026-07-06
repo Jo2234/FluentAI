@@ -18,6 +18,7 @@ from fluent_ai.state import (
     profile_state,
     recalculate_weak_topics,
     record_mistake,
+    record_practice_session,
     review_queue,
     set_skill_score,
     set_topic_score,
@@ -917,6 +918,7 @@ def update_progress(state: dict[str, Any], lesson: dict[str, Any], results: list
     data["recent_topics"] = (data.get("recent_topics", []) + [lesson["topic"]])[-8:]
     update_review_schedule(state, lesson, correct_count, total)
     update_mistake_review_schedule(state, lesson, results, language)
+    record_practice_session(state, language)
     daily_summary = data.setdefault("daily_summary", {})
     daily_summary["lessons_completed"] = int(daily_summary.get("lessons_completed", 0) + 1)
     daily_summary["last_sent_at"] = utc_now()

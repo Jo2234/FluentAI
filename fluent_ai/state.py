@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -173,6 +173,80 @@ def set_topic_score(
 
 def conversation_memory(state: dict[str, Any], language: str | None = None) -> dict[str, Any]:
     return language_state(state, language)["conversation_memory"]
+
+
+def record_practice_session(
+    state: dict[str, Any],
+    language: str | None = None,
+    practiced_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Update daily streak and per-day counters before recording a lesson/call.
+
+    Streaks are language-specific because each language has its own profile and
+    history. The first practice keeps the default 1-day streak, same-day
+    practice does not double-count, consecutive days increment, and gaps reset
+    to one active day. When a new local day starts, the language daily summary is
+    reset so Home recommendations and progress copy describe today's practice.
+    """
+
+    moment = practiced_at or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    moment = moment.astimezone(timezone.utc).replace(microsecond=0)
+    today = moment.date()
+
+    data = language_state(state, language)
+    profile = data["profile"]
+    previous_day = _profile_practice_date(profile)
+    current_streak = max(1, int(profile.get("streak_days", 1) or 1))
+
+    if previous_day == today:
+        next_streak = current_streak
+    elif previous_day == today - timedelta(days=1):
+        next_streak = current_streak + 1
+    else:
+        next_streak = 1
+
+    if previous_day != today:
+        previous_summary = data.get("daily_summary", {}) if isinstance(data.get("daily_summary"), dict) else {}
+        data["daily_summary"] = {
+            "last_sent_at": previous_summary.get("last_sent_at"),
+            "lessons_completed": 0,
+            "conversations_completed": 0,
+        }
+
+    timestamp = moment.isoformat()
+    profile["streak_days"] = next_streak
+    profile["last_practice_date"] = today.isoformat()
+    profile["last_session_at"] = timestamp
+    data["updated_at"] = timestamp
+    state["updated_at"] = timestamp
+    return profile
+
+
+def _profile_practice_date(profile: dict[str, Any]) -> date | None:
+    explicit = _parse_iso_date(profile.get("last_practice_date"))
+    if explicit:
+        return explicit
+    last_session = profile.get("last_session_at")
+    if isinstance(last_session, str) and last_session.strip():
+        try:
+            parsed = datetime.fromisoformat(last_session.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).date()
+    return None
+
+
+def _parse_iso_date(value: Any) -> date | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
 
 
 def review_queue(state: dict[str, Any], language: str | None = None) -> dict[str, Any]:
@@ -351,6 +425,7 @@ def _default_language_state(language: str, now: str | None = None) -> dict[str, 
             "level_confidence": 0.45,
             "xp": 0,
             "streak_days": 1,
+            "last_practice_date": None,
             "learning_goals": DEFAULT_GOALS.copy(),
             "last_session_at": None,
             "self_reported_level": None,
