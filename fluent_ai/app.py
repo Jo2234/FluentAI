@@ -15,9 +15,9 @@ from fluent_ai.agent import (
     snapshot_progress,
     update_progress,
 )
-from fluent_ai.conversation import persist_post_call_summary, run_conversation
+from fluent_ai.conversation import persist_post_call_summary, run_conversation, update_conversation_progress
 from fluent_ai.openai_provider import OpenAIProvider
-from fluent_ai.state import conversation_memory, language_state, load_state, profile_state, save_state
+from fluent_ai.state import state_transaction, active_language, conversation_memory, language_state, load_state, profile_state
 
 
 DEFAULT_PROGRESS_PATH = Path("data/progress.json")
@@ -54,7 +54,6 @@ def run_loop(
 
     while True:
         state = load_state(state_path, language)
-        before = snapshot_progress(state)
         data = language_state(state)
         profile = profile_state(state)
         weak_topics = ", ".join(data.get("weak_topics", []))
@@ -93,8 +92,9 @@ def run_loop(
         agent_log("Evaluator Agent", f"Graded quiz: {correct_count}/{len(results)} correct.")
         print_feedback(results)
 
-        state = update_progress(state, lesson, results)
-        save_state(state_path, state)
+        with state_transaction(state_path, active_language(state), generation=state["memory_generation"]) as state:
+            before = snapshot_progress(state)
+            update_progress(state, lesson, results)
 
         agent_log("Progress Reporter Agent", progress_report(before, state))
         agent_log("Evaluator Agent", f"Updated weak topics: {', '.join(language_state(state).get('weak_topics', []))}.")
@@ -161,7 +161,9 @@ def run_conversation_loop(
 
     average_score = sum(turn.score for turn in transcript) / max(1, len(transcript))
     agent_log("Fluency Evaluator Agent", f"Average speaking score: {average_score:.2f}.")
-    summary = persist_post_call_summary(state, topic, transcript)
+    with state_transaction(state_path, active_language(state), generation=state["memory_generation"]) as state:
+        update_conversation_progress(state, topic, transcript, video_on, video_object)
+        summary = persist_post_call_summary(state, topic, transcript)
     if summary:
         agent_log("Conversation Summary Agent", summary["did_well"])
         if summary["correction_to_remember"]:
@@ -170,7 +172,6 @@ def run_conversation_loop(
         "Memory Agent",
         f"Next speaking goal: {conversation_memory(state)['next_speaking_goal']}",
     )
-    save_state(state_path, state)
     agent_log("Conversation Orchestrator", "Saved conversation progress.")
 
 

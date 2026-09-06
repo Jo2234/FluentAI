@@ -8,6 +8,8 @@ import json
 import os
 import re
 import sys
+import uuid
+from functools import wraps
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -38,6 +40,11 @@ from fluent_ai.conversation import (
 )
 from fluent_ai.openai_provider import OpenAIProvider
 from fluent_ai.state import (
+    SessionExpired,
+    atomic_write,
+    check_generation,
+    state_lock,
+    state_transaction,
     add_event,
     active_language,
     conversation_memory,
@@ -74,6 +81,67 @@ SPEAKING_COMFORT_SEEDS = {
     "some": 0.35,
     "comfortable": 0.50,
 }
+
+def _payload_generation(payload: dict[str, Any]) -> str | None:
+    for source in (payload.get("lesson"), payload.get("session"), payload):
+        if isinstance(source, dict) and source.get("memory_generation"):
+            return str(source["memory_generation"])
+    return None
+
+
+def _local_mutation(function):
+    """Short local operations share the same lock as all other state writers."""
+    @wraps(function)
+    def wrapped(payload):
+        try:
+            with state_lock(_path(payload)):
+                state = load_state(_path(payload), _language(payload))
+                check_generation(state, _payload_generation(payload))
+                return function(payload)
+        except SessionExpired as exc:
+            return {"ok": False, "error": str(exc), "session_expired": True, "logs": []}
+    return wrapped
+
+
+def _session_command(kind):
+    """Serialize only duplicate attempts; unrelated model requests remain concurrent."""
+    def decorate(function):
+        @wraps(function)
+        def wrapped(payload):
+            try:
+                initial = _load(payload)
+                generation = _payload_generation(payload)
+                check_generation(initial, generation, session=True)
+                generation = generation or initial["memory_generation"]
+                nested = payload.get("lesson") if kind == "lesson" else payload.get("session")
+                session_id = payload.get("session_id") or (nested or {}).get("session_id")
+                if not session_id:
+                    # Compatibility for old checkpoints; new sessions always carry UUIDs.
+                    content = {key: payload.get(key) for key in ("lesson", "quiz", "turns", "topic", "language")}
+                    session_id = hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()
+                key = kind + ":" + str(session_id)
+                with state_lock(_path(payload), session_id=generation + ":" + key):
+                    with state_lock(_path(payload)):
+                        latest = load_state(_path(payload))
+                        check_generation(latest, generation)
+                        cached = latest.get("completed_sessions", {}).get(key)
+                        if cached:
+                            _discard_matching_checkpoint(_path(payload), f"current_{kind}.json", session_id, generation)
+                            result = copy.deepcopy(cached)
+                            latest["active_language"] = _language(payload) if payload.get("language") else active_language(latest)
+                            result["profile"] = profile_for(latest)
+                            return result
+                    return function({**payload, "memory_generation": generation, "_session_key": key})
+            except SessionExpired as exc:
+                return {"ok": False, "error": str(exc), "session_expired": True, "logs": []}
+        return wrapped
+    return decorate
+
+
+def _remember_result(state: dict[str, Any], payload: dict[str, Any], result: dict[str, Any]) -> None:
+    if payload.get("_session_key"):
+        state.setdefault("completed_sessions", {})[payload["_session_key"]] = copy.deepcopy(result)
+
 
 def onboarding_status(payload: dict[str, Any]) -> dict[str, Any]:
     path = _path(payload)
@@ -119,6 +187,7 @@ def onboarding_status(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@_local_mutation
 def onboarding_submit(payload: dict[str, Any]) -> dict[str, Any]:
     language = _language(payload)
     path = _path(payload)
@@ -237,6 +306,7 @@ def placement_start(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@_local_mutation
 def placement_submit(payload: dict[str, Any]) -> dict[str, Any]:
     session = payload.get("session") if isinstance(payload.get("session"), dict) else {}
     language = _language({"language": session.get("language") or payload.get("language") or "Spanish"})
@@ -448,23 +518,25 @@ def phrase_audio(payload: dict[str, Any]) -> dict[str, Any]:
             "logs": ["[Phrase Audio Agent] No phrase was provided."],
         }
 
-    cache_dir = _tts_cache_dir(_path(payload))
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = _tts_cache_path(cache_dir, language, phrase, voice)
-    if cache_path.exists():
-        audio = cache_path.read_bytes()
-        os.utime(cache_path, None)
-        _enforce_tts_cache_limit(cache_dir)
-        return {
-            "ok": True,
-            "audio_base64": base64.b64encode(audio).decode("ascii"),
-            "mime_type": "audio/mpeg",
-            "voice": voice,
-            "cache_hit": True,
-            "byte_count": len(audio),
-            "profile": profile_for(state, provider),
-            "logs": [f"[Phrase Audio Agent] Replayed cached phrase audio for {language}."],
-        }
+    with state_lock(_path(payload)):
+        check_generation(load_state(_path(payload)), state["memory_generation"])
+        cache_dir = _tts_cache_dir(_path(payload))
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_path = _tts_cache_path(cache_dir, language, phrase, voice)
+        if cache_path.exists():
+            audio = cache_path.read_bytes()
+            os.utime(cache_path, None)
+            _enforce_tts_cache_limit(cache_dir)
+            return {
+                "ok": True,
+                "audio_base64": base64.b64encode(audio).decode("ascii"),
+                "mime_type": "audio/mpeg",
+                "voice": voice,
+                "cache_hit": True,
+                "byte_count": len(audio),
+                "profile": profile_for(state, provider),
+                "logs": [f"[Phrase Audio Agent] Replayed cached phrase audio for {language}."],
+            }
 
     audio = provider.synthesize_speech(phrase, language, voice)
     if not audio:
@@ -474,8 +546,10 @@ def phrase_audio(payload: dict[str, Any]) -> dict[str, Any]:
             "profile": profile_for(state, provider),
             "logs": ["[Phrase Audio Agent] OpenAI TTS generation failed."],
         }
-    cache_path.write_bytes(audio)
-    _enforce_tts_cache_limit(cache_dir)
+    with state_lock(_path(payload)):
+        check_generation(load_state(_path(payload)), state["memory_generation"])
+        atomic_write(cache_path, audio)
+        _enforce_tts_cache_limit(cache_dir)
     return {
         "ok": True,
         "audio_base64": base64.b64encode(audio).decode("ascii"),
@@ -504,6 +578,8 @@ def lesson_start(payload: dict[str, Any]) -> dict[str, Any]:
     if enhanced.get("source") != "openai":
         return _openai_required(state, provider, f"OpenAI lesson generation failed: {provider.last_error or 'empty model response'}")
     lesson = enhanced
+    lesson["session_id"] = uuid.uuid4().hex
+    lesson["memory_generation"] = state["memory_generation"]
     logs.append(f"[Curriculum Agent] Selected {lesson['topic']}: {lesson.get('reason', 'Lesson selected for current progress.')}")
     logs.append("[OpenAI Model Agent] Generated lesson with the OpenAI Responses API.")
 
@@ -512,7 +588,9 @@ def lesson_start(payload: dict[str, Any]) -> dict[str, Any]:
         f"[Lesson Generator Agent] Created a {lesson['minutes']}-minute {lesson['level']} lesson on {lesson['topic']}."
     )
     logs.append(f"[Adaptive Quiz Agent] Prepared {len(quiz)} questions for the learner to answer.")
-    _write_lesson_checkpoint(_path(payload), active_language(state), lesson, quiz, [])
+    with state_lock(_path(payload)):
+        check_generation(load_state(_path(payload)), state["memory_generation"])
+        _write_lesson_checkpoint(_path(payload), active_language(state), lesson, quiz, [])
     logs.append("[Session Recovery Agent] Saved lesson checkpoint.")
 
     return {
@@ -524,10 +602,10 @@ def lesson_start(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@_session_command("lesson")
 def lesson_submit(payload: dict[str, Any]) -> dict[str, Any]:
     state = _load(payload)
     provider = OpenAIProvider()
-    before = snapshot_progress(state)
     lesson = payload["lesson"]
     quiz = payload["quiz"]
     answers = [str(answer).strip() for answer in payload.get("answers", [])]
@@ -539,26 +617,31 @@ def lesson_submit(payload: dict[str, Any]) -> dict[str, Any]:
     if provider.available:
         results = _apply_openai_quiz_grading(provider, state, lesson, quiz, answers, results)
     correct_count = sum(1 for result in results if result.correct)
-    state = update_progress(state, lesson, results)
-    save_state(_path(payload), state)
-    _delete_checkpoint(_checkpoint_path(_path(payload), "current_lesson.json"))
+    with state_transaction(_path(payload), active_language(state), generation=state["memory_generation"]) as state:
+        before = snapshot_progress(state)
+        update_progress(state, lesson, results)
+        result = {
+            "ok": True,
+            "profile": profile_for(state, provider),
+            "results": [result.__dict__ for result in results],
+            "summary": {
+                "score": f"{correct_count}/{len(results)}",
+                "report": progress_report(before, state),
+                "recommendation": recommendation(state),
+            },
+            "logs": [
+                f"[Evaluator Agent] Graded quiz: {correct_count}/{len(results)} correct.",
+                f"[Memory Agent] Scheduled spaced review for {lesson['topic']}.",
+                f"[Memory Agent] Saved progress to {_path(payload)}.",
+                f"[Progress Reporter Agent] {progress_report(before, state)}",
+            ],
+        }
 
-    return {
-        "ok": True,
-        "profile": profile_for(state, provider),
-        "results": [result.__dict__ for result in results],
-        "summary": {
-            "score": f"{correct_count}/{len(results)}",
-            "report": progress_report(before, state),
-            "recommendation": recommendation(state),
-        },
-        "logs": [
-            f"[Evaluator Agent] Graded quiz: {correct_count}/{len(results)} correct.",
-            f"[Memory Agent] Scheduled spaced review for {lesson['topic']}.",
-            f"[Memory Agent] Saved progress to {_path(payload)}.",
-            f"[Progress Reporter Agent] {progress_report(before, state)}",
-        ],
-    }
+        _remember_result(state, payload, result)
+    with state_lock(_path(payload)):
+        check_generation(load_state(_path(payload)), state["memory_generation"])
+        _discard_matching_checkpoint(_path(payload), "current_lesson.json", lesson.get("session_id"), state["memory_generation"])
+    return result
 
 
 def conversation_start(payload: dict[str, Any]) -> dict[str, Any]:
@@ -589,6 +672,9 @@ def conversation_start(payload: dict[str, Any]) -> dict[str, Any]:
         logs.append("[Conversation Orchestrator] Used recovery prompt after empty model response.")
 
     session = {
+        "session_id": uuid.uuid4().hex,
+        "memory_generation": state["memory_generation"],
+        "language": active_language(state),
         "topic": topic,
         "turns": [],
         "video_on": video_on,
@@ -650,16 +736,16 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
     fallback = build_follow_up(topic, learner_text, score, turn_number, state)
     tutor_text, recovery_used = _safe_tutor_reply(provider, payload, topic, state, transcript, "follow_up", fallback)
 
-    apply_conversation_turn_progress(state, topic, turn, is_first_turn=turn_number == 1)
-    memory = conversation_memory(state)
+    with state_transaction(_path(payload), active_language(state), generation=state["memory_generation"]) as state:
+        apply_conversation_turn_progress(state, topic, turn, is_first_turn=turn_number == 1)
+        memory = conversation_memory(state)
 
-    session["turns"] = turns
-    reached_goal = len(turns) >= int(session.get("max_turns", 4))
-    post_call_summary = None
-    if reached_goal and not session.get("post_call_summary"):
-        post_call_summary = persist_post_call_summary(state, topic, turns)
-        session["post_call_summary"] = post_call_summary
-    save_state(_path(payload), state)
+        session["turns"] = turns
+        reached_goal = len(turns) >= int(session.get("max_turns", 4))
+        post_call_summary = None
+        if reached_goal and not session.get("post_call_summary"):
+            post_call_summary = persist_post_call_summary(state, topic, turns)
+            session["post_call_summary"] = post_call_summary
     return {
         "ok": True,
         "profile": profile_for(state, provider),
@@ -676,6 +762,7 @@ def conversation_reply(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@_session_command("call")
 def conversation_end(payload: dict[str, Any]) -> dict[str, Any]:
     state = _load(payload)
     provider = OpenAIProvider()
@@ -727,33 +814,38 @@ def conversation_end(payload: dict[str, Any]) -> dict[str, Any]:
             "logs": ["[Conversation Orchestrator] Call ended with no scored turns."],
         }
 
-    average_score = sum(float(turn["score"]) for turn in turns) / len(turns)
-    apply_turn_progress(
-        state,
-        topic,
-        {
-            "turns": turns,
-            "score": average_score,
-            "aggregate_turns": len(turns),
-            "video_on": bool(payload.get("video") == "on"),
-            "video_object": payload.get("video_object"),
-            "fluency_weight": 0.25,
-            "confidence_delta": 0.035 if average_score >= 0.45 else -0.02,
-            "speaking_delta": 0.035 if average_score >= 0.45 else -0.015,
-        },
-        is_first_turn=True,
-    )
-    summary = persist_post_call_summary(state, topic, turns)
-    save_state(_path(payload), state)
-    return {
-        "ok": True,
-        "profile": profile_for(state, provider),
-        "post_call_summary": summary,
-        "logs": [
-            f"[Conversation Orchestrator] Persisted voice call summary for {topic['topic']}.",
-            f"[Fluency Evaluator Agent] Scored {len(turns)} realtime turns; average {average_score:.2f}.",
-        ],
-    }
+    with state_transaction(_path(payload), active_language(state), generation=state["memory_generation"]) as state:
+        average_score = sum(float(turn["score"]) for turn in turns) / len(turns)
+        apply_turn_progress(
+            state,
+            topic,
+            {
+                "turns": turns,
+                "score": average_score,
+                "aggregate_turns": len(turns),
+                "video_on": bool(payload.get("video") == "on"),
+                "video_object": payload.get("video_object"),
+                "fluency_weight": 0.25,
+                "confidence_delta": 0.035 if average_score >= 0.45 else -0.02,
+                "speaking_delta": 0.035 if average_score >= 0.45 else -0.015,
+            },
+            is_first_turn=True,
+        )
+        summary = persist_post_call_summary(state, topic, turns)
+        result = {
+            "ok": True,
+            "profile": profile_for(state, provider),
+            "post_call_summary": summary,
+            "logs": [
+                f"[Conversation Orchestrator] Persisted voice call summary for {topic['topic']}.",
+                f"[Fluency Evaluator Agent] Scored {len(turns)} realtime turns; average {average_score:.2f}.",
+            ],
+        }
+        _remember_result(state, payload, result)
+    with state_lock(_path(payload)):
+        check_generation(load_state(_path(payload)), state["memory_generation"])
+        _discard_matching_checkpoint(_path(payload), "current_call.json", payload.get("session_id"), state["memory_generation"])
+    return result
 
 
 def home_summary(payload: dict[str, Any]) -> dict[str, Any]:
@@ -782,6 +874,7 @@ def home_summary(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@_local_mutation
 def session_checkpoints(payload: dict[str, Any]) -> dict[str, Any]:
     path = _path(payload)
     lesson = _read_checkpoint(_checkpoint_path(path, "current_lesson.json"))
@@ -796,10 +889,16 @@ def session_checkpoints(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@_local_mutation
 def lesson_checkpoint(payload: dict[str, Any]) -> dict[str, Any]:
     path = _path(payload)
+    state = load_state(path)
+    check_generation(state, _payload_generation(payload), session=True)
+    session_id = payload.get("lesson", {}).get("session_id")
+    if session_id and "lesson:" + str(session_id) in state.get("completed_sessions", {}):
+        return {"ok": True, "logs": ["[Session Recovery Agent] Session is already complete."]}
     existing = _read_checkpoint(_checkpoint_path(path, "current_lesson.json"), delete_expired=False)
-    created_at = existing.get("created_at") if isinstance(existing, dict) else None
+    created_at = existing.get("created_at") if isinstance(existing, dict) and existing.get("session_id") == session_id else None
     _write_lesson_checkpoint(
         path,
         _language(payload),
@@ -811,16 +910,27 @@ def lesson_checkpoint(payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "logs": ["[Session Recovery Agent] Saved lesson draft checkpoint."]}
 
 
+@_local_mutation
 def lesson_checkpoint_discard(payload: dict[str, Any]) -> dict[str, Any]:
-    _delete_checkpoint(_checkpoint_path(_path(payload), "current_lesson.json"))
+    state = load_state(_path(payload))
+    check_generation(state, _payload_generation(payload), session=True)
+    _discard_matching_checkpoint(_path(payload), "current_lesson.json", payload.get("session_id"), _payload_generation(payload), allow_current=True)
     return {"ok": True, "logs": ["[Session Recovery Agent] Discarded interrupted lesson checkpoint."]}
 
 
+@_local_mutation
 def call_checkpoint(payload: dict[str, Any]) -> dict[str, Any]:
     path = _path(payload)
+    state = load_state(path)
+    check_generation(state, _payload_generation(payload), session=True)
+    session_id = payload.get("session_id")
+    if session_id and "call:" + str(session_id) in state.get("completed_sessions", {}):
+        return {"ok": True, "logs": ["[Session Recovery Agent] Session is already complete."]}
     existing = _read_checkpoint(_checkpoint_path(path, "current_call.json"), delete_expired=False)
-    created_at = existing.get("created_at") if isinstance(existing, dict) else None
+    created_at = existing.get("created_at") if isinstance(existing, dict) and existing.get("session_id") == session_id else None
     data = {
+        "session_id": payload.get("session_id"),
+        "memory_generation": state["memory_generation"],
         "type": "call",
         "language": _language(payload),
         "topic": payload.get("topic") if isinstance(payload.get("topic"), dict) else {},
@@ -834,14 +944,18 @@ def call_checkpoint(payload: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "logs": ["[Session Recovery Agent] Saved call transcript checkpoint."]}
 
 
+@_local_mutation
 def call_checkpoint_discard(payload: dict[str, Any]) -> dict[str, Any]:
-    _delete_checkpoint(_checkpoint_path(_path(payload), "current_call.json"))
+    state = load_state(_path(payload))
+    check_generation(state, _payload_generation(payload), session=True)
+    _discard_matching_checkpoint(_path(payload), "current_call.json", payload.get("session_id"), _payload_generation(payload), allow_current=True)
     return {"ok": True, "logs": ["[Session Recovery Agent] Discarded interrupted call checkpoint."]}
 
 
 def call_checkpoint_summarize(payload: dict[str, Any]) -> dict[str, Any]:
     path = _path(payload)
-    checkpoint = _read_checkpoint(_checkpoint_path(path, "current_call.json"))
+    with state_lock(path):
+        checkpoint = _read_checkpoint(_checkpoint_path(path, "current_call.json"))
     if not checkpoint:
         return {
             "ok": False,
@@ -851,6 +965,9 @@ def call_checkpoint_summarize(payload: dict[str, Any]) -> dict[str, Any]:
     result = conversation_end(
         {
             **payload,
+            "language": checkpoint.get("language", _language(payload)),
+            "session_id": checkpoint.get("session_id"),
+            "memory_generation": checkpoint.get("memory_generation"),
             "topic": checkpoint.get("topic", {}),
             "turns": checkpoint.get("turns", []),
             "video": checkpoint.get("video", "off"),
@@ -858,7 +975,8 @@ def call_checkpoint_summarize(payload: dict[str, Any]) -> dict[str, Any]:
         }
     )
     if result.get("ok"):
-        _delete_checkpoint(_checkpoint_path(path, "current_call.json"))
+        with state_lock(path):
+            _discard_matching_checkpoint(path, "current_call.json", checkpoint.get("session_id"), checkpoint.get("memory_generation"))
         result["logs"] = result.get("logs", []) + ["[Session Recovery Agent] Summarized interrupted call checkpoint."]
     return result
 
@@ -871,6 +989,7 @@ def memory_inspect(payload: dict[str, Any]) -> dict[str, Any]:
     return inspected
 
 
+@_local_mutation
 def memory_export(payload: dict[str, Any]) -> dict[str, Any]:
     path = _path(payload)
     language = _language(payload) if payload.get("language") else None
@@ -909,6 +1028,7 @@ def memory_export(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@_local_mutation
 def memory_reset_language(payload: dict[str, Any]) -> dict[str, Any]:
     language = _language(payload)
     if str(payload.get("confirm") or "") != f"RESET {language}":
@@ -939,6 +1059,7 @@ def memory_reset_language(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@_local_mutation
 def memory_delete_all(payload: dict[str, Any]) -> dict[str, Any]:
     if str(payload.get("confirm") or "") != "DELETE ALL MEMORY":
         return {
@@ -990,6 +1111,7 @@ def profile_for(state: dict[str, Any], provider: OpenAIProvider | None = None) -
             next_review_due_at = str(item.get("due_at") or "")
             break
     return {
+        "memory_generation": state["memory_generation"],
         "name": state["learner"].get("display_name", "Demo Learner"),
         "language": active_language(state),
         "level": current_level(state),
@@ -1785,12 +1907,14 @@ def _parse_datetime(value: Any) -> datetime | None:
 def _load(payload: dict[str, Any]) -> dict[str, Any]:
     language = _language(payload) if "language" in payload else None
     path = _path(payload)
-    state = load_state(path, language)
-    if language and active_language(state) != language:
-        state["active_language"] = language
-        language_state(state, language)
-        save_state(path, state)
-    return state
+    with state_lock(path):
+        state = load_state(path, language)
+        check_generation(state, _payload_generation(payload))
+        if language and active_language(state) != language:
+            state["active_language"] = language
+            language_state(state, language)
+            save_state(path, state)
+        return state
 
 
 def _was_recovered(state: dict[str, Any]) -> bool:
@@ -1849,7 +1973,18 @@ def _enforce_tts_cache_limit(cache_dir: Path, limit: int = TTS_CACHE_LIMIT) -> N
 
 def _write_checkpoint(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=True), encoding="utf-8")
+    atomic_write(path, json.dumps(data, indent=2, ensure_ascii=True).encode("utf-8"))
+
+
+def _discard_matching_checkpoint(
+    path: Path, filename: str, session_id: str | None, generation: str | None, *, allow_current: bool = False
+) -> None:
+    checkpoint_path = _checkpoint_path(path, filename)
+    checkpoint = _read_checkpoint(checkpoint_path, delete_expired=False)
+    if checkpoint and ((allow_current and session_id is None) or checkpoint.get("session_id") == session_id) and (
+        generation is None or checkpoint.get("memory_generation") in (None, generation)
+    ):
+        _delete_checkpoint(checkpoint_path)
 
 
 def _delete_checkpoint(path: Path) -> None:
@@ -1897,6 +2032,8 @@ def _write_lesson_checkpoint(
     created_at: str | None = None,
 ) -> None:
     data = {
+        "session_id": lesson.get("session_id"),
+        "memory_generation": lesson.get("memory_generation") or load_state(path)["memory_generation"],
         "type": "lesson",
         "language": language,
         "lesson": lesson,

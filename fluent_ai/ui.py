@@ -4,9 +4,9 @@ from pathlib import Path
 
 from fluent_ai.agent import evaluate_answers, generate_lesson, generate_quiz, progress_report, snapshot_progress, update_progress
 from fluent_ai.app import DEFAULT_PROGRESS_PATH
-from fluent_ai.conversation import run_conversation
+from fluent_ai.conversation import run_conversation, update_conversation_progress
 from fluent_ai.openai_provider import OpenAIProvider
-from fluent_ai.state import load_state, save_state
+from fluent_ai.state import active_language, state_transaction, conversation_memory, load_state
 
 
 def build_lesson_text(lesson: dict, quiz: list[dict]) -> str:
@@ -40,16 +40,18 @@ def launch_ui(state_path: Path = DEFAULT_PROGRESS_PATH, language: str = "Spanish
     if provider.available:
         lesson = provider.enhance_lesson(state, lesson)
     quiz = generate_quiz(state, lesson)
+    lesson_generation = state["memory_generation"]
+    lesson_language = active_language(state)
 
     def submit_answers(answer_text: str) -> tuple[str, str]:
         latest_state = load_state(state_path, language)
-        before = snapshot_progress(latest_state)
         answers = [line.strip() for line in answer_text.splitlines() if line.strip()]
         while len(answers) < len(quiz):
             answers.append("")
         results = evaluate_answers(quiz, answers[: len(quiz)])
-        update_progress(latest_state, lesson, results)
-        save_state(state_path, latest_state)
+        with state_transaction(state_path, lesson_language, generation=lesson_generation) as latest_state:
+            before = snapshot_progress(latest_state)
+            update_progress(latest_state, lesson, results)
 
         feedback_lines = [progress_report(before, latest_state), ""]
         for index, result in enumerate(results, start=1):
@@ -59,6 +61,7 @@ def launch_ui(state_path: Path = DEFAULT_PROGRESS_PATH, language: str = "Spanish
 
     def start_conversation(turns: int, video_enabled: bool, visible_object: str) -> str:
         latest_state = load_state(state_path, language)
+        conversation_language = active_language(latest_state)
         transcript, updated_state, topic = run_conversation(
             state=latest_state,
             turns=int(turns),
@@ -68,12 +71,13 @@ def launch_ui(state_path: Path = DEFAULT_PROGRESS_PATH, language: str = "Spanish
             tutor_reply_fn=provider.conversation_tutor_reply if provider.available else None,
             conversation_grade_fn=getattr(provider, "evaluate_conversation_reply", None) if provider.available else None,
         )
-        save_state(state_path, updated_state)
+        with state_transaction(state_path, conversation_language, generation=latest_state["memory_generation"]) as updated_state:
+            update_conversation_progress(updated_state, topic, transcript, bool(video_enabled), visible_object.strip() or None)
 
         lines = [
             f"Topic: {topic['topic']}",
             f"Complexity: {topic['complexity']}",
-            f"Next speaking goal: {updated_state['conversation_memory']['next_speaking_goal']}",
+            f"Next speaking goal: {conversation_memory(updated_state)['next_speaking_goal']}",
             "",
         ]
         for turn in transcript:

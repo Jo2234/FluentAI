@@ -40,3 +40,5 @@ jobs:
         run: npm ci
       - name: Desktop files exist
         run: test -f desktop/electron/main.js && test -f desktop/electron/renderer.html && test -f desktop/electron/preload.js
+      - name: Desktop session and camera regressions
+        run: npm run test:js

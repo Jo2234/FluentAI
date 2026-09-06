@@ -2530,6 +2530,11 @@
       chatMessages: [],
       postCallSummary: null,
       realtimeTurns: [],
+      realtimeIdentity: null,
+      callFinalization: null,
+      callStarting: false,
+      uiGeneration: 0,
+      deletingMemory: false,
       latestRealtimeTutorText: "",
       realtimeTopic: null,
       localMediaStream: null,
@@ -2549,6 +2554,9 @@
       lastVisionSignature: "",
       lastVisionFrameHash: null,
       lastVisionAt: 0,
+      cameraVideo: null,
+      cameraCanvas: null,
+      cameraSampleCanvas: null,
       mediaDiagnostics: { fakeMedia: false },
       lessonAutoStarted: false,
       onboarding: {
@@ -2651,21 +2659,27 @@
 
     function debounce(callback, delay) {
       let timer = null;
-      return (...args) => {
-        if (timer) window.clearTimeout(timer);
-        timer = window.setTimeout(() => callback(...args), delay);
+      const queued = (...args) => {
+        queued.cancel();
+        timer = window.setTimeout(() => { timer = null; callback(...args); }, delay);
       };
+      queued.cancel = () => {
+        if (timer !== null) window.clearTimeout(timer);
+        timer = null;
+      };
+      return queued;
     }
 
     els.voiceMode.value = "openai";
     els.video.value = "off";
     els.conversationPane.classList.remove("text-chat-active");
 
-    function setMode(mode) {
+    async function setMode(mode) {
+      if (state.deletingMemory) return false;
+      const generation = state.uiGeneration;
+      if (mode !== "conversation" && !(await endRealtimeCall())) return false;
+      if (generation !== state.uiGeneration || state.deletingMemory) return false;
       state.mode = mode;
-      if (mode !== "conversation") {
-        endRealtimeCall();
-      }
       els.homePane.classList.toggle("hidden", mode !== "home");
       els.lessonPane.classList.toggle("hidden", mode !== "lesson");
       els.conversationPane.classList.toggle("hidden", mode !== "conversation");
@@ -2680,6 +2694,7 @@
       if (mode === "conversation" && !state.callActive) {
         els.cameraBtn.disabled = false;
       }
+      return true;
     }
 
     function setBusy(busy, message) {
@@ -2691,6 +2706,8 @@
       const textFallbackReady = !shouldUseVoice() && state.conversationSession;
       els.sendBtn.disabled = busy || !textFallbackReady;
       els.chatInput.disabled = busy || !textFallbackReady;
+      const quizSubmit = document.querySelector(".submit-quiz");
+      if (quizSubmit) quizSubmit.disabled = busy || !state.lessonSession || Boolean(state.lessonSession.completed);
       if (message) els.workspaceStatus.textContent = message;
     }
 
@@ -2899,13 +2916,14 @@
     }
 
     function bridgePayload(extra) {
-      return { language: currentLanguage(), ...(extra || {}) };
+      return { language: currentLanguage(), memory_generation: state.profile && state.profile.memory_generation, ...(extra || {}) };
     }
 
     const queueLessonCheckpoint = debounce(async () => {
-      if (!state.lessonSession || !window.fluentAI.lessonCheckpoint) return;
+      if (state.deletingMemory || !state.lessonSession || state.lessonSession.completed || !window.fluentAI.lessonCheckpoint) return;
       try {
         await window.fluentAI.lessonCheckpoint(bridgePayload({
+          language: state.lessonSession.lesson.language,
           lesson: state.lessonSession.lesson,
           quiz: state.lessonSession.quiz,
           answers: lessonAnswers()
@@ -2915,15 +2933,23 @@
       }
     }, 350);
 
+    function capturedCallPayload() {
+      if (!state.realtimeIdentity) return null;
+      return {
+        ...state.realtimeIdentity,
+        turns: state.realtimeTurns.map((turn) => ({ ...turn })),
+        topic: { ...(state.realtimeTopic || {}) },
+        video: els.video.value,
+        video_object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : null
+      };
+    }
+
     const queueCallCheckpoint = debounce(async () => {
-      if (!window.fluentAI.callCheckpoint || !state.realtimeTurns.length) return;
+      if (state.deletingMemory || state.callFinalization || !window.fluentAI.callCheckpoint || !state.realtimeTurns.length) return;
+      const payload = capturedCallPayload();
+      if (!payload) return;
       try {
-        await window.fluentAI.callCheckpoint(bridgePayload({
-          turns: state.realtimeTurns,
-          topic: state.realtimeTopic || {},
-          video: els.video.value,
-          video_object: state.visualContext ? state.visualContext.primary_object || state.visualContext.summary : null
-        }));
+        await window.fluentAI.callCheckpoint(payload);
       } catch {
         appendLogs(["[Session Recovery Agent] Could not save call transcript checkpoint."]);
       }
@@ -3576,13 +3602,16 @@
     }
 
     async function requestRealtimeSecret() {
+      const identity = state.realtimeIdentity;
       const secret = await window.fluentAI.realtimeClientSecret(bridgePayload({
+        ...(identity || {}),
         video: els.video.value,
         vision_summary: state.visualContext ? visualContextText() : ""
       }));
       if (!secret.ok || !secret.client_secret) {
         throw new Error(secret.error || "Could not create OpenAI Realtime session.");
       }
+      if (identity !== state.realtimeIdentity || state.deletingMemory) throw new Error("Call was canceled.");
       renderProfile(secret.profile);
       appendLogs(secret.logs);
       return secret;
@@ -3604,7 +3633,10 @@
           response: { instructions: realtimeTutorInstruction(initialInstructions) }
         }));
       };
-      channel.onmessage = (event) => handleRealtimeEvent(event.data);
+      const identity = state.realtimeIdentity;
+      channel.onmessage = (event) => {
+        if (identity === state.realtimeIdentity && !state.callFinalization && !state.deletingMemory) handleRealtimeEvent(event.data);
+      };
 
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
@@ -3627,18 +3659,23 @@
 
     async function attachCameraIfAllowed() {
       if (els.video.value !== "on") return false;
+      const stream = state.localMediaStream;
       try {
         setCallStatus("Requesting camera for this call...");
         const videoStream = await navigator.mediaDevices.getUserMedia({ video: cameraConstraints(), audio: false });
+        if (!stream || stream !== state.localMediaStream || state.deletingMemory) {
+          videoStream.getTracks().forEach((track) => track.stop());
+          return false;
+        }
         videoStream.getVideoTracks().forEach((track) => state.localMediaStream.addTrack(track));
         state.visualContext = null;
-        state.visionSequence += 1;
+        resetVisionCapture();
         setCallStatus("Camera is live. Connecting voice...");
         return true;
       } catch {
         els.video.value = "off";
         state.visualContext = null;
-        state.visionSequence += 1;
+        resetVisionCapture();
         setCallStatus("Camera is blocked. Continuing voice-only.");
         return false;
       }
@@ -3646,6 +3683,7 @@
 
     async function refreshRealtimeSession() {
       if (!state.callActive || state.realtimeRefreshInFlight || !state.localMediaStream) return;
+      const identity = state.realtimeIdentity;
       state.realtimeRefreshInFlight = true;
       setCallStatus("Voice session is refreshing.");
       try {
@@ -3659,6 +3697,10 @@
           state.localMediaStream,
           `Continue the same tutoring call. Preserve context from this transcript: ${transcript || "No transcript yet."}`
         );
+        if (identity !== state.realtimeIdentity || !state.callActive) {
+          next.channel.close(); next.peer.close(); next.remoteAudio.pause();
+          return;
+        }
         state.realtimePeer = next.peer;
         state.realtimeChannel = next.channel;
         state.remoteAudio = next.remoteAudio;
@@ -3671,7 +3713,7 @@
         scheduleRealtimeRefresh(secret);
         setCallStatus("Voice session refreshed. Continue speaking naturally.");
       } catch (error) {
-        await fallbackToTextAfterRealtimeRefreshFailure(error);
+        if (identity === state.realtimeIdentity && state.callActive) await fallbackToTextAfterRealtimeRefreshFailure(error);
       } finally {
         state.realtimeRefreshInFlight = false;
       }
@@ -3682,6 +3724,7 @@
       els.voiceMode.value = "text";
       els.conversationPane.classList.add("text-chat-active");
       state.conversationSession = {
+        ...state.realtimeIdentity,
         topic: state.realtimeTopic || { topic: "voice call", complexity: "live conversation", support: "", keywords: [] },
         turns: [],
         video_on: false,
@@ -3717,7 +3760,12 @@
     }
 
     async function startRealtimeCall() {
-      if (!shouldUseVoice() || state.callActive) return;
+      if (!shouldUseVoice() || state.callActive || state.callStarting || state.deletingMemory) return;
+      if (!(await endRealtimeCall()) || state.callStarting || state.deletingMemory || !shouldUseVoice()) return;
+      const generation = state.uiGeneration;
+      const identity = Object.freeze({ session_id: crypto.randomUUID(), language: currentLanguage(), memory_generation: state.profile && state.profile.memory_generation });
+      state.realtimeIdentity = identity;
+      state.callStarting = true;
       setCallStatus("Creating OpenAI Realtime voice session...");
       els.workspaceStatus.textContent = "Starting voice call...";
       els.voiceCallBtn.disabled = true;
@@ -3745,11 +3793,16 @@
 
         setCallStatus(wantsVideo ? "Requesting microphone and camera..." : "Requesting microphone...");
         const media = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(), video: false });
+        if (generation !== state.uiGeneration || state.realtimeIdentity !== identity) {
+          media.getTracks().forEach((track) => track.stop());
+          return;
+        }
         state.localMediaStream = media;
         if (wantsVideo) {
           wantsVideo = await attachCameraIfAllowed();
           cameraFallback = !wantsVideo;
         }
+        if (state.realtimeIdentity !== identity || generation !== state.uiGeneration) return;
         state.visualContext = null;
         state.realtimeTurns = [];
         state.latestRealtimeTutorText = "";
@@ -3759,16 +3812,21 @@
           support: state.profile && state.profile.next_speaking_goal ? `Model answer: ${state.profile.next_speaking_goal}` : "Model answer: Answer in a complete sentence.",
           keywords: []
         };
-        state.visionSequence += 1;
+        resetVisionCapture();
         renderCallMedia();
 
         const secret = await requestRealtimeSecret();
+        if (state.realtimeIdentity !== identity || generation !== state.uiGeneration) return;
         const connection = await connectRealtimePeer(
           secret,
           media,
           `Start the tutoring call now. Greet the learner and ask the first simple ${currentLanguage()} question.`
             + (state.visualContext ? ` Use this camera context naturally: ${visualContextText()}.` : "")
         );
+        if (state.realtimeIdentity !== identity || generation !== state.uiGeneration) {
+          connection.channel.close(); connection.peer.close(); connection.remoteAudio.pause();
+          return;
+        }
         state.realtimePeer = connection.peer;
         state.realtimeChannel = connection.channel;
         state.remoteAudio = connection.remoteAudio;
@@ -3786,11 +3844,12 @@
           startVisionLoop("connected");
         }
       } catch (error) {
+        if (state.realtimeIdentity !== identity || generation !== state.uiGeneration) return;
         closeRealtimeTransport({ stopMedia: true });
         els.voiceCallBtn.disabled = false;
         els.workspaceStatus.textContent = "Voice call needs attention.";
-        setCallStatus(mediaErrorMessage(error));
-      }
+        if (generation === state.uiGeneration) setCallStatus(mediaErrorMessage(error));
+      } finally { if (state.realtimeIdentity === identity) state.callStarting = false; }
     }
 
     function mediaErrorMessage(error) {
@@ -3811,10 +3870,48 @@
       }
     }
 
-    async function analyzeCurrentCameraFrame() {
-      const image = await captureCameraFrame();
-      if (!image) return { ok: false, error: "Camera frame was not ready yet." };
-      return window.fluentAI.analyzeCameraFrame(bridgePayload({ image }));
+    async function analyzeCurrentCameraFrame(reason = "capture") {
+      const sequence = state.visionSequence;
+      const frame = await captureCameraFrame();
+      if (sequence !== state.visionSequence) return { skipped: true };
+      if (!frame) return { ok: false, error: "Camera frame was not ready yet." };
+      const now = Date.now();
+      if (reason === "loop" && state.lastVisionFrameHash && now - state.lastVisionAt < 30000 &&
+          !cameraFrameChanged(state.lastVisionFrameHash, frame.sample)) return { skipped: true };
+      const result = await window.fluentAI.analyzeCameraFrame(bridgePayload({ image: frame.image }));
+      // Failed requests remain retryable; cache only successful analysis from this camera.
+      if (sequence === state.visionSequence && result && result.ok) {
+        state.lastVisionFrameHash = frame.sample;
+        state.lastVisionAt = now;
+      }
+      return result;
+    }
+
+    function cameraFrameChanged(previous, current) {
+      if (!previous || previous.length !== current.length) return true;
+      let total = 0;
+      let changed = 0;
+      for (let i = 0; i < current.length; i += 4) {
+        const delta = (Math.abs(previous[i] - current[i]) + Math.abs(previous[i + 1] - current[i + 1]) + Math.abs(previous[i + 2] - current[i + 2])) / 3;
+        total += delta;
+        if (delta > 24) changed += 1;
+      }
+      const pixels = current.length / 4;
+      // Mean color change plus localized movement; refresh every 30s catches subtle detail.
+      return total / pixels > 6 || changed / pixels > 0.025;
+    }
+
+    function resetVisionCapture() {
+      state.visionSequence += 1;
+      state.visionInFlight = false;
+      state.lastVisionFrameHash = null;
+      state.lastVisionAt = 0;
+      state.lastVisionSignature = "";
+      if (state.cameraVideo) {
+        state.cameraVideo.pause();
+        state.cameraVideo.srcObject = null;
+      }
+      state.cameraVideo = null;
     }
 
     async function analyzeVisionInBackground(reason) {
@@ -3823,7 +3920,8 @@
       const sequence = state.visionSequence;
       state.visionInFlight = true;
       try {
-        const vision = await analyzeCurrentCameraFrame();
+        const vision = await analyzeCurrentCameraFrame(reason);
+        if (vision && vision.skipped) return;
         if (sequence !== state.visionSequence) return;
         if (vision && vision.ok) {
           if (shouldIgnoreSyntheticVision(vision)) {
@@ -3868,8 +3966,10 @@
         if (state.callActive || reason === "initial") {
           setCallStatus(vision && vision.error ? vision.error : "Video is live, but OpenAI could not analyze this frame.");
         }
+      } catch (error) {
+        if (sequence === state.visionSequence) setCallStatus(error.message || "Could not analyze this frame.");
       } finally {
-        state.visionInFlight = false;
+        if (sequence === state.visionSequence) state.visionInFlight = false;
       }
     }
 
@@ -3906,27 +4006,36 @@
     }
 
     async function captureCameraFrame() {
-      if (!state.localMediaStream || !state.localMediaStream.getVideoTracks().length) return "";
-      const video = document.createElement("video");
-      video.muted = true;
-      video.playsInline = true;
-      video.srcObject = state.localMediaStream;
-      await new Promise((resolve) => {
-        video.onloadedmetadata = resolve;
-        setTimeout(resolve, 900);
-        video.play().catch(() => resolve());
-      });
-      const width = video.videoWidth || 640;
-      const height = video.videoHeight || 480;
-      if (!width || !height) return "";
-      const scale = Math.min(1, 640 / Math.max(width, height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(width * scale));
-      canvas.height = Math.max(1, Math.round(height * scale));
+      const stream = state.localMediaStream;
+      if (!stream || !stream.getVideoTracks().length) return null;
+      let video = state.cameraVideo;
+      if (!video || video.srcObject !== stream) {
+        video = document.createElement("video");
+        video.muted = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        state.cameraVideo = video;
+        await new Promise((resolve) => {
+          const timer = window.setTimeout(resolve, 900);
+          video.onloadedmetadata = () => { window.clearTimeout(timer); resolve(); };
+          video.play().catch(() => { window.clearTimeout(timer); resolve(); });
+        });
+      }
+      if (video !== state.cameraVideo || !video.videoWidth || !video.videoHeight) return null;
+      const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+      const canvas = state.cameraCanvas || (state.cameraCanvas = document.createElement("canvas"));
+      canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
       const context = canvas.getContext("2d");
-      if (!context) return "";
+      if (!context) return null;
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", 0.72);
+      const sampleCanvas = state.cameraSampleCanvas || (state.cameraSampleCanvas = document.createElement("canvas"));
+      sampleCanvas.width = 32;
+      sampleCanvas.height = 24;
+      const sampleContext = sampleCanvas.getContext("2d", { willReadFrequently: true });
+      if (!sampleContext) return null;
+      sampleContext.drawImage(canvas, 0, 0, 32, 24);
+      return { image: canvas.toDataURL("image/jpeg", 0.72), sample: sampleContext.getImageData(0, 0, 32, 24).data };
     }
 
     function visualContextText() {
@@ -3967,53 +4076,69 @@
     }
 
     async function endRealtimeCall() {
-      const shouldPersistSummary = shouldUseVoice() && state.mode === "conversation" && (state.callActive || state.realtimeTurns.length > 0);
-      const transcriptForSummary = state.realtimeTurns.slice();
-      const topicForSummary = state.realtimeTopic || {
-        topic: state.visualContext ? `visible object: ${state.visualContext.primary_object || state.visualContext.summary}` : "voice call",
-        complexity: "live conversation",
-        support: state.profile && state.profile.next_speaking_goal ? `Model answer: ${state.profile.next_speaking_goal}` : "Model answer: Answer in a complete sentence.",
-        keywords: []
-      };
+      if (state.callFinalization) return state.callFinalization;
+      const payload = capturedCallPayload();
+      const generation = state.uiGeneration;
+      // Disconnect immediately; retain the captured transcript until the commit succeeds.
+      queueCallCheckpoint.cancel();
       closeRealtimeTransport({ stopMedia: true });
-      state.realtimeTurns = [];
-      state.latestRealtimeTutorText = "";
-      state.realtimeTopic = null;
-      state.visionSequence += 1;
-      state.visionInFlight = false;
-      state.lastVisionSignature = "";
+      resetVisionCapture();
+      state.callStarting = false;
       els.voiceCallBtn.textContent = "Call";
       els.voiceCallBtn.disabled = false;
       els.muteBtn.disabled = true;
       els.cameraBtn.disabled = state.mode !== "conversation";
       els.endCallBtn.disabled = true;
       renderCallMedia();
-      if (state.mode === "conversation") {
-        els.workspaceStatus.textContent = "Call ended.";
-        setCallStatus("Call ended. Press Call to reconnect.");
+      if (!payload || !payload.turns.length) {
+        state.realtimeIdentity = null;
+        return true;
       }
-      if (shouldPersistSummary && window.fluentAI.endConversation) {
+      const pending = (async () => {
         try {
-          const result = await window.fluentAI.endConversation(bridgePayload({
-            turns: transcriptForSummary,
-            topic: topicForSummary,
-            video: els.video.value,
-            video_object: topicForSummary.topic
-          }));
+          // Flush the debounce before finalization, including the last transcription.
+          if (window.fluentAI.callCheckpoint) await window.fluentAI.callCheckpoint(payload);
+          if (generation !== state.uiGeneration) return false;
+          const result = await window.fluentAI.endConversation(payload);
+          if (generation !== state.uiGeneration) return false;
+          if (result.session_expired) {
+            state.realtimeTurns = [];
+            state.realtimeIdentity = null;
+            state.realtimeTopic = null;
+            state.latestRealtimeTutorText = "";
+            state.chatMessages = [];
+            await refreshStatus(false);
+            setCallStatus("This call belongs to memory that has been reset.");
+            return true;
+          }
+          if (!result.ok) throw new Error(result.error || "Could not save the call.");
           appendLogs(result.logs);
           if (result.profile) renderProfile(result.profile);
-          if (result.post_call_summary) {
-            state.postCallSummary = result.post_call_summary;
-            renderChat();
-          }
+          if (result.post_call_summary) state.postCallSummary = result.post_call_summary;
+          state.realtimeTurns = [];
+          state.latestRealtimeTutorText = "";
+          state.realtimeTopic = null;
+          state.realtimeIdentity = null;
+          // Backend also removes the matching checkpoint during a successful commit.
           if (window.fluentAI.discardCallCheckpoint) {
-            await window.fluentAI.discardCallCheckpoint(bridgePayload());
+            await window.fluentAI.discardCallCheckpoint(payload).catch(() => undefined);
           }
+          if (generation !== state.uiGeneration) return false;
+          setCallStatus("Call saved. Press Call to reconnect.");
+          renderChat();
           await loadHomeSummary();
-        } catch {
-          appendLogs(["[Conversation Orchestrator] Could not persist call summary."]);
+          return true;
+        } catch (error) {
+          if (generation !== state.uiGeneration) return false;
+          els.endCallBtn.disabled = false;
+          setCallStatus("Call ended, but saving failed. Your transcript is retained. Press End to retry.");
+          showError(error.message || "Could not persist call summary.");
+          return false;
         }
-      }
+      })();
+      state.callFinalization = pending;
+      try { return await pending; }
+      finally { if (state.callFinalization === pending) state.callFinalization = null; }
     }
 
     function stopLocalMedia() {
@@ -4082,15 +4207,20 @@
       }
 
       if (wantsVideo && !videoTracks.length) {
+        const stream = state.localMediaStream;
         try {
           setCallStatus("Requesting camera for this call...");
           const videoStream = await navigator.mediaDevices.getUserMedia({ video: cameraConstraints(), audio: false });
+          if (stream !== state.localMediaStream || els.video.value !== "on" || state.deletingMemory) {
+            videoStream.getTracks().forEach((track) => track.stop());
+            return;
+          }
           videoStream.getVideoTracks().forEach((track) => {
             state.localMediaStream.addTrack(track);
             if (state.realtimePeer) state.realtimePeer.addTrack(track, state.localMediaStream);
           });
           state.visualContext = null;
-          state.visionSequence += 1;
+          resetVisionCapture();
           renderCallMedia();
           setCallStatus("Camera is live. OpenAI is analyzing the view...");
           startVisionLoop("toggle");
@@ -4109,7 +4239,7 @@
           state.localMediaStream.removeTrack(track);
         });
         state.visualContext = null;
-        state.visionSequence += 1;
+        resetVisionCapture();
         state.lastVisionSignature = "";
         stopVisionLoop();
         setCallStatus("Video paused. Voice is still live.");
@@ -4148,12 +4278,14 @@
     }
 
     async function refreshStatus(persistLanguage = false) {
+      const generation = state.uiGeneration;
       let result = null;
       try {
         result = await window.fluentAI.status(persistLanguage ? bridgePayload() : {});
       } catch {
         result = { ok: false, error: "Status request timed out. Check the network and try again." };
       }
+      if (generation !== state.uiGeneration) return;
       if (!result.ok) {
         showError(result.error || "Could not load status.");
         return;
@@ -4164,12 +4296,14 @@
     }
 
     async function loadHomeSummary() {
+      const generation = state.uiGeneration;
       let result = null;
       try {
         result = await window.fluentAI.homeSummary(bridgePayload());
       } catch {
         result = { ok: false, error: "Home summary request timed out. Check the network and try again." };
       }
+      if (generation !== state.uiGeneration) return;
       if (!result.ok) {
         showError(result.error || "Could not load home workspace.");
         appendLogs(result.logs);
@@ -4303,7 +4437,7 @@
         discard.type = "button";
         discard.className = "secondary overlay-secondary";
         discard.textContent = "Discard";
-        discard.addEventListener("click", discardLessonCheckpoint);
+        discard.addEventListener("click", () => discardLessonCheckpoint(lesson));
         card.append(resume, discard);
         stack.append(card);
       }
@@ -4317,24 +4451,24 @@
         const summarize = document.createElement("button");
         summarize.type = "button";
         summarize.textContent = "Summarize your interrupted call";
-        summarize.addEventListener("click", summarizeCallCheckpoint);
+        summarize.addEventListener("click", () => summarizeCallCheckpoint(call));
         const discard = document.createElement("button");
         discard.type = "button";
         discard.className = "secondary overlay-secondary";
         discard.textContent = "Discard";
-        discard.addEventListener("click", discardCallCheckpoint);
+        discard.addEventListener("click", () => discardCallCheckpoint(call));
         card.append(summarize, discard);
         stack.append(card);
       }
       return stack;
     }
 
-    function resumeLessonCheckpoint(checkpoint) {
+    async function resumeLessonCheckpoint(checkpoint) {
+      if (!(await setMode("lesson"))) return;
       state.lessonSession = {
         lesson: checkpoint.lesson,
         quiz: checkpoint.quiz || []
       };
-      setMode("lesson");
       els.lessonEmpty.classList.add("hidden");
       els.lessonPane.classList.add("lesson-active");
       renderLesson(checkpoint.lesson, checkpoint.quiz || [], checkpoint.answers || []);
@@ -4342,18 +4476,21 @@
       appendLogs(["[Session Recovery Agent] Restored interrupted lesson draft."]);
     }
 
-    async function discardLessonCheckpoint() {
+    async function discardLessonCheckpoint(checkpoint = state.sessionCheckpoints.lesson) {
+      if (state.deletingMemory) return;
       if (window.fluentAI.discardLessonCheckpoint) {
-        const result = await window.fluentAI.discardLessonCheckpoint(bridgePayload());
+        const result = await window.fluentAI.discardLessonCheckpoint(bridgePayload(checkpoint || {}));
         appendLogs(result.logs);
       }
       await loadHomeSummary();
     }
 
-    async function summarizeCallCheckpoint() {
-      if (!window.fluentAI.summarizeCallCheckpoint) return;
+    async function summarizeCallCheckpoint(checkpoint = state.sessionCheckpoints.call) {
+      if (!window.fluentAI.summarizeCallCheckpoint || state.busy || state.deletingMemory) return;
+      const generation = state.uiGeneration;
       setBusy(true, "Summarizing interrupted call...");
-      const result = await window.fluentAI.summarizeCallCheckpoint(bridgePayload());
+      const result = await window.fluentAI.summarizeCallCheckpoint(bridgePayload(checkpoint || {}));
+      if (generation !== state.uiGeneration) return;
       setBusy(false, "Ready");
       appendLogs(result.logs);
       if (!result.ok) {
@@ -4368,9 +4505,10 @@
       await loadHomeSummary();
     }
 
-    async function discardCallCheckpoint() {
+    async function discardCallCheckpoint(checkpoint = state.sessionCheckpoints.call) {
+      if (state.deletingMemory) return;
       if (window.fluentAI.discardCallCheckpoint) {
-        const result = await window.fluentAI.discardCallCheckpoint(bridgePayload());
+        const result = await window.fluentAI.discardCallCheckpoint(bridgePayload(checkpoint || {}));
         appendLogs(result.logs);
       }
       await loadHomeSummary();
@@ -4408,12 +4546,13 @@
       await startLesson();
     }
 
-    function showHome() {
-      setMode("home");
-      loadHomeSummary();
+    async function showHome() {
+      if (!(await setMode("home"))) return;
+      await loadHomeSummary();
     }
 
     async function openMemoryInspector() {
+      const generation = state.uiGeneration;
       if (!els.memoryInspectorPanel.open) return;
       appendLogs(["[Memory Inspector Agent] Opening sanitized memory inspector."]);
       let result = null;
@@ -4422,6 +4561,7 @@
       } catch {
         result = { ok: false, error: "Memory inspector request timed out. Check the network and try again." };
       }
+      if (generation !== state.uiGeneration) return;
       if (!result.ok) {
         showError(result.error || "Could not inspect memory.");
         appendLogs(result.logs);
@@ -4550,14 +4690,59 @@
 
     async function deleteAllMemory() {
       const confirmed = window.prompt("Type DELETE ALL MEMORY to delete all memory.");
-      appendLogs(["[Privacy Agent] Delete-all requested from Home."]);
-      const result = await window.fluentAI.memoryDeleteAll(bridgePayload({ confirm: confirmed || "" }));
-      appendLogs(result.logs);
-      if (!result.ok) {
-        showError(result.error || "Delete all memory canceled.");
-        return;
+      if (confirmed !== "DELETE ALL MEMORY" || state.deletingMemory) return;
+      state.deletingMemory = true;
+      state.uiGeneration += 1;
+      queueLessonCheckpoint.cancel();
+      queueCallCheckpoint.cancel();
+      closeRealtimeTransport({ stopMedia: true });
+      resetVisionCapture();
+      if (state.phraseAudioElement) {
+        state.phraseAudioElement.pause();
+        state.phraseAudioElement.src = "";
+        state.phraseAudioElement = null;
       }
-      await initOnboarding();
+      for (const canvas of [state.cameraCanvas, state.cameraSampleCanvas]) {
+        if (canvas) { canvas.width = 0; canvas.height = 0; }
+      }
+      state.cameraCanvas = state.cameraSampleCanvas = null;
+      setBusy(true, "Deleting local learning memory...");
+      try {
+        const result = await window.fluentAI.memoryDeleteAll(bridgePayload({ confirm: confirmed }));
+        if (!result.ok) throw new Error(result.error || "Could not delete all memory.");
+        state.lessonSession = null;
+        state.callStarting = false;
+        state.conversationSession = null;
+        state.realtimeIdentity = null;
+        state.realtimeTurns = [];
+        state.realtimeTopic = null;
+        state.latestRealtimeTutorText = "";
+        state.latestTutorMessage = "";
+        state.chatMessages = [];
+        state.postCallSummary = null;
+        state.visualContext = null;
+        state.sessionCheckpoints = { lesson: null, call: null };
+        state.memoryPayload = null;
+        state.homeSummary = null;
+        state.lessonAutoStarted = false;
+        state.placementSession = null;
+        state.onboarding.answers = {};
+        els.lessonContent.replaceChildren();
+        els.memoryInspectorContent.replaceChildren();
+        els.memoryJson.textContent = "";
+        els.agentLogs.replaceChildren();
+        if (result.profile) renderProfile(result.profile);
+        state.deletingMemory = false;
+        setBusy(false, "Local learning memory deleted.");
+        renderChat();
+        await loadHomeSummary();
+        await initOnboarding();
+      } catch (error) {
+        state.deletingMemory = false;
+        if (state.lessonSession) state.lessonSession.submitting = false;
+        setBusy(false, "Memory deletion failed.");
+        showError(error.message || "Could not delete all memory.");
+      }
     }
 
     async function ensureLessonStarted() {
@@ -4567,7 +4752,8 @@
     }
 
     async function startLesson() {
-      setMode("lesson");
+      if (state.busy || state.deletingMemory || !(await setMode("lesson"))) return;
+      const generation = state.uiGeneration;
       setBusy(true, "Building lesson...");
       els.lessonEmpty.classList.add("hidden");
       els.lessonPane.classList.add("lesson-active");
@@ -4580,6 +4766,7 @@
       } catch {
         result = { ok: false, error: "Lesson request timed out. Your progress is safe — try again." };
       }
+      if (generation !== state.uiGeneration) return;
       if (!result.ok) {
         showError(result.error || "Lesson failed.");
         setBusy(false, "Ready");
@@ -4764,6 +4951,7 @@
     }
 
     async function playPhraseAudio(phrase, button) {
+      const generation = state.uiGeneration;
       const cleaned = String(phrase || "").trim();
       if (!cleaned) return;
       const original = button.textContent;
@@ -4774,6 +4962,7 @@
           phrase: cleaned,
           language: currentLanguage()
         }));
+        if (generation !== state.uiGeneration) return;
         if (!result || !result.ok || !result.audio_base64) {
           throw new Error((result && result.error) || "Could not generate phrase audio.");
         }
@@ -4853,13 +5042,18 @@
 
     async function submitQuiz(event) {
       event.preventDefault();
-      if (!state.lessonSession) return;
+      if (!state.lessonSession || state.lessonSession.submitting || state.lessonSession.completed || state.deletingMemory) return;
+      const session = state.lessonSession;
+      const generation = state.uiGeneration;
+      session.submitting = true;
+      queueLessonCheckpoint.cancel();
       setBusy(true, "Grading quiz...");
       const answers = lessonAnswers();
 
       let result = null;
       try {
         result = await window.fluentAI.submitLesson(bridgePayload({
+          language: state.lessonSession.lesson.language,
           lesson: state.lessonSession.lesson,
           quiz: state.lessonSession.quiz,
           answers
@@ -4867,6 +5061,8 @@
       } catch {
         result = { ok: false, error: "Your answers didn't go through — try again." };
       }
+      if (generation !== state.uiGeneration || state.lessonSession !== session) return;
+      session.submitting = false;
       if (!result.ok) {
         showError(result.error || "Your answers didn't go through — try again.");
         setBusy(false, "Your answers didn't go through — try again.");
@@ -4874,6 +5070,8 @@
       }
       renderProfile(result.profile);
       appendLogs(result.logs);
+      session.completed = true;
+      queueLessonCheckpoint.cancel();
       renderQuizResults(result.results, result.summary);
       setBusy(false, `Score ${result.summary.score}`);
       await loadHomeSummary();
@@ -4923,7 +5121,9 @@
     }
 
     async function startConversation() {
-      setMode("conversation");
+      if (state.busy || state.deletingMemory || !(await endRealtimeCall())) return;
+      if (!(await setMode("conversation"))) return;
+      const generation = state.uiGeneration;
       state.conversationSession = null;
       state.latestTutorMessage = "";
       state.chatMessages = [];
@@ -4953,6 +5153,7 @@
         } catch {
           result = { ok: false, error: "Conversation request timed out. Your progress is safe — try again." };
         }
+      if (generation !== state.uiGeneration) return;
       if (!result.ok) {
         showError(result.error || "Conversation failed.");
         setBusy(false, "Ready");
@@ -4970,11 +5171,11 @@
     }
 
     async function startTextFallback() {
+      if (!(await endRealtimeCall())) return;
       els.voiceMode.value = "text";
-      endRealtimeCall();
       els.video.value = "off";
       state.visualContext = null;
-      state.visionSequence += 1;
+      resetVisionCapture();
       state.lastVisionSignature = "";
       state.conversationSession = null;
       state.latestTutorMessage = "";
@@ -4989,31 +5190,34 @@
 
     async function startVoiceCallFromButton() {
       if (!shouldUseVoice()) {
-        showVoiceCallInterface();
+        if (!(await showVoiceCallInterface())) return;
       }
       await startRealtimeCall();
     }
 
-    function showVoiceCallInterface() {
+    async function showVoiceCallInterface() {
+      if (!(await endRealtimeCall())) return false;
       els.voiceMode.value = "openai";
-      endRealtimeCall();
       state.conversationSession = null;
       state.latestTutorMessage = "";
       state.chatMessages = [];
       state.postCallSummary = null;
       state.visualContext = null;
-      state.visionSequence += 1;
+      resetVisionCapture();
       state.lastVisionSignature = "";
       els.conversationPane.classList.remove("text-chat-active");
       setBusy(false, "OpenAI voice call selected.");
       setCallStatus("Ready for an OpenAI voice session.");
       renderCallMedia();
       renderChat();
+      return true;
     }
 
     async function sendConversationReply(event) {
       event.preventDefault();
-      if (!state.conversationSession) return;
+      if (!state.conversationSession || state.busy || state.deletingMemory) return;
+      const generation = state.uiGeneration;
+      const session = state.conversationSession;
       const message = els.chatInput.value.trim();
       if (!message) return;
 
@@ -5025,13 +5229,15 @@
       let result = null;
       try {
         result = await window.fluentAI.replyConversation(bridgePayload({
-          session: state.conversationSession,
+          ...session,
+          session,
           message,
           tutor_message: state.latestTutorMessage
         }));
       } catch {
         result = { ok: false, error: "Your reply didn't go through — try again." };
       }
+      if (generation !== state.uiGeneration) return;
       if (!result.ok) {
         const last = state.chatMessages[state.chatMessages.length - 1];
         if (last && last.role === "learner" && last.text === message) {
@@ -5167,14 +5373,20 @@
     els.video.addEventListener("change", syncCallCameraToSelect);
     els.agentLogPanel.addEventListener("toggle", syncAgentLogPanel);
     els.languageSelect.addEventListener("change", async () => {
-      endRealtimeCall();
+      const requestedLanguage = currentLanguage();
+      const previousLanguage = state.realtimeIdentity ? state.realtimeIdentity.language : state.profile && state.profile.language;
+      if (previousLanguage) els.languageSelect.value = previousLanguage;
+      if (!(await endRealtimeCall())) return;
+      state.uiGeneration += 1;
+      els.languageSelect.value = requestedLanguage;
+      queueLessonCheckpoint.cancel();
       state.lessonSession = null;
       state.conversationSession = null;
       state.latestTutorMessage = "";
       state.chatMessages = [];
       state.visualContext = null;
       state.lastVisionSignature = "";
-      state.visionSequence += 1;
+      resetVisionCapture();
       state.lessonAutoStarted = false;
       els.lessonEmpty.classList.remove("hidden");
       els.lessonPane.classList.remove("lesson-active");
@@ -5186,8 +5398,11 @@
       await loadHomeSummary();
       setMode("home");
     });
-    els.voiceMode.addEventListener("change", () => {
-      endRealtimeCall();
+    els.voiceMode.addEventListener("change", async () => {
+      const requestedMode = els.voiceMode.value;
+      if (state.realtimeIdentity) els.voiceMode.value = "openai";
+      if (!(await endRealtimeCall())) return;
+      els.voiceMode.value = requestedMode;
       state.conversationSession = null;
       state.chatMessages = [];
       els.conversationPane.classList.toggle("text-chat-active", !shouldUseVoice());
@@ -5196,8 +5411,11 @@
       renderCallMedia();
       renderChat();
     });
-    window.addEventListener("beforeunload", () => {
-      endRealtimeCall();
+    window.addEventListener("beforeunload", (event) => {
+      if (!state.realtimeIdentity || !state.realtimeTurns.length) return;
+      event.preventDefault();
+      event.returnValue = "";
+      endRealtimeCall().then((saved) => { if (saved) window.close(); });
     });
     document.addEventListener("keydown", trapOnboardingFocus);
 

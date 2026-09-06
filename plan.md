@@ -49,3 +49,11 @@ Create a demoable agentic language learning app with Lesson Mode and Conversatio
 - Packaging step 6 reliability pass: realtime refresh, renderer timeouts, model-failure copy, empty-tutor recovery, lesson/call checkpoints, and camera voice-only fallback. Done.
 - Fix acceptance-run defects: packaged bridge Realtime SSL certificate setup and provider-graded Conversation mistake memory. Done.
 - Final Phase 2/6 polish: phrase listening, pronunciation/culture lesson cards, and post-call pronunciation practice note. Done.
+
+## Approved audit fixes (2026-09-06)
+- Delete managed learner memory completely and reject stale session writes. Done.
+- Finalize calls consistently across navigation, language changes and window close; retain failed saves for retry. Done.
+- Commit progress through cross-process transactions and atomic file replacement. Done.
+- Deduplicate lesson submission before grading and progress updates. Done.
+- Skip unchanged camera frames before inference, with bounded refresh and explicit capture. Done.
+- Run concurrency/privacy/session regressions, existing suites, lint and installed-package smoke. Done; hardware camera/window acceptance remains manual.

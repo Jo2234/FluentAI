@@ -9,11 +9,11 @@ from typing import Any
 
 from fluent_ai.agent import answer_quiz, evaluate_answers, generate_lesson, generate_quiz, progress_report, snapshot_progress, update_progress
 from fluent_ai.app import DEFAULT_PROGRESS_PATH
-from fluent_ai.conversation import persist_post_call_summary, run_conversation
+from fluent_ai.conversation import persist_post_call_summary, run_conversation, update_conversation_progress
 from fluent_ai.desktop_bridge import COMMANDS as BRIDGE_COMMANDS
 from fluent_ai.desktop_bridge import profile_for
 from fluent_ai.openai_provider import OpenAIProvider
-from fluent_ai.state import conversation_memory, load_state, save_state
+from fluent_ai.state import state_transaction, active_language, conversation_memory, load_state
 
 
 MAX_JSON_BYTES = 64_000
@@ -331,7 +331,6 @@ def run_lesson_cycle(state_path: Path, language: str) -> str:
     if not provider.available:
         return f"[OpenAI Model Agent] {provider.status()}\n[Orchestrator] Add OPENAI_API_KEY to .env before running Lesson Mode."
 
-    before = snapshot_progress(state)
     lesson = generate_lesson(state)
     enhanced = provider.enhance_lesson(state, lesson)
     if enhanced.get("source") != "openai":
@@ -342,8 +341,9 @@ def run_lesson_cycle(state_path: Path, language: str) -> str:
     quiz = generate_quiz(state, lesson)
     answers = answer_quiz(quiz, state, "auto")
     results = evaluate_answers(quiz, answers)
-    update_progress(state, lesson, results)
-    save_state(state_path, state)
+    with state_transaction(state_path, active_language(state), generation=state["memory_generation"]) as state:
+        before = snapshot_progress(state)
+        update_progress(state, lesson, results)
 
     lines = [
         f"[OpenAI Model Agent] Source: {source}",
@@ -381,8 +381,9 @@ def run_conversation_cycle(state_path: Path, language: str, turns: int, video_on
         )
     except Exception as exc:
         return f"[OpenAI Model Agent] OpenAI conversation generation failed: {exc.__class__.__name__}: {exc}"
-    summary = persist_post_call_summary(state, topic, transcript)
-    save_state(state_path, state)
+    with state_transaction(state_path, active_language(state), generation=state["memory_generation"]) as state:
+        update_conversation_progress(state, topic, transcript, video_on, video_object)
+        summary = persist_post_call_summary(state, topic, transcript)
 
     source = f"OpenAI Responses API ({provider.model})"
     lines = [
