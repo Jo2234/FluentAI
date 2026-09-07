@@ -8,7 +8,7 @@ version = "0.2.0"
 description = "Agentic language learning demo with local learner state, lesson mode, conversation mode, web, and desktop UI."
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["openai>=1.0.0"]
+dependencies = ["openai>=1.0.0", "certifi>=2024.12.14"]
 
 [project.optional-dependencies]
 ui = ["gradio"]
@@ -32,3 +32,6 @@ select = ["E9", "F63", "F7", "F82"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.setuptools.package-data]
+fluent_ai = ["curriculum/*.json"]

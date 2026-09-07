@@ -2,6 +2,14 @@ from __future__ import annotations
 
 import copy
 import json
+import hashlib
+import os
+import shutil
+import tempfile
+import threading
+import uuid
+import fcntl
+from contextlib import contextmanager
 import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -38,6 +46,84 @@ DEFAULT_GOALS = [
     "Improve conjugation accuracy",
 ]
 
+class StateConflict(RuntimeError):
+    """A stale snapshot must never replace newer learner progress."""
+
+
+class SessionExpired(StateConflict):
+    """The learner deleted memory while this session was running."""
+
+
+_lock_local = threading.local()
+
+
+@contextmanager
+def state_lock(path: Path, *, session_id: str | None = None):
+    """Cross-process, thread-reentrant lock; session locks never block other sessions.
+
+    Lock files contain no learner data and remain in place across resets, since
+    unlinking a locked file would let another process lock a different inode.
+    """
+    path = Path(path).resolve()
+    lock_path = path.with_name(path.name + ".lock")
+    if session_id is not None:
+        digest = hashlib.sha256(session_id.encode()).hexdigest()
+        lock_path = path.parent / ".session-locks" / (digest + ".lock")
+    held = getattr(_lock_local, "held", None)
+    if held is None:
+        held = _lock_local.held = {}
+    key = str(lock_path)
+    if key in held:
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        held[key] = handle
+        try:
+            yield
+        finally:
+            del held[key]
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def atomic_write(path: Path, data: bytes) -> None:
+    """Readers see either the old complete file or the new complete file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix="." + path.name + ".", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(name, path)
+    finally:
+        try:
+            os.unlink(name)
+        except FileNotFoundError:
+            pass
+
+
+def check_generation(state: dict[str, Any], generation: str | None, *, session: bool = False) -> None:
+    if (generation is not None and generation != state["memory_generation"]) or (
+        session and state.get("require_session_generation") and generation is None
+    ):
+        raise SessionExpired("This session predates the memory reset. Start a new session.")
+
+
+@contextmanager
+def state_transaction(path: Path, language: str | None = None, *, generation: str | None = None):
+    """Reload and mutate under a short lock. Keep network calls outside this block."""
+    with state_lock(path):
+        state = load_state(path, language)
+        check_generation(state, generation)
+        if language:
+            state["active_language"] = language
+            language_state(state, language)
+        yield state
+        save_state(path, state)
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -47,22 +133,23 @@ def default_state(language: str) -> dict[str, Any]:
 
 
 def load_state(path: Path, language: str | None = None) -> dict[str, Any]:
-    default_language = language or "Spanish"
-    if not path.exists():
-        state = default_state(default_language)
-        save_state(path, state)
+    with state_lock(path):
+        default_language = language or "Spanish"
+        if not path.exists():
+            state = default_state(default_language)
+            _write_state(path, state)
+            return state
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return _recover_corrupt_state(path, default_language)
+        if not isinstance(state, dict):
+            return _recover_corrupt_state(path, default_language)
+        needs_identity = "memory_generation" not in state
+        state = migrate_state(state, default_language)
+        if needs_identity:
+            _write_state(path, state)
         return state
-
-    try:
-        with path.open("r", encoding="utf-8") as file:
-            state = json.load(file)
-    except json.JSONDecodeError:
-        return _recover_corrupt_state(path, default_language)
-
-    if not isinstance(state, dict):
-        return _recover_corrupt_state(path, default_language)
-
-    return migrate_state(state, default_language)
 
 
 def _recover_corrupt_state(path: Path, language: str) -> dict[str, Any]:
@@ -77,7 +164,7 @@ def _recover_corrupt_state(path: Path, language: str) -> dict[str, Any]:
     state = default_state(language)
     state["_recovered_from_corruption"] = True
     state["_corrupt_backup_path"] = str(backup_path)
-    save_state(path, state)
+    _write_state(path, state)
     return state
 
 
@@ -342,19 +429,24 @@ def recalculate_weak_topics(state: dict[str, Any], limit: int = 4, language: str
 
 
 def save_state(path: Path, state: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    """Save a current snapshot; stale callers must replay their mutation in a transaction."""
+    with state_lock(path):
+        if path.exists():
+            current = load_state(path)
+            check_generation(current, state.get("memory_generation"))
+            if current["storage_revision"] != state.get("storage_revision", 0):
+                raise StateConflict("Learner progress changed. Reload before saving this update.")
+        _write_state(path, state)
+
+
+def _write_state(path: Path, state: dict[str, Any]) -> None:
     state["updated_at"] = utc_now()
     language_state(state)["updated_at"] = state["updated_at"]
+    state["storage_revision"] = int(state.get("storage_revision", 0)) + 1
     _normalize_event_counter(state)
     _cap_events(state)
-    persisted_state = {
-        key: value
-        for key, value in state.items()
-        if key not in {"_recovered_from_corruption", "_corrupt_backup_path"}
-    }
-    with path.open("w", encoding="utf-8") as file:
-        json.dump(persisted_state, file, indent=2, ensure_ascii=False)
-        file.write("\n")
+    persisted = {key: value for key, value in state.items() if not key.startswith("_")}
+    atomic_write(path, (json.dumps(persisted, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
 
 
 def reset_language_state(state: dict[str, Any], language: str) -> dict[str, Any]:
@@ -366,15 +458,27 @@ def reset_language_state(state: dict[str, Any], language: str) -> dict[str, Any]
 
 
 def delete_all_memory(path: Path, language: str) -> dict[str, Any]:
-    state = default_state(language)
-    save_state(path, state)
-    return state
+    with state_lock(path):
+        state = default_state(language)
+        state["require_session_generation"] = True
+        # Publish the new epoch first: even a failed cleanup invalidates old writers.
+        _write_state(path, state)
+        for directory in (path.parent / "sessions", path.parent / "cache" / "tts"):
+            if directory.exists():
+                shutil.rmtree(directory)
+        for pattern in (f"{path.stem}.corrupt.*{path.suffix}", f".{path.name}.*.tmp"):
+            for backup in path.parent.glob(pattern):
+                backup.unlink()
+        return state
 
 
 def _default_v2_state(language: str) -> dict[str, Any]:
     now = utc_now()
     return {
         "schema_version": 2,
+        "memory_generation": uuid.uuid4().hex,
+        "storage_revision": 0,
+        "completed_sessions": {},
         "learner": {
             "id": "local-demo-learner",
             "display_name": "Demo Learner",

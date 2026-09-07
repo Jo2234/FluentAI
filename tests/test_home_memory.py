@@ -28,6 +28,8 @@ PAST = "2000-01-01T00:00:00+00:00"
 
 
 def save_temp_state(path: Path, state: dict) -> None:
+    # Each recommendation case installs an independent fixture, not a stale update.
+    path.unlink(missing_ok=True)
     save_state(path, state)
 
 

@@ -170,6 +170,9 @@ class ReliabilityTests(unittest.TestCase):
                     "answers": [],
                 }
             )
+            # Late autosave of a completed attempt must not resurrect its checkpoint.
+            self.assertIsNone(session_checkpoints({"state_path": state_path})["checkpoints"]["lesson"])
+            lesson_start({"state_path": state_path, "language": "Spanish"})
             self.assertTrue(session_checkpoints({"state_path": state_path})["checkpoints"]["lesson"])
             lesson_checkpoint_discard({"state_path": state_path})
             self.assertIsNone(session_checkpoints({"state_path": state_path})["checkpoints"]["lesson"])
