@@ -1,59 +1,7 @@
-# Plan
+# Current plan
 
-## Goal
-Create a demoable agentic language learning app with Lesson Mode and Conversation Mode. Both modes read local learner state, adapt to current ability, update progress, and make agent decisions visible during a judging demo.
+The core lesson/conversation loop, per-language state, spaced repetition, onboarding, memory controls, packaging path, and durable/retryable session completion are implemented.
 
-## MVP Shape
-- Python CLI loop for a reliable judging demo.
-- Local state in `data/progress.json`.
-- Autonomous demo mode that simulates learner answers so the loop can run unattended for 5-10 minutes.
-- Interactive mode for a real learner.
-- Standalone fullscreen Electron desktop app for manual testing outside the browser.
-- Conversation mode: a FaceTime-like tutor that initiates and steers spoken/chat conversation based on learner ability, with video optional.
-- Video-on conversation can use an object/image context such as "apple" to keep the target-language conversation grounded.
-- Optional Gradio UI when the dependency is installed, with console fallback.
-- OpenAI-backed generation for real lessons and conversations; mocked providers are used only in tests/CI.
+Remaining work is maintained in the [product roadmap](docs/FLUENTAI_LIMITLESS_IDEAL.md#remaining-roadmap). Use the [architecture](docs/GAP_AND_DESIGN.md), [curriculum](docs/CURRICULUM_DESIGN.md), [privacy](docs/ONBOARDING_HOME_DESIGN.md), and [packaging](docs/PACKAGING_DESIGN.md) documents for current decisions and boundaries.
 
-## Build Steps
-- Scaffold project docs and concise Goal-mode instructions. Done.
-- Implement local learner state model. Done.
-- Implement lesson generation, quiz generation, evaluation, and adaptation. Done.
-- Add a CLI loop with duration and interval settings. Done.
-- Add a smoke test or command that proves state updates. Done.
-- Add optional Gradio UI fallback. Done.
-- Add Conversation Mode state, turn loop, adaptive topic steering, video-object handling, and memory updates. Done.
-- Add `.env` loading and OpenAI Responses API support for lesson enhancement and conversation tutor utterances. Done.
-- Add no-dependency local web app for browser testing. Done.
-- Add standalone fullscreen Electron desktop app. Done.
-- Replace transcript-only desktop output with real lesson quiz submission and turn-by-turn conversation. Done.
-- Apply approved red Duolingo-inspired Demo Studio UI to the Electron and browser app. Done.
-- Polish Lesson Mode UI and make Conversation Mode voice-first with text fallback. Done.
-- Add OpenAI Realtime voice-agent integration for speech-to-speech conversation. Done.
-- Put voice-only and video calls in the main Conversation Mode stage instead of a side panel. Done.
-- Replace typed video-object demo labels with OpenAI camera-frame recognition. Done.
-- Stabilize call/video/text fallback UX after live app testing. Done.
-- Make video mode use the live camera feed with recurring OpenAI vision updates and filter synthetic green test feeds. Done.
-- Remove model-name UI copy and improve English-help responsiveness in tutor conversation. Done.
-- Add Hindi, Spanish, and French language selection across lessons, text fallback, realtime voice, and camera-context prompts. Done.
-- Make the visible agent decision log collapsible. Done.
-- Migrate Lesson and Conversation state call sites to state schema v2 helpers and remove temporary v1 compatibility mirrors. Done.
-
-## Next
-- Add spaced repetition scheduling. Done.
-- Implement WP4/WP5: lesson-selection reasons, quiz error categories, OpenAI grading override, and lesson-driven mistake memory. Done.
-- Implement WP6/WP7: lesson-to-conversation goals, conversation mistakes feeding next lessons, and persistent post-call summaries for text/web/CLI/voice. Done.
-- Add richer browser/desktop regression tests for voice and camera behavior.
-- Tune Realtime voice turn-taking and English-help behavior for natural language-learning conversations. Done.
-- Implement WP4 Home workspace, memory inspector/export/reset/delete controls, and privacy-safe memory payloads.
-- Packaging steps 2/3: add API key manager, bridge validation, safe-storage/session key handling, and corrupt progress recovery.
-- Packaging step 6 reliability pass: realtime refresh, renderer timeouts, model-failure copy, empty-tutor recovery, lesson/call checkpoints, and camera voice-only fallback. Done.
-- Fix acceptance-run defects: packaged bridge Realtime SSL certificate setup and provider-graded Conversation mistake memory. Done.
-- Final Phase 2/6 polish: phrase listening, pronunciation/culture lesson cards, and post-call pronunciation practice note. Done.
-
-## Approved audit fixes (2026-09-06)
-- Delete managed learner memory completely and reject stale session writes. Done.
-- Finalize calls consistently across navigation, language changes and window close; retain failed saves for retry. Done.
-- Commit progress through cross-process transactions and atomic file replacement. Done.
-- Deduplicate lesson submission before grading and progress updates. Done.
-- Skip unchanged camera frames before inference, with bounded refresh and explicit capture. Done.
-- Run concurrency/privacy/session regressions, existing suites, lint and installed-package smoke. Done; hardware camera/window acceptance remains manual.
+For each change, verify its behavior with the relevant tests and update these concise documents if the contract changes. Use temporary learner state for verification. Keep actual validation evidence and unresolved acceptance limits in [notes](notes.md).

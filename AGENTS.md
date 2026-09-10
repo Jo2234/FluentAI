@@ -20,8 +20,8 @@ Conversation Mode:
 ## Goal Mode Orchestration
 - Treat Goal mode as a persistent completion contract: state the outcome, evidence of success, constraints, and stopping conditions before long-running work.
 - Follow the Codex Goals pattern from https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex: keep the objective visible, verify progress from artifacts or tests, and choose the next useful action from evidence.
-- Keep `plan.md` as the current plan and `notes.md` as the compact memory of actual progress, decisions, user preferences, and important facts to preserve across turns.
-- The main goal orchestrator must write actual progress and important things to remember in `notes.md` whenever meaningful work is completed or priorities change.
+- Keep `plan.md` as the current plan and `notes.md` as a concise record of durable decisions and dated validation evidence. Current architecture, privacy, curriculum, packaging, limitations, and roadmap are linked from `plan.md`; update those documents when behavior changes.
+- Record meaningful validation results and unresolved acceptance limits in `notes.md`; avoid accumulating task-by-task construction logs or completed roadmap items.
 - If another user or agent modifies `plan.md` midway, stay calm, reread it, adapt Goal mode to the updated plan, and continue from the newest valid intent instead of fighting the change.
 - Keep all project documents concise. Prefer short bullets with concrete facts over long narrative.
 

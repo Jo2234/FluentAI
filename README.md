@@ -127,7 +127,7 @@ Build a macOS `.app` bundle:
 
 ```bash
 npm run build:app
-open dist/FluentAI.app
+open dist/mac-arm64/FluentAI.app  # Apple Silicon; use the path reported by the build
 ```
 
 The desktop app calls the same Python bridge/API as the CLI and web UI, so demo behavior stays consistent.
@@ -169,9 +169,12 @@ tests/                  unittest suite for core, bridge, and web endpoints
 data/progress.json      demo learner memory
 ```
 
+## Design and limitations
+
+See [architecture and memory](docs/GAP_AND_DESIGN.md), [privacy controls](docs/ONBOARDING_HOME_DESIGN.md), [curriculum](docs/CURRICULUM_DESIGN.md), and [packaging](docs/PACKAGING_DESIGN.md). The [product direction](docs/FLUENTAI_LIMITLESS_IDEAL.md) separates implemented behavior from limitations and remaining work; [notes](notes.md) preserves historical validation and provenance.
+
 ## Roadmap
 
-- Add spaced repetition scheduling.
 - Add richer lesson packs for Hindi and French.
 - Add stable browser-based voice regression tests with mocked Realtime events.
 - Add camera-frame fixtures for vision-context tests.
