@@ -9,7 +9,15 @@ from fluent_ai.openai_provider import OpenAIProvider, _safe_error
 class ProjectContractTests(unittest.TestCase):
     def test_required_demo_files_exist(self):
         root = Path(__file__).resolve().parents[1]
-        for relative in [".env.example", "macos/desktop_app.py", "scripts/smoke_demo.py", ".github/workflows/smoke.yml"]:
+        for relative in [
+            ".env.example",
+            "desktop/electron/main.js",
+            "desktop/electron/preload.js",
+            "desktop/electron/renderer.html",
+            "fluent_ai/desktop_bridge.py",
+            "scripts/smoke_demo.py",
+            ".github/workflows/smoke.yml",
+        ]:
             self.assertTrue((root / relative).exists(), relative)
 
     def test_openai_status_is_non_secret_and_model_aware(self):
