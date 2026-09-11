@@ -4,6 +4,12 @@ FluentAI is an OpenAI-powered agentic language-learning demo. It feels like a co
 
 FluentAI now requires `OPENAI_API_KEY` for real lesson and conversation runs. Tests use mocked OpenAI responses so CI never needs secrets.
 
+[![Current FluentAI lesson screen — mocked model responses](docs/media/current-lesson.png)](docs/media/workflow-demo.mp4)
+
+**[Watch the 83-second workflow demo](docs/media/workflow-demo.mp4)** · [Download MP4](https://raw.githubusercontent.com/Jo2234/FluentAI/main/docs/media/workflow-demo.mp4) · [Reproduce the recording](docs/DEMO.md)
+
+This is the current browser app with **mocked model responses and temporary learner memory**, labelled throughout the recording. It shows a lesson, a deliberate quiz mistake, saved XP and spaced review, text conversation, and progress surviving reload. It demonstrates the interface and state flow; live model quality, voice, and camera behavior are not shown.
+
 ## What works now
 
 - **Lesson Mode**: personalized mini lesson, vocabulary, grammar, examples, adaptive quiz, grading, XP, weak-topic updates.
@@ -178,3 +184,7 @@ See [architecture and memory](docs/GAP_AND_DESIGN.md), [privacy controls](docs/O
 - Add richer lesson packs for Hindi and French.
 - Add stable browser-based voice regression tests with mocked Realtime events.
 - Add camera-frame fixtures for vision-context tests.
+
+## License
+
+[MIT](LICENSE), copyright Johan Vaz. Dependencies and third-party materials retain their own licenses and notices.

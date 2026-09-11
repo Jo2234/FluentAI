@@ -24,3 +24,7 @@ Current behavior is documented in [architecture](docs/GAP_AND_DESIGN.md), [curri
 ## Provenance
 
 The full construction log and original five design proposals remain available in [the pre-cleanup Git snapshot](https://github.com/Jo2234/FluentAI/tree/d923a6a49243ed19cbad3c3470e165157f2c34b0). In that snapshot, `notes.md` records dated work and validation, and `docs/` contains the original north-star, schema, onboarding, curriculum, and packaging proposals. Their work-package assignments, future-tense descriptions, and old source line numbers are historical, not current implementation instructions. Git history retains authorship and the evolution of those decisions.
+
+## Portfolio recording (2026-09-11)
+
+Added a current-app screenshot and 83-second workflow recording using a labelled mock-provider harness and temporary learner data. Real bridge/UI checks verify quiz XP, review scheduling, and persistence after reload. The recording is not evidence of live model, voice, camera, or signed-app quality. Python/JS regressions and Ruff passed; see [demo reproduction and provenance](docs/DEMO.md).

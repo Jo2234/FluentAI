@@ -1,0 +1,20 @@
+{
+  "source_commit": "85241bc625a2435324fffeca0bda2b0847d3f143",
+  "duration_seconds": 82.7,
+  "size_bytes": 1312712,
+  "viewport": "1440x1000",
+  "model_boundary": "Mocked Python provider; actual renderer, bridge, grading, state persistence, and review scheduling",
+  "external_browser_requests": "Blocked",
+  "checks": [
+    "Lesson awarded XP",
+    "Review queue populated",
+    "XP and review queue survive page reload",
+    "No browser errors or failed bridge responses"
+  ],
+  "excluded": [
+    "Live model quality",
+    "Realtime voice",
+    "Camera",
+    "Signed desktop distribution"
+  ]
+}
