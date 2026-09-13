@@ -28,3 +28,5 @@ The full construction log and original five design proposals remain available in
 ## Portfolio recording (2026-09-11)
 
 Added a current-app screenshot and 83-second workflow recording using a labelled mock-provider harness and temporary learner data. Real bridge/UI checks verify quiz XP, review scheduling, and persistence after reload. The recording is not evidence of live model, voice, camera, or signed-app quality. Python/JS regressions and Ruff passed; see [demo reproduction and provenance](docs/DEMO.md).
+
+The same recording gained explanatory synthetic narration and captions on 2026-09-13. Video packets and timing remain unchanged; AAC audio, ten cue windows, and source/output hashes were verified. This is a media edit, not acceptance of the app's Realtime voice feature.

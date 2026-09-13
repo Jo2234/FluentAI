@@ -1,0 +1,56 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:06.047
+Fluent A I links lessons with learner memory.
+This demo uses scripted model responses.
+
+2
+00:00:07.800 --> 00:00:13.176
+A temporary learner profile opens a past-tense
+lesson, with a visible selection reason.
+
+3
+00:00:14.800 --> 00:00:24.464
+The learner answers six questions, mixing
+vocabulary, sentences, and translation. One
+answer is deliberately wrong so we can follow
+the feedback.
+
+4
+00:00:26.500 --> 00:00:32.175
+Five answers are correct. The mistake gets
+feedback and becomes a scheduled review item.
+
+5
+00:00:34.000 --> 00:00:39.227
+Back home, the score, experience points, and
+review queue reflect the completed lesson.
+
+6
+00:00:41.800 --> 00:00:45.021
+Now text practice picks up the same past-tense
+topic.
+
+7
+00:00:48.000 --> 00:00:51.947
+A short Spanish reply receives feedback and a
+follow-up prompt.
+
+8
+00:00:54.000 --> 00:01:00.613
+A second reply continues the exchange. These are
+scripted responses, exercising the app's
+practice workflow.
+
+9
+00:01:02.000 --> 00:01:07.675
+The memory inspector exposes the saved profile,
+skills, topic scores, and mistakes.
+
+10
+00:01:10.000 --> 00:01:20.176
+Reloading keeps the lesson result and review
+queue. This demonstrates saved progress across
+the workflow; live voice and model quality are
+outside this recording.
