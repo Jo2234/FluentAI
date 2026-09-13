@@ -1,23 +1,35 @@
 {
-  "source_commit": "85241bc625a2435324fffeca0bda2b0847d3f143",
-  "duration_seconds": 82.7,
-  "size_bytes": 2226409,
-  "viewport": "1440x1000",
-  "model_boundary": "Mocked Python provider; actual renderer, bridge, grading, state persistence, and review scheduling",
-  "external_browser_requests": "Blocked",
-  "checks": [
-    "Lesson awarded XP",
-    "Review queue populated",
-    "XP and review queue survive page reload",
-    "No browser errors or failed bridge responses"
-  ],
+  "source_commit": "3aff411514bd90f0fe887d02c66714b10b08bb30",
+  "api_calls": 5,
+  "totals": {
+    "input_tokens": 2136,
+    "output_tokens": 623,
+    "total_tokens": 2759
+  },
+  "capture": "Continuous Chromium browser renderer; actual production bridge and OpenAIProvider; SDK response creation wrapped only to observe unchanged requests/responses. No response substitution or fixtures.",
+  "state": "Disposable default Spanish learner; onboarding and placement marked complete before capture. Initial-state.json retains exact defaults. No private existing learner state used.",
+  "editing": "Cropped top 48px recording-only banner; no timeline cuts, no synthesized UI, no speed changes.",
   "excluded": [
-    "Live model quality",
     "Realtime voice",
+    "Microphone",
     "Camera",
-    "Signed desktop distribution"
+    "Desktop packaging"
   ],
-  "original_capture_size_bytes": 1312712,
-  "sha256": "4cf66e258ca8003fb10239d44e62486a27065febecdaa2e46816d9c887585d73",
-  "post_production": "Synthetic explanatory narration and captions added; see narration.json. In-app realtime voice remains excluded."
+  "checks": [
+    "All five real Responses calls completed",
+    "Lesson score 5/6",
+    "55 XP persisted after reload",
+    "Review queue grew from 0 to 2 after lesson to 3 after tutor correction",
+    "No browser errors or failed bridge responses",
+    "133 Python tests without skips",
+    "11 JavaScript renderer scenarios and syntax/redaction checks passed"
+  ],
+  "video_duration_seconds": 93.4,
+  "viewport": "1440x1000",
+  "output_dimensions": "1440x952",
+  "recorded_at": "2026-09-13",
+  "provider": "OpenAI Responses API",
+  "model": "gpt-5.5-2026-04-23",
+  "fixture_provider": false,
+  "narrated_video_sha256": "725b096f558da1ff4a15e94e86659abc8f06df6b9a2b558a7ad9e954c92bfb8e"
 }
