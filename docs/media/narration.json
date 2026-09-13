@@ -1,87 +1,77 @@
 {
   "generated_at": "2026-09-13",
-  "engine": "kokoro-onnx 0.6.1 / Kokoro v1.0",
+  "source_video_sha256": "1e09bebc39ea6a6488e86d78d8f512c65af28f2db27a98e520fd26b2b6f39f4f",
+  "output_video_sha256": "725b096f558da1ff4a15e94e86659abc8f06df6b9a2b558a7ad9e954c92bfb8e",
+  "duration_seconds": 93.4,
+  "engine": "Kokoro v1.0 / kokoro-onnx 0.6.1",
   "voice": "af_heart",
-  "language": "en-US",
-  "purpose": "Synthetic explanatory voiceover added in post-production; not app-generated speech.",
-  "source_video_sha256": "0507e4e7f6e495552f4c7d7c065b642256236b7af1ef1668476f3d02231595ba",
-  "output_video_sha256": "4cf66e258ca8003fb10239d44e62486a27065febecdaa2e46816d9c887585d73",
-  "source_duration_seconds": 82.7,
-  "video_stream": "Copied unchanged; no cuts or speed changes.",
-  "audio_codec": "AAC",
-  "audio_sample_rate": 24000,
+  "purpose": "Explanatory voiceover over a recording of real API-backed app execution.",
+  "video_stream": "Copied unchanged from the supplied recording; see capture provenance for edits.",
+  "app_audio": "No source app audio",
   "model_source": "https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0",
-  "model_license": "Apache-2.0",
   "cues": [
     {
-      "start": 0.5,
-      "end": 7.2,
-      "text": "Fluent A I links lessons with learner memory. This demo uses scripted model responses.",
-      "actual_end": 6.047,
-      "speed": 0.95
+      "start": 2.5,
+      "end": 9.0,
+      "text": "FluentAI remembers your level and weak topics. This lesson focuses on the Spanish past tense.",
+      "actual_end": 8.601,
+      "speed": 0.97
     },
     {
-      "start": 7.8,
-      "end": 14.2,
-      "text": "A temporary learner profile opens a past-tense lesson, with a visible selection reason.",
-      "actual_end": 13.176,
-      "speed": 0.95
+      "start": 13.5,
+      "end": 22.5,
+      "text": "OpenAI builds a lesson around yesterday, with useful vocabulary, examples, and six practice questions.",
+      "actual_end": 21.009,
+      "speed": 0.97
     },
     {
-      "start": 14.8,
-      "end": 25.8,
-      "text": "The learner answers six questions, mixing vocabulary, sentences, and translation. One answer is deliberately wrong so we can follow the feedback.",
-      "actual_end": 24.464,
-      "speed": 0.95
+      "start": 23.0,
+      "end": 31.0,
+      "text": "Here, I answer the quiz and deliberately write ma\u00f1ana where the question asks for yesterday.",
+      "actual_end": 28.525,
+      "speed": 0.97
     },
     {
-      "start": 26.5,
-      "end": 33.3,
-      "text": "Five answers are correct. The mistake gets feedback and becomes a scheduled review item.",
-      "actual_end": 32.175,
-      "speed": 0.95
+      "start": 35.0,
+      "end": 44.0,
+      "text": "The app explains the mistake, awards fifty-five experience points, and adds the weak areas to the review queue.",
+      "actual_end": 41.677,
+      "speed": 0.97
     },
     {
-      "start": 34.0,
-      "end": 40.8,
-      "text": "Back home, the score, experience points, and review queue reflect the completed lesson.",
-      "actual_end": 39.227,
-      "speed": 0.95
+      "start": 47.5,
+      "end": 56.5,
+      "text": "The text tutor picks up the same goal, asking what I did yesterday to reinforce the lesson.",
+      "actual_end": 52.94,
+      "speed": 0.97
     },
     {
-      "start": 41.8,
-      "end": 47.3,
-      "text": "Now text practice picks up the same past-tense topic.",
-      "actual_end": 45.021,
-      "speed": 0.95
+      "start": 57.0,
+      "end": 64.0,
+      "text": "I reply with another deliberate error: using the present tense, voy, after ayer.",
+      "actual_end": 62.013,
+      "speed": 0.97
     },
     {
-      "start": 48.0,
-      "end": 53.4,
-      "text": "A short Spanish reply receives feedback and a follow-up prompt.",
-      "actual_end": 51.947,
-      "speed": 0.95
+      "start": 65.0,
+      "end": 74.0,
+      "text": "The tutor corrects voy to fui, preserves the meaning, and asks what I bought. It saves that correction for review.",
+      "actual_end": 71.997,
+      "speed": 0.97
     },
     {
-      "start": 54.0,
-      "end": 60.8,
-      "text": "A second reply continues the exchange. These are scripted responses, exercising the app's practice workflow.",
-      "actual_end": 60.613,
-      "speed": 1.083
+      "start": 78.0,
+      "end": 85.0,
+      "text": "The memory inspector shows the saved learner state, including the correction and review queue.",
+      "actual_end": 83.141,
+      "speed": 0.97
     },
     {
-      "start": 62.0,
-      "end": 68.8,
-      "text": "The memory inspector exposes the saved profile, skills, topic scores, and mistakes.",
-      "actual_end": 67.675,
-      "speed": 0.95
-    },
-    {
-      "start": 70.0,
-      "end": 81.8,
-      "text": "Reloading keeps the lesson result and review queue. This demonstrates saved progress across the workflow; live voice and model quality are outside this recording.",
-      "actual_end": 80.176,
-      "speed": 0.95
+      "start": 85.5,
+      "end": 92.5,
+      "text": "Reloading keeps the experience points and scheduled reviews, ready for the next session.",
+      "actual_end": 90.428,
+      "speed": 0.97
     }
   ]
 }

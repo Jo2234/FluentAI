@@ -1,47 +1,35 @@
-# Recorded workflow demo
+# Live API walkthrough
 
-[Watch the MP4](media/workflow-demo.mp4) or inspect the [current lesson screenshot](media/current-lesson.png). Both are captured from the current shared browser/Electron renderer served through the real Python HTTP bridge, not from the historical mockups.
+[Watch the narrated recording](media/workflow-demo.mp4) · [Captions](media/narration.vtt) · [Capture metadata](media/recording.json)
 
-## What the recording proves
+The 93-second recording runs the production Python bridge and shared browser renderer against OpenAI's Responses API. Five requests completed using `gpt-5.5-2026-04-23`, consuming 2,136 input and 623 output tokens. Responses were observed without modification; there was no fixture provider or response substitution.
 
-| Approximate time | Workflow |
+| Time | Visible behavior |
 | --- | --- |
-| 0–6 s | Home loads an isolated learner profile with no prior practice |
-| 6–26 s | Start a lesson from weak-topic memory; answer six quiz questions |
-| 26–41 s | Submit one deliberate mistake; see feedback, XP, and scheduled review |
-| 41–61 s | Practice two text conversation replies using the same learner memory |
-| 61–83 s | Inspect memory, reload the app, and see persisted progress |
+| 2–13 s | Load a fresh Spanish learner and start a lesson |
+| 13–34 s | Read generated vocabulary and answer six questions, including one deliberate mistake |
+| 35–46 s | See specific feedback, a 5/6 result, 55 XP, and scheduled review |
+| 47–77 s | Practice with the text tutor; it corrects the tense and asks a follow-up question |
+| 78–93 s | Inspect saved memory and reload; 55 XP and three reviews persist |
 
-The yellow banner remains visible throughout: **mocked model responses, temporary learner profile, no API calls**. The Python harness replaces the provider with deterministic curriculum/tutor scaffolding. The renderer, HTTP bridge, local grading, transaction logic, review scheduling, and persistence remain real. It changes provider-success log wording so the recording does not claim a live OpenAI call.
+Capture used a disposable default A1 profile with onboarding and placement marked complete before recording. It did not read existing personal learner data. The top 48 pixels of a recording-only status banner were cropped from the final 1440×952 video; the timeline is continuous, with no speed changes or generated UI. Real calls, replies, timings, and initial/final state were retained privately for verification. Credentials and request headers are excluded from published artifacts.
 
-This is workflow evidence, not a demonstration of OpenAI output quality, language-course quality, Realtime voice, camera accuracy, or desktop signing/distribution. The screenshot includes the same disclosure. No microphone/camera permission is requested. No personal profile, `.env`, or API credential is needed.
+English narration was added after capture using the generic Kokoro `af_heart` voice. Its [timed script and hashes](media/narration.json) describe the actual visible results. This walkthrough uses text conversation; Realtime voice, microphone, camera, and desktop packaging are outside its scope.
 
-## Reproduce
+## Run the real app
 
-Use Python 3.10+, Node.js, FFmpeg (`ffmpeg` and `ffprobe` on PATH), and a Playwright Chromium installation. From the repository root:
+Install the project as described in the root README, configure `OPENAI_API_KEY` in the server environment, and start:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev]'
-npm ci
-npm install --no-save --package-lock=false playwright@1.62.1
-npx playwright install chromium
-node scripts/record_portfolio_demo.cjs
+python -m fluent_ai.web --port 7860
 ```
 
-The recording script starts `scripts/portfolio_demo.py` on localhost, creates a disposable profile, drives visible controls, blocks external browser requests, and shuts down the server afterward. It checks for browser/bridge errors, quiz XP, scheduled review, and persistence after reload. It writes `docs/media/current-lesson.png`, `workflow-demo.mp4`, and `recording.json`; FFmpeg converts the captured browser video to a silent H.264 MP4. This recreates the silent base recording with on-screen chapter labels; the published MP4 additionally contains the post-production narration described below.
+Open `http://127.0.0.1:7860`, use a separate learner profile, complete placement, then try a lesson and text conversation. The recording used `OPENAI_MODEL=gpt-5.5`, reasoning effort `low`, and verbosity `low`. Model-generated lessons, replies, and timings vary; inspect the actual results when narrating a new capture. Paid calls are required for ordinary app use.
 
-Optional environment overrides: `PYTHON_EXECUTABLE` for the interpreter, `CHROMIUM_EXECUTABLE` for an already installed browser, and `DEMO_PORT` for an available localhost port (default 7862). An existing Playwright installation can be resolved through `NODE_PATH`. The checked recording reused an installed Chromium binary; the commands above install Playwright's own compatible browser for a fresh reproduction. Timing, session IDs, and timestamps may vary; `recording.json` records the actual duration and source commit.
+## Offline development harness
 
-To inspect the workflow manually, run `python scripts/portfolio_demo.py` and open `http://127.0.0.1:7861`. Ctrl-C deletes the temporary state. This explicit development harness is not a production offline-tutor mode; ordinary app entrypoints continue to require OpenAI.
+`scripts/portfolio_demo.py` and `scripts/record_portfolio_demo.cjs` remain available as explicit mock-provider development tools. They write the older labelled workflow capture under ignored `cache/offline-recording/`, keeping it separate from the published live API assets. Tests continue to mock providers so CI requires no credentials or paid requests.
 
-## Checks and provenance
+## Validation
 
-The screenshot and video are generated by the two scripts above. `recording.json` identifies the pre-recording source commit and automated assertions. The Git commit containing the artifacts also contains the exact harness and driver. Original design mockups and their notices remain in `mockups/`. The repository's MIT license covers Johan Vaz's original work; third-party dependencies retain their own terms.
-
-## Explanatory narration
-
-English voiceover and optional embedded captions explain the committed recording. [Timed cue text and provenance](media/narration.json) and [WebVTT captions](media/narration.vtt) accompany the MP4. The generic synthetic Kokoro `af_heart` voice was generated locally after capture; it is not FluentAI's Realtime voice feature.
-
-The original H.264 video stream and its timing are unchanged. For another recording, re-time the cues to the captured actions, generate narration within those windows, and mux audio/captions while copying the video stream. The capture command does not generate speech. The narration manifest preserves source/output hashes, and Git history retains the silent original. Validation on 13 September 2026 confirmed unchanged video packets, AAC narration, ten captions, and all speech ending inside its allotted window.
+The live capture verified five completed Responses requests, specific wrong-answer feedback, three scheduled reviews, and saved progress after reload, with no browser errors or failed bridge responses. Separately, 133 Python tests passed without skips and all 11 JavaScript renderer scenarios passed. The lesson screenshot comes from the new API-backed recording. Original mockups, earlier captures, and historical validation remain in Git history.

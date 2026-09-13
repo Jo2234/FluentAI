@@ -4,11 +4,11 @@ FluentAI is an OpenAI-powered agentic language-learning demo. It feels like a co
 
 FluentAI now requires `OPENAI_API_KEY` for real lesson and conversation runs. Tests use mocked OpenAI responses so CI never needs secrets.
 
-[![Current FluentAI lesson screen — mocked model responses](docs/media/current-lesson.png)](docs/media/workflow-demo.mp4)
+[![FluentAI lesson generated through OpenAI](docs/media/current-lesson.png)](docs/media/workflow-demo.mp4)
 
-**[Watch the narrated 83-second workflow demo](docs/media/workflow-demo.mp4)** · [Download MP4](https://raw.githubusercontent.com/Jo2234/FluentAI/main/docs/media/workflow-demo.mp4) · [Reproduce the recording](docs/DEMO.md)
+**[Watch the narrated 93-second walkthrough](docs/media/workflow-demo.mp4)** · [Download MP4](https://raw.githubusercontent.com/Jo2234/FluentAI/main/docs/media/workflow-demo.mp4) · [Reproduce the recording](docs/DEMO.md)
 
-This is the current browser app with **mocked model responses and temporary learner memory**, labelled throughout the recording. It shows a lesson, a deliberate quiz mistake, saved XP and spaced review, text conversation, and progress surviving reload. It demonstrates the interface and state flow; live model quality, in-app voice, and camera behavior are not shown. Explanatory English narration was added after recording. [Captions](docs/media/narration.vtt) · [Narration script](docs/media/narration.json).
+This recording runs the real browser app against OpenAI. It shows a generated Spanish lesson, specific quiz feedback, an adaptive text conversation, and learner memory surviving reload. Five Responses API calls completed during capture. English narration explains the visible actions; optional captions and the [narration script](docs/media/narration.json) accompany the video. This recording uses text conversation; microphone, Realtime voice, and camera are outside its scope. [Captions](docs/media/narration.vtt).
 
 ## What works now
 

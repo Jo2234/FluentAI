@@ -30,3 +30,7 @@ The full construction log and original five design proposals remain available in
 Added a current-app screenshot and 83-second workflow recording using a labelled mock-provider harness and temporary learner data. Real bridge/UI checks verify quiz XP, review scheduling, and persistence after reload. The recording is not evidence of live model, voice, camera, or signed-app quality. Python/JS regressions and Ruff passed; see [demo reproduction and provenance](docs/DEMO.md).
 
 The same recording gained explanatory synthetic narration and captions on 2026-09-13. Video packets and timing remain unchanged; AAC audio, ten cue windows, and source/output hashes were verified. This is a media edit, not acceptance of the app's Realtime voice feature.
+
+## Live API recording (2026-09-13)
+
+Replaced the portfolio video and screenshot with a continuous real-provider capture: five completed GPT-5.5 Responses calls, generated lesson, specific quiz/tutor feedback, and persistence of 55 XP plus three reviews. Used a disposable A1 profile, with no existing private learner data. Nine explanatory narration cues accompany the 93-second video. Validation passed 133 Python tests and 11 JavaScript renderer scenarios; microphone, camera, and Realtime voice were outside this recording's scope. See [capture provenance](docs/DEMO.md).
