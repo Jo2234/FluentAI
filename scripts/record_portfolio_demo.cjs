@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
 
 (async () => {
   const root = path.resolve(__dirname, '..');
-  const output = path.join(root, 'docs', 'media');
+  const output = path.join(root, 'cache', 'offline-recording');
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'fluentai-video-'));
   const port = process.env.DEMO_PORT || '7862';
   const url = `http://127.0.0.1:${port}`;

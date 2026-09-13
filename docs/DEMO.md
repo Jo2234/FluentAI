@@ -28,7 +28,7 @@ Open `http://127.0.0.1:7860`, use a separate learner profile, complete placement
 
 ## Offline development harness
 
-`scripts/portfolio_demo.py` and `scripts/record_portfolio_demo.cjs` remain available as explicit mock-provider development tools. They generate the older labelled workflow capture and do not reproduce this live API recording. Do not use their output to replace these published assets without identifying its provenance. Tests continue to mock providers so CI requires no credentials or paid requests.
+`scripts/portfolio_demo.py` and `scripts/record_portfolio_demo.cjs` remain available as explicit mock-provider development tools. They write the older labelled workflow capture under ignored `cache/offline-recording/`, keeping it separate from the published live API assets. Tests continue to mock providers so CI requires no credentials or paid requests.
 
 ## Validation
 
