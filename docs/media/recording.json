@@ -1,7 +1,7 @@
 {
   "source_commit": "85241bc625a2435324fffeca0bda2b0847d3f143",
   "duration_seconds": 82.7,
-  "size_bytes": 1312712,
+  "size_bytes": 2226409,
   "viewport": "1440x1000",
   "model_boundary": "Mocked Python provider; actual renderer, bridge, grading, state persistence, and review scheduling",
   "external_browser_requests": "Blocked",
@@ -16,5 +16,8 @@
     "Realtime voice",
     "Camera",
     "Signed desktop distribution"
-  ]
+  ],
+  "original_capture_size_bytes": 1312712,
+  "sha256": "4cf66e258ca8003fb10239d44e62486a27065febecdaa2e46816d9c887585d73",
+  "post_production": "Synthetic explanatory narration and captions added; see narration.json. In-app realtime voice remains excluded."
 }

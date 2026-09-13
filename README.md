@@ -6,9 +6,9 @@ FluentAI now requires `OPENAI_API_KEY` for real lesson and conversation runs. Te
 
 [![Current FluentAI lesson screen — mocked model responses](docs/media/current-lesson.png)](docs/media/workflow-demo.mp4)
 
-**[Watch the 83-second workflow demo](docs/media/workflow-demo.mp4)** · [Download MP4](https://raw.githubusercontent.com/Jo2234/FluentAI/main/docs/media/workflow-demo.mp4) · [Reproduce the recording](docs/DEMO.md)
+**[Watch the narrated 83-second workflow demo](docs/media/workflow-demo.mp4)** · [Download MP4](https://raw.githubusercontent.com/Jo2234/FluentAI/main/docs/media/workflow-demo.mp4) · [Reproduce the recording](docs/DEMO.md)
 
-This is the current browser app with **mocked model responses and temporary learner memory**, labelled throughout the recording. It shows a lesson, a deliberate quiz mistake, saved XP and spaced review, text conversation, and progress surviving reload. It demonstrates the interface and state flow; live model quality, voice, and camera behavior are not shown.
+This is the current browser app with **mocked model responses and temporary learner memory**, labelled throughout the recording. It shows a lesson, a deliberate quiz mistake, saved XP and spaced review, text conversation, and progress surviving reload. It demonstrates the interface and state flow; live model quality, in-app voice, and camera behavior are not shown. Explanatory English narration was added after recording. [Captions](docs/media/narration.vtt) · [Narration script](docs/media/narration.json).
 
 ## What works now
 
