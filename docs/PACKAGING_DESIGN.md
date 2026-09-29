@@ -46,4 +46,4 @@ Keys can be validated through the bridge and persisted using Electron `safeStora
 
 ## Manual acceptance still required
 
-Use a clean macOS account with the repository inaccessible and an isolated profile. Verify double-click launch, first-run key entry, lesson submission and restart/resume, voice-only conversation, camera-denial recovery, navigation/language-change/window-close finalization, and export/delete controls. Mocked tests, bridge smokes, and a successful bundle build do not establish those hardware/window behaviors. Prior acceptance evidence and its limits are recorded in [notes](../notes.md).
+Use a clean macOS account with the repository inaccessible and an isolated profile. Verify double-click launch, first-run key entry, lesson submission and restart/resume, voice-only conversation, camera-denial recovery, navigation/language-change/window-close finalization, and export/delete controls. Mocked tests, bridge smokes, and a successful bundle build do not establish those hardware/window behaviors. Prior acceptance evidence and its limits are recorded in [notes](notes.md).

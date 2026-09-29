@@ -31,4 +31,4 @@ Memory should explain why the tutor chose an activity. Lesson and conversation p
 
 Spaced repetition, state-v2 migration, home/privacy controls, and durable session completion are implemented; they are not pending roadmap items.
 
-See [architecture and memory decisions](GAP_AND_DESIGN.md), [curriculum](CURRICULUM_DESIGN.md), and [historical evidence](../notes.md).
+See [architecture and memory decisions](GAP_AND_DESIGN.md), [curriculum](CURRICULUM_DESIGN.md), and [historical evidence](notes.md).

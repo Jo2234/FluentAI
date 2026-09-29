@@ -177,7 +177,7 @@ data/progress.json      demo learner memory
 
 ## Design and limitations
 
-See [architecture and memory](docs/GAP_AND_DESIGN.md), [privacy controls](docs/ONBOARDING_HOME_DESIGN.md), [curriculum](docs/CURRICULUM_DESIGN.md), and [packaging](docs/PACKAGING_DESIGN.md). The [product direction](docs/FLUENTAI_LIMITLESS_IDEAL.md) separates implemented behavior from limitations and remaining work; [notes](notes.md) preserves historical validation and provenance.
+See [architecture and memory](docs/GAP_AND_DESIGN.md), [privacy controls](docs/ONBOARDING_HOME_DESIGN.md), [curriculum](docs/CURRICULUM_DESIGN.md), and [packaging](docs/PACKAGING_DESIGN.md). The [product direction](docs/FLUENTAI_LIMITLESS_IDEAL.md) separates implemented behavior from limitations and remaining work; [notes](docs/notes.md) preserves historical validation and provenance.
 
 ## Roadmap
 
