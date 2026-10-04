@@ -21,6 +21,13 @@ Current behavior is documented in [architecture](GAP_AND_DESIGN.md), [curriculum
 - The PyInstaller bridge passed its outside-checkout status/missing-key/SDK-import smokes. Electron packaging succeeded using the installed lockfile-matching Electron distribution; ad-hoc signing and strict deep signature verification passed. The host required Command Line Tools via a per-command `DEVELOPER_DIR` because its selected Xcode loader was broken. The default Electron download was blocked by sandbox DNS; no source/build-config workaround was committed.
 - No paid API calls or physical-camera/clean-account GUI acceptance were performed.
 
+## Local web request security (2026-10-04)
+
+- Decision: the browser server is loopback-only. It validates Host/Origin/fetch metadata and requires a per-launch token for every API request, plus strict JSON bodies. This closes foreign-page `text/plain` POSTs to delete-all, provider, and other bridge routes, and DNS rebinding. Contract and migration: [architecture](GAP_AND_DESIGN.md#local-web-security).
+- Validation: socket-level tests cover every bridge command and the legacy lesson/conversation routes. They exercise foreign/null/cross-port/wrong-scheme Origin, cross-site fetch metadata, missing/wrong/stale/duplicate tokens, rebinding/invalid/duplicate Host, unsupported media types, bad/oversize/5,000-digit/superscript lengths, chunked bodies, malformed/non-object/NaN/deep JSON, and OPTIONS/PUT/DELETE/PATCH. Spies show rejected requests never reach state, providers, or dispatch, and files stay byte-identical. Unauthenticated malformed lengths keep their 403/421 status.
+- Authorized browser-shaped and originless requests persist disposable state. VM tests check that both the shared and fallback browser renderers send the token, and that Electron IPC makes no HTTP calls. 145 Python tests, JS checks, Ruff, and mocked smoke passed.
+- Limits: no real-browser, Electron window, camera, or paid-provider run was part of this validation. Intentional breaks are non-loopback `--host`, tokenless scripts, empty or non-object POST bodies, and plain `ThreadingHTTPServer` embedding.
+
 ## Provenance
 
 The full construction log and original five design proposals remain available in [the pre-cleanup Git snapshot](https://github.com/Jo2234/FluentAI/tree/d923a6a49243ed19cbad3c3470e165157f2c34b0). In that snapshot, `notes.md` records dated work and validation, and `docs/` contains the original north-star, schema, onboarding, curriculum, and packaging proposals. Their work-package assignments, future-tense descriptions, and old source line numbers are historical, not current implementation instructions. Git history retains authorship and the evolution of those decisions.

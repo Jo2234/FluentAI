@@ -28,7 +28,7 @@ Open `http://127.0.0.1:7860`, use a separate learner profile, complete placement
 
 ## Offline development harness
 
-`scripts/portfolio_demo.py` and `scripts/record_portfolio_demo.cjs` remain available as explicit mock-provider development tools. They write the older labelled workflow capture under ignored `cache/offline-recording/`, keeping it separate from the published live API assets. Tests continue to mock providers so CI requires no credentials or paid requests.
+`scripts/portfolio_demo.py` and `scripts/record_portfolio_demo.cjs` remain available as explicit mock-provider development tools. The harness uses `FluentAIServer`. The recorder copies the page's per-launch token into its direct API check. They write the older labelled workflow capture under ignored `cache/offline-recording/`, keeping it separate from the published live API assets. Tests continue to mock providers so CI requires no credentials or paid requests.
 
 ## Validation
 

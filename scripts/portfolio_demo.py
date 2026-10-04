@@ -70,7 +70,7 @@ def main():
         DemoHandler.state_path = path
         DemoHandler.language = "Spanish"
         with patch.object(web, "OpenAIProvider", DemoProvider), patch.object(desktop_bridge, "OpenAIProvider", DemoProvider):
-            with web.ThreadingHTTPServer(("127.0.0.1", args.port), DemoHandler) as server:
+            with web.FluentAIServer(("127.0.0.1", args.port), DemoHandler) as server:
                 print(f"Mocked portfolio recording: http://127.0.0.1:{args.port}", flush=True)
                 try:
                     server.serve_forever()
