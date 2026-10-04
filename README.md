@@ -120,7 +120,9 @@ Video context uses `OPENAI_VISION_MODEL`, defaulting to `gpt-4.1-mini` for faste
 python -m fluent_ai.web --port 7860
 ```
 
-Open `http://127.0.0.1:7860`. The UI exposes Lesson Mode, Conversation Mode, video on/off, visible object context, live profile state, and agent logs.
+Open `http://127.0.0.1:7860` (or `http://localhost:7860`). The UI exposes Lesson Mode, Conversation Mode, video on/off, visible object context, live profile state, and agent logs.
+
+The browser server is local-only and rejects other websites. See [local web security](docs/GAP_AND_DESIGN.md#local-web-security) for the token and request rules that scripts must follow.
 
 ## Desktop app
 

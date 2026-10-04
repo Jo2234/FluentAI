@@ -2460,10 +2460,14 @@
     }
 
     if (!window.fluentAI) {
+      // Browser mode only: fluent_ai.web injects a per-launch token into the
+      // served page. Electron uses preload IPC and never takes this path.
+      const apiToken = document.querySelector('meta[name="fluentai-api-token"]')?.content || "";
+
       async function bridge(command, payload, options = {}) {
         const response = await fetchWithTimeout(`/api/bridge/${command}`, {
           method: "POST",
-          headers: {"Content-Type": "application/json"},
+          headers: {"Content-Type": "application/json", "X-FluentAI-Token": apiToken},
           body: JSON.stringify(payload || {})
         }, { timeoutMs: 20000, retries: options.idempotent ? 1 : 0 });
         return response.json();

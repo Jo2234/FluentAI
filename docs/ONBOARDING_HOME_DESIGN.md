@@ -23,6 +23,8 @@ The schema's `privacy.local_only` describes local learner-memory storage. The ap
 
 Raw microphone recordings and raw camera video are not persisted as learner memory. Transcripts, corrections, session checkpoints, and camera summaries can contain personal context. Generated phrase audio is cached under `cache/tts` beside the state file and removed by delete-all. Camera sampling skips unchanged frames before inference, with explicit capture and a bounded refresh; fake test feeds must not become claimed real-world objects.
 
+The browser server only answers same-origin loopback requests that carry the per-launch app token. Other websites cannot read or delete memory through it (see [local web security](GAP_AND_DESIGN.md#local-web-security)). Any local process that can load the page can still obtain the token, just as it could read `data/` directly.
+
 The privacy fields document intent and supported controls; do not treat them as a general consent engine or a guarantee about provider retention. Keep API keys out of progress, exports, and logs. Electron key storage and precedence are described in [packaging](PACKAGING_DESIGN.md).
 
 ## Validation limits

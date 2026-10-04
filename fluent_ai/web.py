@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import hmac
+import html
 import json
-from dataclasses import asdict
+import re
+import secrets
+import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -17,6 +21,53 @@ from fluent_ai.state import state_transaction, active_language, conversation_mem
 
 
 MAX_JSON_BYTES = 64_000
+MAX_JSON_DEPTH = 64
+# The browser UI is served only to loopback clients. These names are matched
+# exactly (with the listening port), so attacker DNS names that rebind to
+# 127.0.0.1 are rejected by Host even when Origin matches that Host.
+LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+LOOPBACK_BIND_HOSTS = ("127.0.0.1", "localhost", "::1")
+TOKEN_HEADER = "X-FluentAI-Token"
+TOKEN_META = "fluentai-api-token"
+BRIDGE_PREFIX = "/api/bridge/"
+COMMAND_RE = re.compile(r"[a-z_]{1,64}")
+SAME_ORIGIN_FETCH_SITES = ("same-origin", "none")
+NO_STORE_HEADERS = (
+    ("Cache-Control", "no-store"),
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "no-referrer"),
+)
+# Pages carrying the API token must not be framed by another site (clickjacking).
+HTML_HEADERS = (("X-Frame-Options", "DENY"), ("Content-Security-Policy", "frame-ancestors 'none'"))
+
+
+class RequestRejected(Exception):
+    def __init__(self, status: int, code: str, message: str) -> None:
+        super().__init__(message)
+        self.status = status
+        self.code = code
+        self.message = message
+
+
+class FluentAIServer(ThreadingHTTPServer):
+    """Loopback HTTP server with a fresh API token for each launch."""
+
+    daemon_threads = True
+
+    def __init__(self, server_address: tuple[str, int], handler_class: type[BaseHTTPRequestHandler]) -> None:
+        if server_address[0] not in LOOPBACK_BIND_HOSTS:
+            raise ValueError(f"FluentAI web only binds to loopback hosts: {', '.join(LOOPBACK_BIND_HOSTS)}")
+        if server_address[0] == "::1":
+            self.address_family = socket.AF_INET6
+        super().__init__(server_address, handler_class)
+        self.api_token = secrets.token_urlsafe(32)
+        port = self.server_address[1]
+        authorities = {f"{host}:{port}" for host in LOOPBACK_HOSTS}
+        if port == 80:
+            authorities.update(LOOPBACK_HOSTS)
+        self.allowed_authorities = frozenset(authorities)
+        self.allowed_origins = frozenset(f"http://{authority}" for authority in authorities)
+
 
 HTML = """<!doctype html>
 <html lang="en">
@@ -184,21 +235,23 @@ HTML = """<!doctype html>
     const objectEl = document.getElementById("object");
     const preview = document.getElementById("videoPreview");
 
+    const apiToken = document.querySelector('meta[name="fluentai-api-token"]')?.content || "";
+
     async function postJSON(url, body) {
       output.textContent = "Running agents...";
       const response = await fetch(url, {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: {"Content-Type": "application/json", "X-FluentAI-Token": apiToken},
         body: JSON.stringify(body || {})
       });
       const data = await response.json();
-      output.textContent = data.text || JSON.stringify(data, null, 2);
+      output.textContent = data.text || data.error || JSON.stringify(data, null, 2);
     }
 
     async function loadStatus() {
-      const response = await fetch("/api/status");
+      const response = await fetch("/api/status", { headers: {"X-FluentAI-Token": apiToken} });
       const data = await response.json();
-      statusEl.textContent = data.status;
+      statusEl.textContent = data.status || data.error;
     }
 
     function updateVideoPreview() {
@@ -234,39 +287,61 @@ class FluentAIHandler(BaseHTTPRequestHandler):
     state_path = DEFAULT_PROGRESS_PATH
     language = "Spanish"
     renderer_path = Path(__file__).resolve().parent.parent / "desktop" / "electron" / "renderer.html"
+    timeout = 30
 
+    # Every request is checked in this order before any learner state is read,
+    # any provider is constructed, or any bridge command runs:
+    #   1. Host is an exact loopback authority on the listening port.
+    #   2. API requests: Origin (if sent) is that same loopback origin, fetch
+    #      metadata (if sent) is same-origin, and X-FluentAI-Token matches.
+    #   3. POST bodies are application/json, bounded, UTF-8 JSON objects.
     def do_GET(self) -> None:
-        if self.path == "/":
-            self._send_text(self._renderer_html(), "text/html")
+        try:
+            path = self._checked_path()
+            if path == "/":
+                self._send_html(self._with_token(self._renderer_html()))
+                return
+            if path not in ("/api/status", "/api/progress"):
+                raise RequestRejected(404, "not_found", "Not found.")
+            self._check_api_caller()
+        except RequestRejected as exc:
+            self._send_rejection(exc)
             return
-        if self.path == "/api/status":
+        if path == "/api/status":
             provider = OpenAIProvider()
             state = load_state(self.state_path, self.language)
             profile = profile_for(state, provider)
             status = f"{provider.status()} Level {profile['level']}; weak topics: {', '.join(profile['weak_topics'])}."
             self._send_json({"status": status})
             return
-        if self.path == "/api/progress":
-            self._send_json(load_state(self.state_path, self.language))
-            return
-        self.send_error(404)
+        self._send_json(load_state(self.state_path, self.language))
 
     def do_POST(self) -> None:
-        body = self._read_json()
-        if self.path.startswith("/api/bridge/"):
-            command = self.path.rsplit("/", 1)[-1]
+        self._body_consumed = False
+        try:
+            path = self._checked_path()
+            self._check_api_caller()
+            command = self._route_post(path)
+            body = self._read_json()
+        except RequestRejected as exc:
+            self._send_rejection(exc)
+            return
+        if command is not None:
             self._send_json(self._run_bridge_command(command, body))
             return
-        if self.path == "/api/lesson":
+        if path == "/api/lesson":
             self._send_json({"text": run_lesson_cycle(self.state_path, self.language)})
             return
-        if self.path == "/api/conversation":
-            turns = _bounded_int(body.get("turns", 4), 2, 8, 4)
-            video_on = body.get("video", "off") == "on"
-            video_object = str(body.get("object") or "").strip() or None
-            self._send_json({"text": run_conversation_cycle(self.state_path, self.language, turns, video_on, video_object)})
-            return
-        self.send_error(404)
+        turns = _bounded_int(body.get("turns", 4), 2, 8, 4)
+        video_on = body.get("video", "off") == "on"
+        video_object = str(body.get("object") or "").strip() or None
+        self._send_json({"text": run_conversation_cycle(self.state_path, self.language, turns, video_on, video_object)})
+
+    def do_OPTIONS(self) -> None:
+        # No CORS: preflights get no Access-Control-* grant.
+        self._send_rejection(RequestRejected(405, "method_not_allowed", "Method not allowed."))
+
+    do_PUT = do_PATCH = do_DELETE = do_OPTIONS
 
     def log_message(self, format: str, *args: Any) -> None:
         return
@@ -276,6 +351,56 @@ class FluentAIHandler(BaseHTTPRequestHandler):
             return self.renderer_path.read_text(encoding="utf-8")
         except OSError:
             return HTML
+
+    def _with_token(self, page: str) -> str:
+        meta = f'<meta name="{TOKEN_META}" content="{html.escape(self._server_token(), quote=True)}">'
+        if "<head>" in page:
+            return page.replace("<head>", f"<head>\n  {meta}", 1)
+        return meta + page
+
+    def _server_token(self) -> str:
+        token = getattr(self.server, "api_token", None)
+        if not isinstance(token, str) or not token:
+            # Plain ThreadingHTTPServer instances have no token; fail closed.
+            raise RequestRejected(500, "server_misconfigured", "Server has no API token; start it with FluentAIServer.")
+        return token
+
+    def _single_header(self, name: str) -> str | None:
+        values = self.headers.get_all(name) or []
+        if len(values) > 1:
+            raise RequestRejected(400, "duplicate_header", f"Duplicate {name} header.")
+        return values[0] if values else None
+
+    def _checked_path(self) -> str:
+        allowed = getattr(self.server, "allowed_authorities", frozenset())
+        host = self._single_header("Host")
+        if host is None or host.strip().lower() not in allowed:
+            raise RequestRejected(421, "invalid_host", "Requests must address this app on a loopback host and port.")
+        if not self.path.startswith("/") or self.path.startswith("//"):
+            raise RequestRejected(400, "invalid_path", "Invalid request path.")
+        return self.path.split("?", 1)[0]
+
+    def _check_api_caller(self) -> None:
+        origin = self._single_header("Origin")
+        if origin is not None and origin.strip().lower() not in getattr(self.server, "allowed_origins", frozenset()):
+            raise RequestRejected(403, "invalid_origin", "Cross-origin requests are not allowed.")
+        fetch_site = self._single_header("Sec-Fetch-Site")
+        if fetch_site is not None and fetch_site.strip().lower() not in SAME_ORIGIN_FETCH_SITES:
+            raise RequestRejected(403, "invalid_origin", "Cross-site requests are not allowed.")
+        expected = self._server_token()
+        supplied = self._single_header(TOKEN_HEADER) or ""
+        if not hmac.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8")):
+            raise RequestRejected(403, "invalid_token", "Missing or stale app token. Reload the FluentAI page.")
+
+    def _route_post(self, path: str) -> str | None:
+        if path.startswith(BRIDGE_PREFIX):
+            command = path[len(BRIDGE_PREFIX):]
+            if not COMMAND_RE.fullmatch(command) or command not in BRIDGE_COMMANDS:
+                raise RequestRejected(404, "unknown_command", f"Unknown command: {command[:64]}")
+            return command
+        if path in ("/api/lesson", "/api/conversation"):
+            return None
+        raise RequestRejected(404, "not_found", "Not found.")
 
     def _run_bridge_command(self, command: str, body: dict[str, Any]) -> dict[str, Any]:
         handler = BRIDGE_COMMANDS.get(command)
@@ -290,31 +415,122 @@ class FluentAIHandler(BaseHTTPRequestHandler):
             return {"ok": False, "error": f"{exc.__class__.__name__}: {exc}"}
 
     def _read_json(self) -> dict[str, Any]:
-        length = _bounded_int(self.headers.get("content-length", "0"), 0, MAX_JSON_BYTES, 0)
-        if length <= 0:
-            return {}
-        raw = self.rfile.read(length).decode("utf-8", errors="replace")
+        content_type = self._single_header("Content-Type")
+        if not _is_json_media_type(content_type):
+            raise RequestRejected(415, "unsupported_media_type", "Requests must use Content-Type: application/json.")
+        if self._single_header("Transfer-Encoding") is not None:
+            raise RequestRejected(400, "unsupported_transfer_encoding", "Transfer-Encoding is not supported; send Content-Length.")
+        raw_length = self._single_header("Content-Length")
+        if raw_length is None:
+            raise RequestRejected(411, "length_required", "Content-Length is required.")
+        length = _parse_content_length(raw_length)
+        if length is None:
+            raise RequestRejected(400, "invalid_content_length", "Invalid Content-Length.")
+        if length > MAX_JSON_BYTES:
+            raise RequestRejected(413, "body_too_large", f"Request body exceeds {MAX_JSON_BYTES} bytes.")
+        if length == 0:
+            raise RequestRejected(400, "empty_body", "Request body must be a JSON object; send {} for no options.")
+        raw = self.rfile.read(length)
+        self._body_consumed = True
+        if len(raw) != length:
+            raise RequestRejected(400, "incomplete_body", "Request body ended before Content-Length.")
         try:
-            value = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return value if isinstance(value, dict) else {}
+            value = json.loads(raw.decode("utf-8"), parse_constant=_reject_json_constant)
+        except (UnicodeDecodeError, ValueError, RecursionError):
+            raise RequestRejected(400, "invalid_json", "Request body must be valid UTF-8 JSON.") from None
+        if not isinstance(value, dict):
+            raise RequestRejected(400, "invalid_json", "Request body must be a JSON object.")
+        if _json_depth(value) > MAX_JSON_DEPTH:
+            raise RequestRejected(400, "invalid_json", f"JSON nesting exceeds {MAX_JSON_DEPTH} levels.")
+        return value
 
-    def _send_json(self, payload: dict[str, Any]) -> None:
-        data = json.dumps(payload).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+    def _send_rejection(self, exc: RequestRejected) -> None:
+        # Unread request bodies must not be parsed as a follow-up request.
+        self.close_connection = True
+        self._discard_small_body()
+        self._send_json({"ok": False, "error": exc.message, "error_code": exc.code}, status=exc.status)
 
-    def _send_text(self, payload: str, content_type: str) -> None:
-        data = payload.encode("utf-8")
-        self.send_response(200)
+    def _discard_small_body(self) -> None:
+        # Drain (never parse) a bounded body so closing the socket does not
+        # reset the connection before the client reads the JSON error.
+        # Malformed or oversized lengths are not drained; the connection closes
+        # and the original rejection status is still sent.
+        if self.command != "POST" or getattr(self, "_body_consumed", False) or "Transfer-Encoding" in self.headers:
+            return
+        lengths = self.headers.get_all("Content-Length") or []
+        length = _parse_content_length(lengths[0]) if len(lengths) == 1 else None
+        if length is None or length > MAX_JSON_BYTES:
+            return
+        try:
+            self.rfile.read(length)
+        except OSError:
+            pass
+
+    def _send_json(self, payload: dict[str, Any], status: int = 200) -> None:
+        self._send_bytes(json.dumps(payload).encode("utf-8"), "application/json", status)
+
+    def _send_html(self, payload: str) -> None:
+        self._send_bytes(payload.encode("utf-8"), "text/html; charset=utf-8", 200, HTML_HEADERS)
+
+    def _send_bytes(self, data: bytes, content_type: str, status: int, extra: tuple[tuple[str, str], ...] = ()) -> None:
+        self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
+        for name, value in NO_STORE_HEADERS + extra:
+            self.send_header(name, value)
+        if self.close_connection:
+            self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(data)
+
+
+def _is_json_media_type(value: str | None) -> bool:
+    if value is None:
+        return False
+    media_type, *params = (part.strip() for part in value.split(";"))
+    if media_type.lower() != "application/json":
+        return False
+    for param in params:
+        name, _, param_value = param.partition("=")
+        if name.strip().lower() != "charset" or param_value.strip().strip('"').lower() not in ("utf-8", "utf8"):
+            return False
+    return True
+
+
+def _reject_json_constant(value: str) -> Any:
+    raise ValueError(f"Unsupported JSON constant: {value}")
+
+
+def _parse_content_length(value: str) -> int | None:
+    """ASCII decimal Content-Length; None if malformed, MAX_JSON_BYTES + 1 if too large.
+
+    Never converts unbounded digit strings to int (Python caps int() digits).
+    """
+    digits = value.strip(" \t")
+    if not digits or not digits.isascii() or not digits.isdigit():
+        return None
+    digits = digits.lstrip("0") or "0"
+    if len(digits) > len(str(MAX_JSON_BYTES)):
+        return MAX_JSON_BYTES + 1
+    return min(int(digits), MAX_JSON_BYTES + 1)
+
+
+def _json_depth(value: Any) -> int:
+    deepest = 0
+    stack = [(value, 1)]
+    while stack:
+        item, depth = stack.pop()
+        if isinstance(item, dict):
+            children = item.values()
+        elif isinstance(item, list):
+            children = item
+        else:
+            continue
+        deepest = max(deepest, depth)
+        if deepest > MAX_JSON_DEPTH:
+            return deepest
+        stack.extend((child, depth + 1) for child in children)
+    return deepest
 
 
 def _bounded_int(value: Any, low: int, high: int, default: int) -> int:
@@ -418,14 +634,15 @@ def run_conversation_cycle(state_path: Path, language: str, turns: int, video_on
 def run_server(host: str, port: int, state_path: Path, language: str) -> None:
     FluentAIHandler.state_path = state_path
     FluentAIHandler.language = language
-    server = ThreadingHTTPServer((host, port), FluentAIHandler)
-    print(f"FluentAI web app running at http://{host}:{port}")
+    server = FluentAIServer((host, port), FluentAIHandler)
+    url_host = "[::1]" if host == "::1" else host
+    print(f"FluentAI web app running at http://{url_host}:{server.server_address[1]}")
     server.serve_forever()
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the FluentAI local web app.")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="127.0.0.1", choices=LOOPBACK_BIND_HOSTS, help="Loopback bind address.")
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument("--state-path", type=Path, default=DEFAULT_PROGRESS_PATH)
     parser.add_argument("--language", default="Spanish")
